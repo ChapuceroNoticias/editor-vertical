@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lo aprendido</title>
+<style>
+  :root { --fondo: #0b0b0d; --panel: #15151a; --panel2: #1c1c22; --texto: #ececf1; --suave: #9a9aa6; --borde: #2a2a32;
+    --acento: #d91e2b; --ok: #22c55e; --pend: #f59e0b; --rojo: #ff4553; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fondo); color: var(--texto); }
+  .barra { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px; border-bottom: 1px solid var(--borde); background: var(--panel); }
+  .barra .info { flex: 1 1 380px; color: var(--suave); font-size: 13px; }
+  .btn { border: 1px solid var(--borde); background: var(--panel2); color: var(--texto); padding: 6px 11px; border-radius: 8px;
+    cursor: pointer; font-weight: 600; font-size: 13px; }
+  .btn.prim { background: var(--acento); border-color: var(--acento); color: #fff; }
+  .btn.ok { border-color: var(--ok); color: var(--ok); }
+  .btn.no { color: var(--rojo); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  #estado { font-size: 13px; color: var(--suave); }
+  .resumen { display: flex; gap: 12px; padding: 12px; flex-wrap: wrap; }
+  .dato { background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; padding: 10px 14px; min-width: 150px; }
+  .dato b { display: block; font-size: 22px; }
+  .dato span { color: var(--suave); font-size: 12px; }
+  .grupo { margin: 0 12px 14px; background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; overflow: hidden; }
+  .grupo h3 { margin: 0; padding: 10px 12px; font-size: 14px; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--borde); }
+  .grupo h3::before { content: ""; width: 4px; height: 16px; border-radius: 2px; background: var(--acento); }
+  .grupo h3 .sp { flex: 1; }
+  .grupo .sub { color: var(--suave); font-size: 12.5px; padding: 8px 12px 0; }
+  .regla { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 9px 12px; border-top: 1px solid var(--borde); align-items: center; }
+  .regla:first-of-type { border-top: 0; }
+  .regla .t { font-weight: 600; }
+  .regla .d { color: var(--suave); font-size: 12.5px; }
+  .regla .acc { display: flex; gap: 6px; align-items: center; }
+  .chip { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--borde); color: var(--suave); }
+  .chip.aprobada { color: var(--ok); border-color: var(--ok); }
+  .chip.descartada { color: var(--rojo); border-color: var(--rojo); }
+  .regla.descartada .t { text-decoration: line-through; color: var(--suave); }
+  .vacio { padding: 14px 12px; color: var(--suave); }
+  .filtros { display: flex; gap: 6px; }
+  .filtros .btn.activo { border-color: var(--acento); color: #fff; }
+</style>
+</head>
+<body>
+<div class="barra">
+  <div class="info">La plataforma compara lo que armó sola con lo que dejaste al <b>exportar</b> y propone reglas.
+    Solo las <b style="color:var(--ok)">aprobadas</b> se usan en los siguientes análisis (no cambian videos ya hechos).</div>
+  <span id="estado"></span>
+  <button class="btn" id="b_todo" title="Revisa todas las carpetas _trabajo de VideosEdit">Aprender de todos los trabajos</button>
+  <button class="btn" id="b_act">↻ Actualizar</button>
+</div>
+<div class="resumen" id="resumen"></div>
+<div class="barra" style="background:none;border:0;padding-top:0">
+  <div class="filtros" id="filtros">
+    <button class="btn activo" data-f="propuesta">Por revisar</button>
+    <button class="btn" data-f="aprobada">Aprobadas</button>
+    <button class="btn" data-f="descartada">Descartadas</button>
+    <button class="btn" data-f="todas">Todas</button>
+  </div>
+</div>
+<div id="grupos"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const GRUPOS = [
+  { tipo: "subtitulos", nombre: "Subtítulos", sub: "Palabras que Whisper escribe mal y tú corriges. Aprobadas, se corrigen solas al transcribir y los nombres se le dan a Whisper como pista." },
+  { tipo: "imagenes", nombre: "Imágenes", sub: "Sitios que evitas o prefieres, tus búsquedas como ejemplo para el modelo, y la duración y el estilo que les das." },
+  { tipo: "acomodos", nombre: "Acomodos", sub: "Cómo corriges el encuadre de Nacho y qué pantalla eliges según lo que proyecta." },
+];
+let datos = null, filtro = "propuesta";
+function estado(t, c) { $("estado").textContent = t || ""; $("estado").style.color = c === "err" ? "var(--rojo)" : (c === "ok" ? "var(--ok)" : "var(--suave)"); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+async function cargar() {
+  datos = await (await fetch("/apr/datos")).json();
+  pintar();
+}
+async function cambiar(ids, est) {
+  await fetch("/apr/estado", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, estado: est }) });
+  await cargar();
+}
+function pintar() {
+  const rs = datos.reglas;
+  $("resumen").innerHTML = `
+    <div class="dato"><b>${datos.videos}</b><span>videos de los que aprendió</span></div>
+    <div class="dato"><b style="color:var(--pend)">${datos.propuestas}</b><span>reglas por revisar</span></div>
+    <div class="dato"><b style="color:var(--ok)">${datos.aprobadas}</b><span>reglas en uso</span></div>`;
+  const cont = $("grupos");
+  cont.innerHTML = "";
+  for (const g of GRUPOS) {
+    const todas = rs.filter(r => r.tipo === g.tipo);
+    const lista = todas.filter(r => filtro === "todas" || r.estado === filtro);
+    const div = document.createElement("div");
+    div.className = "grupo";
+    const pend = todas.filter(r => r.estado === "propuesta").map(r => r.id);
+    div.innerHTML = `<h3>${g.nombre} <span class="chip">${todas.length}</span><span class="sp"></span>
+      ${pend.length ? `<button class="btn ok" data-acc="todas">Aprobar las ${pend.length} por revisar</button>` : ""}</h3>
+      <div class="sub">${g.sub}</div>`;
+    if (!lista.length) div.insertAdjacentHTML("beforeend", `<div class="vacio">Nada aquí todavía.</div>`);
+    for (const r of lista) {
+      const fila = document.createElement("div");
+      fila.className = "regla " + r.estado;
+      fila.innerHTML = `<div><div class="t">${esc(r.titulo)}</div>
+          <div class="d">${esc(r.detalle)} · ${esc(r.evidencia)} · en ${r.videos} video(s)</div></div>
+        <div class="acc"><span class="chip ${r.estado}">${{ propuesta: "por revisar", aprobada: "en uso", descartada: "descartada" }[r.estado]}</span>
+          ${r.estado !== "aprobada" ? `<button class="btn ok" data-e="aprobada">Aprobar</button>` : ""}
+          ${r.estado !== "descartada" ? `<button class="btn no" data-e="descartada">Descartar</button>` : ""}
+          ${r.estado !== "propuesta" ? `<button class="btn" data-e="propuesta">Volver a revisar</button>` : ""}</div>`;
+      fila.querySelectorAll("[data-e]").forEach(b => b.onclick = () => cambiar([r.id], b.dataset.e));
+      div.appendChild(fila);
+    }
+    const bt = div.querySelector('[data-acc="todas"]');
+    if (bt) bt.onclick = () => cambiar(pend, "aprobada");
+    cont.appendChild(div);
+  }
+}
+$("filtros").querySelectorAll(".btn").forEach(b => b.onclick = () => {
+  filtro = b.dataset.f;
+  $("filtros").querySelectorAll(".btn").forEach(x => x.classList.toggle("activo", x === b));
+  pintar();
+});
+$("b_act").onclick = cargar;
+$("b_todo").onclick = async () => {
+  $("b_todo").disabled = true; estado("Revisando tus trabajos…");
+  try {
+    const d = await (await fetch("/apr/aprender_todo", { method: "POST" })).json();
+    estado(`Listo: aprendí de ${d.n} trabajo(s).`, "ok");
+  } catch (e) { estado("No se pudo: " + e.message, "err"); }
+  $("b_todo").disabled = false;
+  cargar();
+};
+cargar();
+// al volver a esta pestaña, se pone al día
+let oculta = false;
+new ResizeObserver(() => {
+  if (document.documentElement.clientWidth === 0) { oculta = true; return; }
+  if (oculta) { oculta = false; cargar(); }
+}).observe(document.documentElement);
+</script>
+</body>
+</html>

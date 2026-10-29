@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subtítulos en vivo</title>
+<style>
+  :root {
+    --fondo: #0b0b0d; --panel: #15151a; --texto: #ececf1; --suave: #9a9aa6; --borde: #2a2a32;
+    --acento: #d91e2b; --ok: #22c55e; --pend: #f59e0b; --rojo: #ff4553; --activo: #2a1215;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fondo); color: var(--texto); }
+  .app { display: flex; gap: 12px; padding: 10px; height: 100%; }
+  @media (max-width: 760px) { .app { flex-direction: column; height: auto; } }
+  .izq { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .pantalla { position: relative; background: #000; border-radius: 10px; overflow: hidden; line-height: 0; }
+  video { display: block; height: min(680px, calc(100vh - 110px)); aspect-ratio: 9 / 16; background: #000; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #armado { display: none; pointer-events: auto; cursor: pointer; background: #000; }
+  .controles { display: none; gap: 8px; align-items: center; width: 100%; max-width: 420px; }
+  .controles input[type=range] { flex: 1; }
+  .controles .tiempo { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--suave); min-width: 112px; text-align: right; }
+  .modos { display: none; gap: 6px; }
+  .modos button { border: 1px solid var(--borde); background: var(--panel); color: var(--texto); padding: 5px 10px;
+    border-radius: 8px; cursor: pointer; font-size: 12.5px; font-weight: 600; }
+  .modos button.activo { border-color: var(--acento); color: var(--acento); }
+  .nota { max-width: 380px; font-size: 12.5px; color: var(--suave); text-align: center; }
+  .nota.alerta { color: var(--pend); }
+  .der { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; background: var(--panel);
+    border: 1px solid var(--borde); border-radius: 12px; overflow: hidden; }
+  .barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px; border-bottom: 1px solid var(--borde); }
+  .barra .ayuda { flex: 1 1 260px; color: var(--suave); font-size: 12.5px; }
+  button.btn { border: 1px solid var(--borde); background: var(--panel); color: var(--texto); padding: 7px 12px;
+    border-radius: 8px; cursor: pointer; font-weight: 600; }
+  button.prim { background: var(--acento); color: #fff; border-color: var(--acento); }
+  button:disabled { opacity: .5; cursor: default; }
+  #estado { font-size: 13px; color: var(--suave); width: 100%; }
+  #estado.ok { color: var(--ok); } #estado.pend { color: var(--pend); } #estado.err { color: var(--rojo); }
+  .lista { overflow: auto; flex: 1 1 auto; }
+  .fila { display: grid; grid-template-columns: 30px 86px 86px 1fr 118px 28px; gap: 6px; align-items: center;
+    padding: 6px 10px; border-bottom: 1px solid var(--borde); }
+  .fila.activa { background: var(--activo); }
+  .fila.cambiada { box-shadow: inset 3px 0 0 var(--pend); }
+  .fila input { width: 100%; padding: 6px 7px; border: 1px solid var(--borde); border-radius: 6px; background: var(--fondo);
+    color: var(--texto); font: inherit; }
+  .fila input.t { font-variant-numeric: tabular-nums; font-size: 13px; }
+  .fila textarea.tx { width: 100%; padding: 6px 7px; border: 1px solid var(--borde); border-radius: 6px; background: var(--fondo);
+    color: var(--texto); font: inherit; resize: none; overflow: hidden; line-height: 1.35; display: block; min-height: 32px; }
+  .fila .ir, .fila .mas { border: 0; background: none; color: var(--suave); cursor: pointer; font-size: 15px; padding: 2px; }
+  .fila .ir:hover, .fila .mas:hover { color: var(--acento); }
+  .fila .alt { display: flex; gap: 3px; align-items: center; }
+  .fila .alt button { border: 1px solid var(--borde); background: var(--panel); color: var(--texto); border-radius: 6px;
+    cursor: pointer; font-size: 11px; padding: 5px 6px; line-height: 1; }
+  .fila .alt button:hover { border-color: var(--acento); }
+  .fila .alt input.dy { width: 52px; padding: 5px 4px; text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .fila .alt input.dy.movido { border-color: var(--pend); color: var(--pend); }
+  /* sobre el subtítulo: cursor ↕ (también encima de la vista previa armada y del video, que traen su propio cursor) */
+  .pantalla.sobre-sub, .pantalla.sobre-sub *, .pantalla.arrastrando, .pantalla.arrastrando * { cursor: ns-resize !important; }
+  .encabezado { display: grid; grid-template-columns: 30px 86px 86px 1fr 118px 28px; gap: 6px; padding: 6px 10px;
+    font-size: 12px; color: var(--suave); font-weight: 600; border-bottom: 1px solid var(--borde); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="izq">
+    <div class="pantalla" id="pantalla">
+      <video id="video" controls playsinline preload="auto"></video>
+      <canvas id="armado"></canvas>
+      <canvas id="capa"></canvas>
+    </div>
+    <div class="controles" id="controles">
+      <button class="btn" id="b_play">▶</button>
+      <input type="range" id="barra_t" min="0" max="1" step="0.01" value="0">
+      <span class="tiempo" id="t_vivo">00:00:00</span>
+    </div>
+    <div class="modos" id="modos">
+      <button id="m_vivo" title="Se arma en vivo con tus correcciones actuales (sin renderizar)">Armado en vivo</button>
+      <button id="m_render" title="El último video renderizado">Video renderizado</button>
+    </div>
+    <div class="nota" id="nota"></div>
+  </div>
+  <div class="der">
+    <div class="barra">
+      <div class="ayuda">Los cambios se ven al instante en el video. Tiempos en minutos:segundos:centésimas del video
+        editado. Texto vacío = quitar el subtítulo. <b>＋</b> agrega uno debajo. <b>Shift+Enter</b> corta el renglón donde quieras.
+        <b>Altura:</b> cada subtítulo se sube o baja por separado con ▲▼ (Shift = 50 px) o <b>arrastrándolo sobre el video</b>; Alt+↑/↓ mueve el que se ve. Al terminar: <b>Guardar</b>.</div>
+      <button class="btn" id="descartar" disabled>Descartar</button>
+      <button class="btn prim" id="guardar" disabled>Guardar subtítulos</button>
+      <div id="estado"></div>
+    </div>
+    <div class="encabezado"><span></span><span>Inicio</span><span>Fin</span><span>Texto</span><span title="Sube (▲) o baja (▼) cada subtítulo por separado. También puedes arrastrarlo arriba o abajo sobre el video.">Altura ↕</span><span></span></div>
+    <div class="lista" id="lista"></div>
+  </div>
+</div>
+
+<script>
+const T = new URLSearchParams(location.search).get("t");
+const $ = (id) => document.getElementById(id);
+const video = $("video"), capa = $("capa"), ctx = capa.getContext("2d");
+const arm = $("armado"), actx = arm.getContext("2d");
+let vivo = false;      // true = se arma la vista previa en vivo desde el video original
+let E = null;          // datos del armado (los mismos del editor de encuadre)
+let tituloImg = null, franjaImg = null;
+const imagenes = {};   // imágenes de los momentos ya cargadas
+let D = null;          // datos del servidor
+let filas = [];        // [{id, i, f, texto, palabras}]
+let base = "";         // para saber si hay cambios
+let cajaSub = null;    // dónde quedó dibujado el subtítulo que se ve (px del lienzo), para arrastrarlo
+let arrastreSub = null;
+let fuenteLista = false;
+
+// ---------- tiempos ----------
+function mmss(t) {
+  const cc = Math.round(Math.max(0, t) * 100);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(Math.floor(cc / 6000))}:${p(Math.floor(cc / 100) % 60)}:${p(cc % 100)}`;
+}
+function seg(v) {
+  v = String(v || "").trim().replace(",", ".").replace(";", ":");
+  if (!v) return null;
+  const p = v.split(":");
+  if (p.some(x => x !== "" && isNaN(Number(x)))) return null;
+  if (p.length === 1) return Number(p[0]);
+  if (p.length === 2) return Number(p[0] || 0) * 60 + Number(p[1] || 0);
+  return Number(p[0] || 0) * 60 + Number(p[1] || 0) + Number((p[2] || "0").padEnd(2, "0").slice(0, 2)) / 100;
+}
+function estado(txt, cls) { $("estado").textContent = txt; $("estado").className = cls || ""; }
+
+// En vivo se reproduce el video ORIGINAL saltando las pausas recortadas; los subtítulos van en tiempo editado.
+function aEditado(t) {
+  let quitado = 0;
+  for (const c of E.cortes) {
+    if (t >= c.fin) quitado += c.fin - c.inicio;
+    else if (t > c.inicio) { quitado += t - c.inicio; break; }
+    else break;
+  }
+  return Math.max(0, t - quitado);
+}
+function aOriginal(te) {
+  let t = te;
+  for (const c of E.cortes) { if (t >= c.inicio - 1e-9) t += c.fin - c.inicio; else break; }
+  return t;
+}
+let fuenteProxy = null;   // en vivo: copia ligera sin pausas (su tiempo ya es el del video editado)
+function ahora() { return vivo && !fuenteProxy ? aEditado(video.currentTime) : video.currentTime; }
+function irA(te) { video.currentTime = vivo && !fuenteProxy ? Math.min(E.video.duracion, aOriginal(te) + 0.001) : te; }
+const tO = () => fuenteProxy ? aOriginal(video.currentTime) : video.currentTime;   // tiempo del video original
+
+// ---------- palabras con tiempo para la vista previa ----------
+function palabrasDe(fila) {
+  // renglones que puso el usuario con Shift+Enter: la última palabra de cada renglón lleva salto
+  const ws = [], saltos = new Set();
+  for (const ln of fila.texto.replace(/\r/g, "").split("\n")) {
+    const p = ln.trim().split(/\s+/).filter(Boolean);
+    if (!p.length) continue;
+    if (ws.length) saltos.add(ws.length - 1);
+    ws.push(...p);
+  }
+  const conSalto = (arr) => arr.map((w, k) => ({ ...w, salto: saltos.has(k) }));
+  return conSalto(palabrasBase(fila, ws));
+}
+function palabrasBase(fila, ws) {
+  const i = seg(fila.iTxt), f = seg(fila.fTxt);
+  if (!ws.length || i === null || f === null || f <= i) return [];
+  const orig = fila.palabras || [];
+  if (orig.length === ws.length && orig.length && fila.i0 !== undefined && fila.f0 > fila.i0) {
+    const esc = (f - i) / (fila.f0 - fila.i0);
+    return ws.map((p, k) => ({ p, i: i + (orig[k].i - fila.i0) * esc, f: i + (orig[k].f - fila.i0) * esc }));
+  }
+  const paso = (f - i) / ws.length;
+  return ws.map((p, k) => ({ p, i: i + k * paso, f: i + (k + 1) * paso }));
+}
+
+// ---------- dibujo de los subtítulos (igual que el render) ----------
+function disenoEn(t) {
+  if (vivo) return disenoVivo();
+  let lay = D.diseno.length ? D.diseno[0][1] : "persona";
+  for (const [te, l] of D.diseno) { if (te <= t + 1e-6) lay = l; else break; }
+  return lay;
+}
+function hex(c) { return c || "#ffffff"; }
+
+function ajustarCanvas() {
+  const r = video.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  capa.width = Math.round(r.width * dpr); capa.height = Math.round(r.height * dpr);
+}
+
+function dibujar() {
+  if (!D) return;
+  const W = capa.width, H = capa.height;
+  ctx.clearRect(0, 0, W, H);
+  if ((!D.limpia && !vivo) || !fuenteLista) { cajaSub = null; return; }
+  const t = ahora();
+  const s = W / D.salida[0];
+  const st = D.estilo;
+  let act = null;
+  for (const fl of filas) {
+    const i = seg(fl.iTxt), f = seg(fl.fTxt);
+    if (i !== null && f !== null && i <= t && t < f && fl.texto.trim()) act = fl;   // el último que empezó gana
+  }
+  if (!act) { cajaSub = null; return; }
+  const lay = disenoEn(t);
+  // ESTE subtítulo, subido (−) o bajado (+) a mano; px de un video de 1920 de alto
+  const dy = (act.dy || 0) * ((D.salida[1] || 1920) / 1920) * s;
+  cajaSub = null;
+  let ws = palabrasDe(act).map(w => ({ ...w, p: st.mayusculas ? w.p.toUpperCase() : w.p }));
+  if (!ws.length) return;
+  ctx.lineJoin = "round"; ctx.textBaseline = "alphabetic";
+
+  if (D.modo === "frases") {
+    if (lay === "titulo") return;
+    let tam = st.tam * s;
+    ctx.font = `${tam}px SubFuente`;
+    const ancho = st.ancho_max * s;
+    let lineas = [], actual = "";
+    if (ws.some((w, k) => w.salto && k < ws.length - 1)) {
+      // renglones del usuario; si uno no cabe se achica la letra
+      ws.forEach(w => { actual = (actual + " " + w.p).trim(); if (w.salto) { lineas.push(actual); actual = ""; } });
+      if (actual) lineas.push(actual);
+      while (Math.max(...lineas.map(l => ctx.measureText(l).width)) > ancho && tam > (st.tam_min || 56) * s) {
+        tam -= 4 * s; ctx.font = `${tam}px SubFuente`;
+      }
+    } else {
+      const texto = ws.map(w => w.p).join(" ");
+      for (const w of texto.split(" ")) {
+        const prueba = (actual + " " + w).trim();
+        if (actual && ctx.measureText(prueba).width > ancho) { lineas.push(actual); actual = w; } else actual = prueba;
+      }
+      if (actual) lineas.push(actual);
+    }
+    const paso = tam * (st.interlineado || 1.1);
+    let [cx, cy] = st.centro;
+    if (lay === "dividida" && D.areas.dividida) {   // dentro de la franja azul
+      const [fx, fy, fw, fh] = D.areas.dividida; cx = fx + fw / 2; cy = fy + fh / 2;
+    }
+    const y0 = cy * s + dy - paso * (lineas.length - 1) / 2;
+    cajaSub = { fila: act, x0: cx * s - ancho / 2, x1: cx * s + ancho / 2, y0: y0 - tam, y1: y0 + paso * (lineas.length - 1) + tam * 0.6 };
+    ctx.textAlign = "center";
+    lineas.forEach((ln, k) => {
+      const y = y0 + k * paso + tam * 0.35;
+      const [sx, sy] = st.sombra || [3, 5];
+      ctx.fillStyle = `rgba(0,0,0,${st.sombra_opacidad || 0.75})`;
+      ctx.lineWidth = 2 * (st.contorno || 4) * s; ctx.strokeStyle = ctx.fillStyle;
+      ctx.strokeText(ln, cx * s + sx * s, y + sy * s); ctx.fillText(ln, cx * s + sx * s, y + sy * s);
+      ctx.strokeStyle = hex(st.color_contorno); ctx.strokeText(ln, cx * s, y);
+      ctx.fillStyle = hex(st.color); ctx.fillText(ln, cx * s, y);
+    });
+    return;
+  }
+
+  // palabra por palabra con la palabra activa resaltada
+  if (lay === "titulo") return;   // mientras está el título no hay subtítulos («Tiktoks Yair»)
+  const area = D.areas[lay] || D.areas.persona;
+  if (!area) return;
+  const [ax, ay0, aw, ah] = area.map(v => v * s);
+  const ay = ay0 + dy;
+  cajaSub = { fila: act, x0: ax, x1: ax + aw, y0: ay, y1: ay + ah };
+  const c = (st.contorno || 8) * s;
+  let tam = st.tam * s, lineas, anchos, esp, cap;
+  while (true) {
+    ctx.font = `${tam}px SubFuente`;
+    const m = ctx.measureText("H");
+    cap = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+    esp = cap * (st.espacio ?? 0.28);
+    anchos = ws.map(w => ctx.measureText(w.p).width + 2 * c);
+    lineas = []; let act_l = [], w_act = 0;
+    const manual = ws.some((w, k) => w.salto && k < ws.length - 1);
+    if (manual) {
+      ws.forEach((w, k) => { act_l.push(k); if (w.salto) { lineas.push(act_l); act_l = []; } });
+      if (act_l.length) lineas.push(act_l);
+      const mayor = Math.max(...lineas.map(ln => ln.reduce((a, k) => a + anchos[k], 0) + esp * (ln.length - 1)));
+      if (mayor <= aw || tam <= (st.tam_min || 40) * s) break;
+      tam -= 4 * s; continue;
+    }
+    anchos.forEach((a, k) => {
+      const nuevo = act_l.length ? w_act + esp + a : a;
+      if (act_l.length && nuevo > aw) { lineas.push(act_l); act_l = [k]; w_act = a; } else { act_l.push(k); w_act = nuevo; }
+    });
+    if (act_l.length) lineas.push(act_l);
+    if ((lineas.length <= (st.max_lineas || 2) && Math.max(...anchos) <= aw) || tam <= (st.tam_min || 40) * s) break;
+    tam -= 4 * s;
+  }
+  let wi = 0;
+  ws.forEach((w, k) => { if (w.i <= t) wi = k; });
+  const alto = cap * 1.45;
+  const yc0 = ay + ah / 2 - alto * (lineas.length - 1) / 2;
+  ctx.textAlign = "left";
+  lineas.forEach((ln, li) => {
+    const total = ln.reduce((a, k) => a + anchos[k], 0) + esp * (ln.length - 1);
+    let x = ax + (aw - total) / 2;
+    const yc = yc0 + li * alto;
+    ln.forEach(k => {
+      if (k === wi) {
+        ctx.fillStyle = hex(st.color_resalte);
+        const r = 10 * s, x0 = x - 6 * s, y0 = yc - cap * 0.95, x1 = x + anchos[k] + 6 * s, y1 = yc + cap * 0.95;
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(x0, y0, x1 - x0, y1 - y0, r) : ctx.rect(x0, y0, x1 - x0, y1 - y0);
+        ctx.fill();
+      }
+      ctx.lineWidth = 2 * c; ctx.strokeStyle = hex(st.color_contorno);
+      ctx.strokeText(ws[k].p, x + c, yc + cap / 2);
+      ctx.fillStyle = hex(st.color); ctx.fillText(ws[k].p, x + c, yc + cap / 2);
+      x += anchos[k] + esp;
+    });
+  });
+}
+
+function bucle() {
+  if (vivo && E) { saltarPausas(); componer(); actualizarControles(); }
+  dibujar(); marcoArrastre(); marcarActiva(); requestAnimationFrame(bucle);
+}
+
+// ---------- armado en vivo (misma lógica que el render, sin movimiento de las fotos) ----------
+const TIPOS = ["persona", "dividida", "video", "imagen", "contenida"];
+function indice(t) { return Math.min(E.muestras.length - 1, Math.max(0, Math.floor(t / E.paso))); }
+function muestra(t) {
+  const i = indice(t), a = E.muestras[i], b = E.muestras[Math.min(E.muestras.length - 1, i + 1)];
+  const e = { tipo: TIPOS[a[1]], ex: E.extra[i] };
+  if (a.length > 2) {
+    e.region = a.slice(2, 6); e.aspect = a[6]; e.auto = a.slice(7, 11);
+    if (b.length > 2 && b[1] === a[1] && b[2] === a[2] && b[3] === a[3]) {
+      const f = Math.min(1, Math.max(0, (t - a[0]) / E.paso));
+      e.auto = e.auto.map((v, k) => v + (b[7 + k] - v) * f);
+    }
+  }
+  return e;
+}
+function ventanaManual(a, e, t) {   // igual que ventana_manual() del editor.py
+  const [rx, ry, rw, rh] = a.region || e.region, asp = e.aspect;
+  const maxW = Math.min(rw, rh * asp);
+  const [ax, ay, aw, ah] = e.auto;
+  const z = Math.max(0.2, a.zoom || 1);
+  let cx, cy, w;
+  if (a.modo === "ajuste") { cx = ax + aw / 2 + (a.dx || 0); cy = ay + ah / 2 + (a.dy || 0); w = aw / z; }
+  else { cx = a.cx ?? ax + aw / 2; cy = a.cy ?? ay + ah / 2; w = maxW / Math.max(1, z); }
+  if (a.final && a.modo !== "ajuste" && t != null && a.inicio != null) {
+    const f = Math.min(1, Math.max(0, (t - a.inicio) / Math.max(0.05, a.fin - a.inicio)));
+    const p = a.suavizado === "lineal" ? f : 0.5 - 0.5 * Math.cos(Math.PI * f);
+    const wf = maxW / Math.max(1, Math.max(0.2, a.final.zoom || 1));
+    cx += ((a.final.cx ?? cx) - cx) * p; cy += ((a.final.cy ?? cy) - cy) * p; w += (wf - w) * p;
+  }
+  w = Math.max(16, Math.min(w, maxW));
+  const h = w / asp;
+  return [Math.min(Math.max(cx - w / 2, rx), rx + rw - w), Math.min(Math.max(cy - h / 2, ry), ry + rh - h), w, h];
+}
+function ventana(t, e) {
+  const a = E.ajustes.find(x => x.inicio <= t && t < x.fin);
+  return a ? ventanaManual(a, e) : e.auto;
+}
+function disenoVivo() {
+  const t = tO();
+  if (E.estilo === "motivacional") return t < E.armado.titulo_fin ? "titulo" : "frases";
+  const e = muestra(t);
+  return (e.tipo === "dividida" || (e.tipo === "contenida" && e.ex[6] === 1)) ? "dividida" : "persona";
+}
+function imagenMomento(m, k) {
+  const clave = m + "_" + k;
+  if (!imagenes[clave]) {
+    imagenes[clave] = new Image();
+    imagenes[clave].src = `/mov/img?t=${encodeURIComponent(T)}&n=${m + 1}&k=${k}`;
+  }
+  const im = imagenes[clave];
+  return im.complete && im.naturalWidth ? im : null;
+}
+function cubrir(src, sw, sh, dx, dy, dw, dh) {   // la imagen cubre el área, centrada
+  const esc = Math.max(dw / sw, dh / sh), w = dw / esc, h = dh / esc;
+  try { actx.drawImage(src, (sw - w) / 2, (sh - h) / 2, w, h, dx, dy, dw, dh); } catch (err) {}
+}
+// el video con las franjas difuminadas ya aplicadas (subtítulos que traía el video de Nacho), como en el render
+const lienzoDif = document.createElement("canvas"), dctx = lienzoDif.getContext("2d");
+let difClave = null;
+function fuenteDifuminada() {
+  const t = aOriginal(ahora()), activos = (E && E.difuminar || []).filter(x => x.inicio <= t && t < x.fin);
+  if (!activos.length || !video.videoWidth) return video;
+  const clave = video.currentTime + "|" + JSON.stringify(activos.map(x => x.caja));
+  if (clave === difClave) return lienzoDif;
+  if (lienzoDif.width !== video.videoWidth) { lienzoDif.width = video.videoWidth; lienzoDif.height = video.videoHeight; }
+  const k = video.videoWidth / E.video.ancho;
+  dctx.filter = "none"; dctx.drawImage(video, 0, 0);
+  for (const x of activos) {
+    const [rx, ry, rw, rh] = x.caja.map(v => v * k), m = Math.max(3, Math.min(rw, rh) * 0.25);
+    dctx.save();
+    dctx.beginPath(); dctx.rect(rx - m / 2, ry - m / 2, rw + m, rh + m); dctx.clip();
+    dctx.filter = `blur(${Math.max(4, rh * 0.22).toFixed(1)}px)`;
+    dctx.drawImage(video, 0, 0);
+    dctx.restore();
+  }
+  dctx.filter = "none";
+  difClave = clave;
+  return lienzoDif;
+}
+function deVideo(x, y, w, h, dx, dy, dw, dh) {
+  const k = fuenteProxy ? fuenteProxy.ancho / E.video.ancho : 1;   // la copia ligera es más chica
+  try { actx.drawImage(fuenteDifuminada(), x * k, y * k, w * k, h * k, dx, dy, dw, dh); } catch (err) {}
+}
+function dibujarMomento(i, t, dx, dy, dw, dh) {
+  const m = E.armado.momentos[i];
+  if (!m || !m.n) return;
+  // mismo reparto que el render (el estilo motivacional cuenta en tiempo del video editado)
+  const moti = E.estilo === "motivacional";
+  const tt = moti ? aEditado(t) : t, ini = moti ? aEditado(m.inicio) : m.inicio, fin = moti ? aEditado(m.fin) : m.fin;
+  const dur = Math.max(0.1, (fin - ini) / m.n), k = Math.min(m.n - 1, Math.max(0, Math.floor((tt - ini) / dur)));
+  const im = imagenMomento(i, k);
+  if (!im) return;
+  const mv = m.marcos && m.marcos[k];
+  if (!mv) { cubrir(im, im.naturalWidth, im.naturalHeight, dx, dy, dw, dh); return; }
+  // movimiento de la foto: del marco de inicio al final (igual que encuadrar() del editor.py)
+  const [a, b, suav] = mv, f = Math.min(1, Math.max(0, (tt - ini - k * dur) / dur));
+  const p = suav === "suave" ? 0.5 - 0.5 * Math.cos(Math.PI * f) : f;
+  const nw = im.naturalWidth, nh = im.naturalHeight;
+  const x = (a[0] + (b[0] - a[0]) * p) * nw, y = (a[1] + (b[1] - a[1]) * p) * nh;
+  const cw = (a[2] + (b[2] - a[2]) * p) * nw, ch = cw * dh / dw;
+  try { actx.drawImage(im, x, y, cw, ch, dx, dy, dw, dh); } catch (err) {}
+}
+function dibujarPantallaAbajo(i, t, dx, dy, dw, dh) {   // lo que proyecta Nacho, en la parte de abajo
+  const p = E.armado.proyeccion[i];
+  if (!p) return;
+  const [x, y, w, h] = p.caja, asp = dw / dh, fase = Math.min(1, Math.max(0, (t - p.inicio) / Math.max(0.1, p.fin - p.inicio)));
+  let cw, ch, x0, y0;
+  if (p.tipo === "video" || p.vertical) { cw = w; ch = Math.min(h, cw / asp); cw = ch * asp; x0 = x + (w - cw) / 2; y0 = y + (h - ch) * 0.45; }
+  else if (p.documento || p.tipo === "lectura") { cw = w; ch = cw / asp; x0 = x; y0 = y + Math.max(0, h - ch) * (0.05 + 0.5 * fase); }
+  else { cw = Math.min(w, h * asp) / E.armado.zoom_imagen; ch = cw / asp; x0 = x + (w - cw) * (0.2 + 0.6 * fase); y0 = y + (h - ch) * 0.45; }
+  deVideo(x0, y0, cw, ch, dx, dy, dw, dh);
+}
+function pantallaManual(t) {   // recuadro de la pantalla de Nacho acomodado a mano en t (o null)
+  const a = (E.ajustes_pantalla || []).find(x => x.inicio <= t && t < x.fin);
+  const w = E.pvwin && E.pvwin[indice(t)];
+  if (!a || !w) return null;
+  return ventanaManual(a, { region: w.slice(0, 4), aspect: w[4], auto: w.slice(5, 9) }, t);
+}
+function dibujarAbajo(e, t, s) {
+  const A = E.armado.dividida;
+  if (A.franja) {
+    const [fx, fy, fw, fh] = A.franja.map(v => v * s);
+    if (franjaImg && franjaImg.complete && franjaImg.naturalWidth) cubrir(franjaImg, franjaImg.naturalWidth, franjaImg.naturalHeight, fx, fy, fw, fh);
+    else { actx.fillStyle = "#1e3a8a"; actx.fillRect(fx, fy, fw, fh); }
+  }
+  if (!A.inferior) return;
+  const [ix, iy, iw, ih] = A.inferior.map(v => v * s);
+  const pm = pantallaManual(t);
+  if (e.ex[0] >= 0) dibujarMomento(e.ex[0], t, ix, iy, iw, ih);
+  else if (e.ex[1] >= 0 && pm) deVideo(...pm, ix, iy, iw, ih);
+  else if (e.ex[1] >= 0) dibujarPantallaAbajo(e.ex[1], t, ix, iy, iw, ih);
+}
+function componer() {
+  const W = arm.width, H = arm.height, s = W / E.salida[0];
+  const t = tO(), e = muestra(t);
+  actx.fillStyle = "#000"; actx.fillRect(0, 0, W, H);
+  const area = (a) => (a || [0, 0, E.salida[0], E.salida[1]]).map(v => v * s);
+  if (e.tipo === "persona" || e.tipo === "video") {
+    const [ax, ay, aw, ah] = e.tipo === "video" ? area(null) : area(E.areas.persona);
+    deVideo(...ventana(t, e), ax, ay, aw, ah);
+  } else if (e.tipo === "dividida") {
+    const [ax, ay, aw, ah] = area(E.areas.dividida);
+    deVideo(...ventana(t, e), ax, ay, aw, ah);
+    dibujarAbajo(e, t, s);
+  } else if (e.tipo === "imagen") {
+    const pm = pantallaManual(t);
+    if (e.ex[0] >= 0) dibujarMomento(e.ex[0], t, 0, 0, W, H);
+    else if (e.ex[1] >= 0 && pm) deVideo(...pm, 0, 0, W, H);
+    else if (e.ex[1] >= 0) {   // imagen fija de la pantalla (p. ej. un tweet) a pantalla completa
+      const p = E.armado.proyeccion[e.ex[1]], [x, y, w, h] = p.caja, asp = W / H;
+      const fase = Math.min(1, Math.max(0, (t - p.inicio) / Math.max(0.1, p.fin - p.inicio))), z = 1 + 0.06 * fase;
+      const ch = Math.min(h, w / asp) / z, cw = ch * asp;
+      deVideo(x + Math.min(w - cw, w * 0.02), y + (h - ch) * 0.4, cw, ch, 0, 0, W, H);
+    }
+  } else if (e.tipo === "contenida") {   // recuadro angosto completo al centro, con fondo desenfocado
+    const [rx, ry, rw, rh] = e.ex.slice(2, 6), divi = e.ex[6] === 1;
+    const [ax, ay, aw, ah] = area(divi ? E.areas.dividida : E.areas.persona), C = E.armado.contener;
+    actx.save();
+    actx.beginPath(); actx.rect(ax, ay, aw, ah); actx.clip();
+    actx.filter = `blur(${C.desenfoque * s}px) brightness(${C.oscurecer_fondo})`;
+    const esc = Math.max(aw / rw, ah / rh) * 1.15;
+    deVideo(rx, ry, rw, rh, ax + (aw - rw * esc) / 2, ay + (ah - rh * esc) * 0.4, rw * esc, rh * esc);
+    actx.filter = "none";
+    const k = aw * C.ancho_panel / rw;
+    deVideo(rx, ry, rw, rh, ax + (aw - rw * k) / 2, ay, rw * k, rh * k);
+    actx.restore();
+    if (divi) dibujarAbajo(e, t, s);
+  }
+  if (tituloImg && tituloImg.complete && tituloImg.naturalWidth && (E.estilo !== "motivacional" || t < E.armado.titulo_fin))
+    actx.drawImage(tituloImg, 0, 0, W, H);
+}
+function saltarPausas() {
+  if (fuenteProxy || video.paused || video.seeking) return;
+  const t = video.currentTime, c = E.cortes.find(c => c.inicio <= t && t < c.fin - 0.02);
+  if (c) video.currentTime = c.fin;
+}
+function duracionEd() { return aEditado(E.video.duracion); }
+let arrastrando = false;
+function actualizarControles() {
+  const te = ahora();
+  if (!arrastrando) $("barra_t").value = te;
+  $("t_vivo").textContent = `${mmss(te)} / ${mmss(duracionEd())}`;
+  $("b_play").textContent = video.paused ? "▶" : "❚❚";
+}
+function ajustarArmado() {
+  const r = video.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  arm.width = Math.round(r.width * dpr); arm.height = Math.round(r.height * dpr);
+}
+async function cargarArmado() {
+  if (E) return true;
+  try {
+    const r = await fetch(`/enc/datos?t=${encodeURIComponent(T)}`);
+    if (!r.ok) return false;
+    const d = await r.json();
+    if (!d.soportado) return false;
+    E = d;
+  } catch (err) { return false; }
+  if (E.titulo) { tituloImg = new Image(); tituloImg.src = `/enc/titulo?t=${encodeURIComponent(T)}&v=${Date.now()}`; }
+  if (E.armado.dividida.franja_fondo) { franjaImg = new Image(); franjaImg.src = `/enc/franja?t=${encodeURIComponent(T)}`; }
+  $("barra_t").max = duracionEd();
+  return true;
+}
+function ponerModo(enVivo) {
+  const te = video.src ? ahora() : 0;
+  vivo = enVivo;
+  video.pause();
+  arm.style.display = vivo ? "block" : "none";
+  $("controles").style.display = vivo ? "flex" : "none";
+  video.controls = !vivo;
+  $("m_vivo").classList.toggle("activo", vivo);
+  $("m_render").classList.toggle("activo", !vivo);
+  fuenteProxy = vivo && E && E.proxy ? E.proxy : null;
+  video.src = !vivo ? `/sub/video?t=${encodeURIComponent(T)}&v=${Date.now()}`
+    : (fuenteProxy ? `/enc/proxy?t=${encodeURIComponent(T)}&f=${fuenteProxy.firma}` : `/enc/video?t=${encodeURIComponent(T)}`);
+  if (vivo && !fuenteProxy && E && E.preparando) setTimeout(vigilarProxy, 5000);
+  video.addEventListener("loadedmetadata", () => { irA(te); ajustarArmado(); }, { once: true });
+  if (vivo) {
+    $("nota").textContent = "Armado en vivo con tus correcciones actuales (encuadre, pantalla, imágenes, pausas). " +
+      "Es una vista aproximada: no salen las cortinillas. El video final se arma en «Exportar».";
+    $("nota").className = "nota";
+  } else {
+    $("nota").textContent = D.desactualizada
+      ? "Este es el último render; tiene cambios que todavía no están renderizados."
+      : "Vista previa: los subtítulos que ves aquí son los de la lista, con tus cambios.";
+    $("nota").className = D.desactualizada ? "nota alerta" : "nota";
+  }
+}
+async function vigilarProxy() {   // cuando la copia ligera está lista, se cambia sola (sin perder el punto)
+  if (!E || !vivo || fuenteProxy) return;
+  try {
+    const d = await (await fetch(`/enc/proxy_estado?t=${encodeURIComponent(T)}`)).json();
+    E.proxy = d.proxy; E.preparando = d.preparando;
+    if (d.proxy) { const seguia = !video.paused; ponerModo(true); if (seguia) video.addEventListener("loadedmetadata", () => video.play(), { once: true }); return; }
+  } catch (err) {}
+  if (E.preparando) setTimeout(vigilarProxy, 5000);
+}
+arm.addEventListener("click", () => video.paused ? video.play() : video.pause());
+$("b_play").onclick = () => video.paused ? video.play() : video.pause();
+$("barra_t").addEventListener("input", () => { arrastrando = true; irA(Number($("barra_t").value)); });
+$("barra_t").addEventListener("change", () => { arrastrando = false; });
+$("m_vivo").onclick = () => { if (!vivo) ponerModo(true); };
+$("m_render").onclick = () => { if (vivo) ponerModo(false); };
+new ResizeObserver(ajustarArmado).observe(video);
+let pestanaOculta = false;
+new ResizeObserver(async () => {
+  if (document.documentElement.clientWidth === 0) { pestanaOculta = true; return; }
+  if (!pestanaOculta) return;
+  pestanaOculta = false;
+  if (await revisarCambiosEdicion()) return;
+  if (!E) return;
+  const te = ahora(), antes = fuenteProxy && fuenteProxy.firma;
+  E = null;
+  await cargarArmado();
+  if (vivo && (E.proxy ? E.proxy.firma : null) !== antes) { ponerModo(true); return; }   // cambiaron las pausas
+  if (vivo) irA(te);
+}).observe(document.documentElement);
+
+// ¿se renderizó de nuevo o se quitó / restauró un tramo en Edición? Entonces los tiempos de los subtítulos
+// se recalculan (se recarga si aquí no hay cambios sin guardar). true = se recargó.
+let avisoEdicion = false;
+async function revisarCambiosEdicion() {
+  try {
+    const d = await (await fetch(`/sub/datos?t=${encodeURIComponent(T)}`)).json();
+    if (D && (d.previa_v !== D.previa_v || d.firma_cortes !== D.firma_cortes)) {
+      if (!hayCambios()) { location.reload(); return true; }
+      if (!avisoEdicion) {
+        avisoEdicion = true;
+        $("nota").textContent = "Cambió la edición (render nuevo o tramos quitados): guarda tus cambios y se acomodan los tiempos nuevos.";
+        $("nota").className = "nota alerta";
+      }
+    }
+  } catch (err) { /* sin conexión: se revisa la próxima vez */ }
+  return false;
+}
+// también mientras la pestaña está abierta (por si el render termina estando aquí)
+setInterval(() => { if (T && D && !document.hidden && document.documentElement.clientWidth > 0) revisarCambiosEdicion(); }, 6000);
+
+// ---------- lista ----------
+function firma() { return JSON.stringify(filas.map(f => [f.iTxt, f.fTxt, f.texto, f.dy || 0])); }
+function moverFila(fl, d) {   // sube (−) o baja (+) SOLO este subtítulo
+  fl.dy = Math.max(-1800, Math.min(1800, Math.round((fl.dy || 0) + d)));
+  const n = filas.indexOf(fl), el = document.querySelectorAll(".fila")[n];
+  if (el) {
+    const inp = el.querySelector("input.dy");
+    inp.value = fl.dy; inp.classList.toggle("movido", !!fl.dy);
+    el.classList.add("cambiada");
+  }
+  actualizarBotones();
+}
+function hayCambios() { return firma() !== base; }
+function actualizarBotones() {
+  const c = hayCambios();
+  $("guardar").disabled = !c; $("descartar").disabled = !c;
+  if (c) estado("Cambios sin guardar (ya se ven en el video).", "pend");
+}
+
+let ultimaActiva = -1;
+function marcarActiva() {
+  const t = ahora();
+  let k = -1;
+  filas.forEach((fl, n) => { const i = seg(fl.iTxt), f = seg(fl.fTxt); if (i !== null && f !== null && i <= t && t < f) k = n; });
+  if (k === ultimaActiva) return;
+  ultimaActiva = k;
+  document.querySelectorAll(".fila").forEach((el, n) => el.classList.toggle("activa", n === k));
+  const editando = document.activeElement && document.activeElement.closest && document.activeElement.closest(".lista");
+  if (k >= 0 && !video.paused && !editando) {
+    const el = document.querySelectorAll(".fila")[k];
+    if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+}
+
+function pintarLista() {
+  const lista = $("lista");
+  lista.innerHTML = "";
+  filas.forEach((fl, n) => {
+    const div = document.createElement("div");
+    div.className = "fila";
+    div.innerHTML = `<button class="ir" title="Ir a este subtítulo">▶</button>
+      <input class="t" data-c="iTxt" value="${fl.iTxt}"><input class="t" data-c="fTxt" value="${fl.fTxt}">
+      <textarea class="tx" data-c="texto" rows="1" title="Shift+Enter = cortar el renglón aquí"></textarea>
+      <span class="alt"><button data-d="-10" title="Subir este subtítulo (Shift: 50 px)">▲</button><input class="dy" type="number" step="5" title="px: negativo = más arriba, 0 = donde lo pone la plataforma"><button data-d="10" title="Bajar este subtítulo (Shift: 50 px)">▼</button></span><button class="mas" title="Agregar un subtítulo debajo">＋</button>`;
+    const tx = div.querySelector('[data-c="texto"]');
+    tx.value = fl.texto;
+    const crecer = () => { tx.style.height = "auto"; tx.style.height = tx.scrollHeight + 2 + "px"; };
+    tx.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) {   // Enter solo: pasa al siguiente subtítulo; Shift+Enter: salto de línea
+        e.preventDefault();
+        const todos = document.querySelectorAll('.fila [data-c="texto"]');
+        if (todos[n + 1]) todos[n + 1].focus();
+      }
+    });
+    tx.addEventListener("input", crecer);
+    requestAnimationFrame(crecer);
+    div.querySelector(".ir").onclick = () => { const i = seg(fl.iTxt); if (i !== null) { irA(i + 0.01); } };
+    const inDy = div.querySelector("input.dy");
+    inDy.value = fl.dy || 0; inDy.classList.toggle("movido", !!fl.dy);
+    div.querySelectorAll(".alt button").forEach(b => b.onclick = (e) => {
+      moverFila(fl, Number(b.dataset.d) * (e.shiftKey ? 5 : 1));
+      const i = seg(fl.iTxt); if (i !== null && video.paused) irA(i + 0.01);
+    });
+    inDy.onchange = () => { const v = Number(inDy.value); moverFila(fl, (isFinite(v) ? v : 0) - (fl.dy || 0)); };
+    inDy.onfocus = () => { const i = seg(fl.iTxt); if (i !== null && video.paused) irA(i + 0.01); };
+    div.querySelectorAll("input.t, textarea").forEach(inp => {
+      inp.oninput = () => {
+        fl[inp.dataset.c] = inp.value;
+        div.classList.toggle("cambiada", true);
+        actualizarBotones();
+      };
+      inp.onfocus = () => { const i = seg(fl.iTxt); if (i !== null && video.paused) irA(i + 0.01); };
+    });
+    div.querySelector(".mas").onclick = () => {
+      const f = seg(fl.fTxt) || 0;
+      const sig = filas[n + 1] ? seg(filas[n + 1].iTxt) : f + 1.5;
+      filas.splice(n + 1, 0, { id: -1, iTxt: mmss(f), fTxt: mmss(Math.max(f + 0.5, Math.min(sig, f + 2))), texto: "", palabras: [], dy: fl.dy || 0 });
+      pintarLista(); actualizarBotones();
+      document.querySelectorAll('.fila [data-c="texto"]')[n + 1].focus();
+    };
+    lista.appendChild(div);
+  });
+  ultimaActiva = -2;
+}
+
+function desdeDatos(d) {
+  D = d;
+  filas = d.grupos.map((g, n) => ({ id: g.id ?? n, iTxt: mmss(g.i), fTxt: mmss(g.f), texto: g.texto, palabras: g.palabras, i0: g.i, f0: g.f, dy: g.dy || 0 }));
+  base = firma();
+  pintarLista();
+  actualizarBotones();
+}
+
+async function cargar() {
+  const r = await fetch(`/sub/datos?t=${encodeURIComponent(T)}`);
+  desdeDatos(await r.json());
+  // el cuadro toma la forma del video real (en «Solo subtítulos» el clip puede ser horizontal)
+  const [vw, vh] = D.salida || [1080, 1920];
+  if (vw && vh) {
+    video.style.aspectRatio = `${vw} / ${vh}`;
+    if (vw > vh) { video.style.height = "auto"; video.style.width = "min(560px, 42vw)"; }
+    ajustarCanvas();
+  }
+  const hayArmado = await cargarArmado();
+  const hayRender = D.hay_video && D.limpia && !D.provisional;
+  if (hayArmado && hayRender) $("modos").style.display = "flex";
+  if (hayArmado && (!hayRender || D.desactualizada)) ponerModo(true);
+  else if (hayRender || D.hay_video) {
+    ponerModo(false);
+    if (!D.limpia) {
+      $("nota").textContent = "Este video se exportó con una versión anterior: exporta de nuevo una vez " +
+        "para ver aquí los cambios de subtítulos en vivo.";
+      $("nota").className = "nota alerta";
+    }
+  } else {
+    $("nota").textContent = "Aún no hay video renderizado.";
+    $("nota").className = "nota alerta";
+  }
+  try {
+    const f = new FontFace("SubFuente", `url(/sub/fuente?t=${encodeURIComponent(T)})`);
+    await f.load(); document.fonts.add(f); fuenteLista = true;
+  } catch (e) { fuenteLista = true; }
+}
+
+$("guardar").onclick = async () => {
+  $("guardar").disabled = true;
+  estado("Guardando…");
+  try {
+    const cuerpo = { t: T, cortes: D.cortes, filas: filas.map(fl => ({ i: fl.iTxt, f: fl.fTxt, texto: fl.texto, id: fl.id, dy: fl.dy || 0 })) };
+    const r = await fetch("/sub/guardar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    desdeDatos(Object.assign(D, d.datos));
+    if (avisoEdicion) { location.reload(); return; }   // se guardó con los tiempos de antes: ahora se ve lo nuevo
+    estado(`Guardado ✓ (${d.n} subtítulos). Se ven en la vista previa; el video final se arma en «Exportar».`, "ok");
+  } catch (e) {
+    estado("No se pudo guardar: " + e.message, "err");
+    actualizarBotones();
+  }
+};
+$("descartar").onclick = () => { desdeDatos(D); estado(""); };
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (!$("guardar").disabled) $("guardar").click(); }
+  if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown") && D) {   // mueve el subtítulo que se ve ahora
+    e.preventDefault();
+    if (cajaSub) moverFila(cajaSub.fila, (e.key === "ArrowUp" ? -10 : 10) * (e.shiftKey ? 5 : 1));
+  }
+});
+
+// ---------- arrastrar el subtítulo que se ve, arriba o abajo, sobre el video ----------
+function puntoLienzo(e) {
+  const r = capa.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr];
+}
+let encimaSub = false;   // el mouse está sobre el subtítulo que se ve (para marcarlo)
+// recuadro punteado alrededor del subtítulo cuando el mouse está encima o se está arrastrando
+function marcoArrastre() {
+  if (!cajaSub || !(encimaSub || arrastreSub)) return;
+  const dpr = window.devicePixelRatio || 1, m = 8 * dpr;
+  ctx.save();
+  ctx.setLineDash([8 * dpr, 6 * dpr]); ctx.lineWidth = 2 * dpr; ctx.strokeStyle = "#fbbf24";
+  ctx.strokeRect(cajaSub.x0 - m, cajaSub.y0 - m, cajaSub.x1 - cajaSub.x0 + 2 * m, cajaSub.y1 - cajaSub.y0 + 2 * m);
+  const dy = Math.round(cajaSub.fila.dy || 0);
+  const txt = `↕ arrastra para subir o bajar · ${dy > 0 ? "+" : ""}${dy}`;
+  ctx.setLineDash([]); ctx.font = `${12 * dpr}px sans-serif`; ctx.textBaseline = "bottom";
+  const w = ctx.measureText(txt).width + 12 * dpr, y = Math.max(18 * dpr, cajaSub.y0 - m - 4 * dpr);
+  ctx.fillStyle = "rgba(0,0,0,.75)"; ctx.fillRect(cajaSub.x0 - m, y - 18 * dpr, w, 18 * dpr);
+  ctx.fillStyle = "#fbbf24"; ctx.fillText(txt, cajaSub.x0 - m + 6 * dpr, y - 3 * dpr);
+  ctx.restore();
+}
+function sobreSub(e) {
+  if (!cajaSub) return false;
+  const [x, y] = puntoLienzo(e), m = 22 * (window.devicePixelRatio || 1);
+  return x >= cajaSub.x0 - m && x <= cajaSub.x1 + m && y >= cajaSub.y0 - m && y <= cajaSub.y1 + m;
+}
+let recienArrastrado = false;
+const pant = $("pantalla");
+pant.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || !sobreSub(e)) return;
+  e.preventDefault(); e.stopPropagation();
+  const s = capa.width / D.salida[0], k = s * ((D.salida[1] || 1920) / 1920);   // px del lienzo por unidad de altura
+  arrastreSub = { fila: cajaSub.fila, y: e.clientY, dy0: cajaSub.fila.dy || 0, k };
+  pant.classList.add("arrastrando");
+  video.pause();
+}, true);
+window.addEventListener("pointermove", (e) => {
+  if (arrastreSub) {
+    const dpr = window.devicePixelRatio || 1;
+    const nuevo = Math.round(arrastreSub.dy0 + (e.clientY - arrastreSub.y) * dpr / arrastreSub.k);
+    if (nuevo !== (arrastreSub.fila.dy || 0)) { moverFila(arrastreSub.fila, nuevo - (arrastreSub.fila.dy || 0)); recienArrastrado = true; }
+    return;
+  }
+  const r = pant.getBoundingClientRect();
+  const dentro = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  encimaSub = dentro && sobreSub(e);
+  pant.classList.toggle("sobre-sub", encimaSub);
+});
+window.addEventListener("pointerup", () => {
+  if (!arrastreSub) return;
+  arrastreSub = null; pant.classList.remove("arrastrando");
+  setTimeout(() => { recienArrastrado = false; }, 300);
+});
+pant.addEventListener("click", (e) => { if (recienArrastrado) { e.preventDefault(); e.stopPropagation(); } }, true);
+
+new ResizeObserver(ajustarCanvas).observe(video);
+video.addEventListener("loadedmetadata", ajustarCanvas);
+if (T) { cargar(); requestAnimationFrame(bucle); }
+else $("lista").innerHTML = '<div style="padding:30px;color:var(--suave)">Carga un video primero.</div>';
+</script>
+</body>
+</html>

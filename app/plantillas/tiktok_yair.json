@@ -1,0 +1,166 @@
+{
+ "nombre": "Tiktoks Yair",
+ "estilo": "motivacional",
+ "variante": "yair",
+ "descripcion": "Como Tiktoks Motivacionales, pero la entrada es en pantalla dividida: Yair arriba, título en dos cuadros (naranja y rojo) que entran deslizándose y una imagen abajo que se pone a mano. Después, Yair a pantalla completa con subtítulos palabra por palabra (como Clips Chapuceros) y música.",
+ "salida": {
+  "ancho": 1080,
+  "alto": 1920,
+  "crf": 20,
+  "audio_kbps": 125
+ },
+ "encuadre": {
+  "_nota": "Como Tiktoks Motivacionales (lejos = toda la altura; cerca = zoom_cerca anclado abajo), pero con el ritmo del editor de Yair: cambia de tamaño en casi cada corte de pausa, en cuanto pasaron 'ritmo_seg' del cambio anterior; si pasan 'max_sin_cambio_seg' sin un corte, cambia en un respiro (silencio corto) o al inicio de una frase. El encuadre de la entrada está en «entrada».",
+  "inicial": "cerca",
+  "alto_lejos": 1.0,
+  "zoom_cerca": 1.19,
+  "ancla": "abajo",
+  "desplazamiento_x": 0.05,
+  "nitidez": 0.3,
+  "ritmo_seg": [
+   1.6,
+   2.4,
+   2.0,
+   3.0,
+   1.8,
+   2.6,
+   2.2,
+   3.4
+  ],
+  "max_sin_cambio_seg": 3.5,
+  "cambiar_en_frases": true,
+  "silencio_min_seg": 0.12,
+  "umbral_silencio_db": 12
+ },
+ "titulo": {
+  "_nota": "Título «texto de arriba – texto de abajo» (lo que va antes del guion va en el cuadro naranja; lo de después, en el rojo). Medidas del archivo Titulos_Yair.psd. alto_letra: alto de las mayúsculas; si el texto no cabe a lo ancho, la letra se achica. El título se quita cuando Yair termina de decirlo.",
+  "tipo": "dos_cuadros",
+  "fuente": "assets/AkuKamu.otf",
+  "x": 150,
+  "ancho": 780,
+  "relleno_x": 18,
+  "alto_letra": 76,
+  "mayusculas": true,
+  "arriba": {
+   "y": 985,
+   "alto": 108,
+   "fondo": "#F79E00",
+   "color": "#000000",
+   "entra_desde": "izquierda"
+  },
+  "abajo": {
+   "y": 1093,
+   "alto": 108,
+   "fondo": "#840909",
+   "color": "#FFFFFF",
+   "entra_desde": "derecha"
+  },
+  "entrada_seg": 0.3,
+  "min_seg": 2.7,
+  "max_seg": 5.0,
+  "min_voz_seg": 1.2,
+  "escala_x": 1.0,
+  "inclinacion": 0.2
+ },
+ "entrada": {
+  "_nota": "Mientras está el título: Yair arriba (alto_persona px) con su propio encuadre, fijo, medido de los ejemplos: alto_ventana = parte del alto del video original que se ve en esa franja (0.933 = casi todo, por eso se ve más lejos que el resto); cara_x / cara_y = dónde queda el centro de la cara en la franja (0..1). Se puede corregir a mano en Edición › Encuadre. Abajo va la imagen de la entrada. Los cuadros del título: el que entra por la derecha llega con rebote y el de la izquierda frenando suave.",
+  "alto_persona": 1201,
+  "alto_ventana": 0.933,
+  "cara_x": 0.51,
+  "cara_y": 0.34
+ },
+ "subtitulos": {
+  "fuente": "assets/AkuKamu.otf",
+  "tam": 72,
+  "tam_min": 56,
+  "max_lineas": 2,
+  "color": "#FFFFFF",
+  "contorno": 8,
+  "color_contorno": "#000000",
+  "color_resalte": "#A8002F",
+  "max_palabras": 4,
+  "espacio": 0.09,
+  "pausa_corte_seg": 0.45,
+  "mayusculas": true,
+  "puntuar_con_ia": true
+ },
+ "layouts": {
+  "persona": {
+   "persona": {
+    "area": [
+     0,
+     0,
+     1080,
+     1920
+    ]
+   },
+   "subtitulos": {
+    "area": [
+     40,
+     1490,
+     860,
+     200
+    ]
+   }
+  },
+  "dividida": {
+   "persona": {
+    "area": [
+     0,
+     0,
+     1080,
+     1201
+    ]
+   }
+  }
+ },
+ "momentos": {
+  "_nota": "Muy pocas imágenes: solo cuando se nombra a alguien o algo reconocible. Una imagen por persona si se enumeran varias.",
+  "cada_seg": 40,
+  "duracion_min": 2.5,
+  "duracion_max": 3.5,
+  "imagenes_por_momento": 1,
+  "efecto": "zoom_in",
+  "intensidad": 0.1,
+  "max_candidatos": 8,
+  "puntaje_min": 7
+ },
+ "transicion": {
+  "_nota": "La imagen (y luego Nacho de regreso) entra desde la derecha girando.",
+  "duracion_seg": 0.12,
+  "angulo": 40
+ },
+ "cortes": {
+  "_nota": "Pausas menores a pausa_min_seg quedan intactas. En las largas se deja: dejar_antes_seg antes de la siguiente palabra, y después de la última palabra: coma, frase u oración (punto). Las 'dramáticas' (remates elegidos por la IA y el final) dejan más. En Tiktoks Yair se recortan también pausas más cortas (como el editor).",
+  "activar": true,
+  "umbral_rel_db": 12,
+  "pausa_min_seg": 0.35,
+  "dejar_antes_seg": 0.1,
+  "dejar_coma_seg": 0.15,
+  "dejar_frase_seg": 0.22,
+  "dejar_oracion_seg": 0.4,
+  "dejar_oracion_larga_seg": 0.6,
+  "dejar_dramatico_seg": 0.95,
+  "dramaticas_cada_seg": 45,
+  "inicio_dejar_seg": 0.08,
+  "final_dejar_seg": 0.5
+ },
+ "audio": {
+  "musica": "assets/musica_fondo.mp3",
+  "volumen_musica": 0.9,
+  "nivelar_voz": true,
+  "duck_umbral": 0.02,
+  "duck_ratio": 6,
+  "duck_ataque_ms": 20,
+  "duck_liberacion_ms": 400
+ },
+ "toma_fija": {
+  "_nota": "Tomas fijas: el recuadro NO sigue a la persona. Se queda quieto mientras la cara se mueva dentro del margen; si se sale, salta de golpe (corte) a otra posición fija, de preferencia en una pausa recortada cercana. margen_x: cuánto puede moverse de lado (fracción del ancho del recuadro). margen_y: cuánto arriba/abajo (en altos de cara). margen_tam: cuánto puede acercarse/alejarse (1.35 = 35%). min_seg: duración mínima de cada toma. adelantar_corte: hasta cuántos segundos antes se puede adelantar el salto para que caiga en una pausa recortada. activar=false regresa al seguimiento suave anterior.",
+  "activar": true,
+  "margen_x": 0.35,
+  "margen_y": 0.8,
+  "margen_tam": 1.35,
+  "min_seg": 1.5,
+  "adelantar_corte": 1.5
+ }
+}

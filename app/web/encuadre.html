@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Encuadre</title>
+<style>
+  :root {
+    --fondo: #f6f7fb; --panel: #ffffff; --texto: #1f2430; --suave: #6b7280; --borde: #e3e6ee;
+    --acento: #5b5bd6; --ok: #16a34a; --pend: #d97706; --rojo: #dc2626;
+    --c-persona: #6366f1; --c-dividida: #0d9488; --c-video: #ea580c; --c-imagen: #9ca3af; --c-manual: #16a34a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --fondo: #0f1117; --panel: #171a23; --texto: #e7e9ee; --suave: #9aa1ad; --borde: #2a2f3c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fondo); color: var(--texto); }
+  .barra { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 12px;
+    border-bottom: 1px solid var(--borde); }
+  .barra .ayuda { color: var(--suave); flex: 1 1 360px; font-size: 13px; }
+  #estado { font-size: 13px; color: var(--suave); }
+  #estado.ok { color: var(--ok); } #estado.pend { color: var(--pend); } #estado.err { color: var(--rojo); }
+  button.btn { border: 1px solid var(--borde); background: var(--panel); color: var(--texto); padding: 7px 12px;
+    border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; }
+  button.prim { background: var(--acento); color: #fff; border-color: var(--acento); }
+  button.peligro { color: var(--rojo); }
+  button:disabled { opacity: .45; cursor: default; }
+  .zona { display: flex; gap: 12px; padding: 12px; align-items: flex-start; flex-wrap: wrap; }
+  .escenario { position: relative; flex: 1 1 520px; min-width: 300px; background: #000; border-radius: 10px; overflow: hidden; }
+  .escenario video { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .escenario canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: default; touch-action: none; }
+  .lado { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .lado .rotulo { font-size: 12px; color: var(--suave); }
+  #previa { width: 230px; height: 409px; background: #111; border-radius: 10px; border: 1px solid var(--borde); }
+  .controles { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 0 12px; }
+  .tiempo { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 150px; }
+  .tiempo small { color: var(--suave); font-weight: 500; }
+  .linea { padding: 8px 12px 0; }
+  #linea { width: 100%; height: 64px; display: block; border-radius: 8px; background: var(--panel);
+    border: 1px solid var(--borde); cursor: pointer; }
+  .leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--suave); padding: 6px 12px 0; }
+  .leyenda i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+  .panel { margin: 12px; background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; padding: 12px;
+    display: flex; flex-direction: column; gap: 10px; }
+  .panel .fila { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .panel label { font-size: 12px; color: var(--suave); display: flex; flex-direction: column; gap: 3px; }
+  .panel input[type=text] { width: 100px; padding: 6px 8px; border: 1px solid var(--borde); border-radius: 6px;
+    background: var(--fondo); color: var(--texto); font-variant-numeric: tabular-nums; }
+  .modos { display: flex; gap: 6px; }
+  .modo { border: 2px solid var(--borde); border-radius: 8px; padding: 6px 10px; cursor: pointer; background: var(--panel);
+    color: var(--texto); font-size: 13px; font-weight: 600; text-align: left; }
+  .modo small { display: block; font-weight: 400; color: var(--suave); font-size: 11px; }
+  .modo.activo { border-color: var(--acento); }
+  #situacion { font-weight: 700; }
+  #situacion.manual { color: var(--ok); } #situacion.pend { color: var(--pend); } #situacion.no { color: var(--suave); }
+  .lista { display: flex; flex-direction: column; gap: 6px; }
+  .item { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border: 1px solid var(--borde); border-radius: 8px;
+    font-size: 13px; font-variant-numeric: tabular-nums; }
+  .item.actual { border-color: var(--ok); }
+  .item .txt { flex: 1; }
+  .vacio { padding: 40px 16px; color: var(--suave); }
+</style>
+</head>
+<body>
+<div class="barra">
+  <div class="ayuda">El video original con el <b>recuadro</b> que se ve en el video final (amarillo punteado = automático,
+    verde = corregido). <b>Arrastra</b> el recuadro para moverlo, usa las <b>esquinas</b> o la <b>rueda del ratón</b> para
+    acercar o alejar y <b>doble clic</b> para centrarlo ahí. Luego <b>Aplicar al tramo</b> y al final
+    <b>Renderizar de nuevo</b>.</div>
+  <span id="estado"></span>
+</div>
+
+<div id="contenido"><div class="vacio">Cargando…</div></div>
+
+<template id="plantilla">
+  <div class="zona">
+    <div class="escenario" id="escenario">
+      <video id="video" preload="auto" playsinline></video>
+      <canvas id="capa"></canvas>
+    </div>
+    <div class="lado">
+      <canvas id="previa" width="460" height="818"></canvas>
+      <span class="rotulo">Así se verá (sin subtítulos)</span>
+    </div>
+  </div>
+  <div class="controles">
+    <button class="btn" id="b_play">▶ Reproducir</button>
+    <button class="btn" id="b_m1" title="1 segundo atrás (Shift + ←)">−1 s</button>
+    <button class="btn" id="b_mf" title="Un cuadro atrás (←)">◀ cuadro</button>
+    <button class="btn" id="b_pf" title="Un cuadro adelante (→)">cuadro ▶</button>
+    <button class="btn" id="b_p1" title="1 segundo adelante (Shift + →)">+1 s</button>
+    <span class="tiempo" id="tiempo">00:00:00</span>
+  </div>
+  <div class="linea"><canvas id="linea"></canvas></div>
+  <div class="leyenda">
+    <span><i style="background:var(--c-persona)"></i>Nacho a pantalla completa</span>
+    <span><i style="background:var(--c-dividida)"></i>Nacho arriba (dividida)</span>
+    <span><i style="background:var(--c-video)"></i>Video de la proyección</span>
+    <span><i style="background:var(--c-imagen)"></i>Imagen / documento (sin encuadre)</span>
+    <span><i style="background:var(--c-manual)"></i>Corregido a mano</span>
+    <span><i style="background:#7f1d1d"></i>Pausa recortada</span>
+    <span>Rueda del ratón sobre la línea: acercar</span>
+  </div>
+
+  <div class="panel">
+    <div><span id="situacion">—</span></div>
+    <div class="fila">
+      <div class="modos">
+        <button class="modo activo" data-modo="fijo">Fijo<small>el recuadro se queda donde lo pones</small></button>
+        <button class="modo" data-modo="ajuste">Seguir la cara<small>sigue a la persona, con tu corrección</small></button>
+      </div>
+    </div>
+    <div class="fila">
+      <label>Tramo desde (min:seg:cent)<input type="text" id="t_ini"></label>
+      <button class="btn" id="b_ini" title="Usar el tiempo actual">aquí</button>
+      <label>hasta<input type="text" id="t_fin"></label>
+      <button class="btn" id="b_fin" title="Usar el tiempo actual">aquí</button>
+      <button class="btn" id="b_toma" title="El tramo completo de esta toma">toda la toma</button>
+    </div>
+    <div class="fila">
+      <button class="btn prim" id="b_aplicar" disabled>Aplicar al tramo</button>
+      <button class="btn" id="b_cancelar" disabled>Descartar cambio</button>
+      <button class="btn peligro" id="b_quitar" disabled>Volver al automático en este tramo</button>
+    </div>
+    <div>
+      <div style="font-weight:700;margin-bottom:6px">Tramos corregidos</div>
+      <div class="lista" id="lista"></div>
+    </div>
+  </div>
+</template>
+
+<script>
+const q = new URLSearchParams(location.search);
+const T = q.get("t");
+const $ = (id) => document.getElementById(id);
+const TIPOS = ["persona", "dividida", "video", "imagen", "contenida"];
+const NOMBRES = { persona: "Nacho a pantalla completa", dividida: "Nacho arriba (pantalla dividida)",
+  video: "Video de la proyección a pantalla completa", imagen: "Imagen o documento", contenida: "Recuadro completo de Nacho" };
+let D = null;            // datos del servidor
+let ajustes = [];        // correcciones guardadas
+let edit = null;         // corrección en curso: {modo, cx, cy, zoom} o {modo, dx, dy, zoom}
+let modo = "fijo";
+let tramo = null;        // [inicio, fin] en tiempo original
+let tituloImg = null;
+let vista = [0, 1];      // ventana visible de la línea de tiempo (segundos originales)
+let video, capa, ctx, previa, pctx, linea, lctx;
+
+function estado(txt, cls) { const e = $("estado"); e.textContent = txt || ""; e.className = cls || ""; }
+
+// ---------- tiempos ----------
+function aEditado(t) {
+  let quitado = 0;
+  for (const c of D.cortes) {
+    if (t >= c.fin) quitado += c.fin - c.inicio;
+    else if (t > c.inicio) { quitado += t - c.inicio; break; }
+    else break;
+  }
+  return Math.max(0, t - quitado);
+}
+function aOriginal(te) {
+  let t = te;
+  for (const c of D.cortes) { if (t >= c.inicio - 1e-9) t += c.fin - c.inicio; else break; }
+  return t;
+}
+function mmss(t) {
+  t = Math.max(0, t);
+  const m = Math.floor(t / 60), s = Math.floor(t % 60), c = Math.floor((t * 100) % 100);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}:${String(c).padStart(2, "0")}`;
+}
+function seg(txt) {
+  txt = (txt || "").trim().replace(",", ".");
+  if (!txt) return null;
+  const p = txt.split(":");
+  if (p.length === 1) return parseFloat(p[0]);
+  if (p.length === 2) return parseInt(p[0]) * 60 + parseFloat(p[1]);
+  return parseInt(p[0]) * 60 + parseInt(p[1]) + parseInt(p[2].padEnd(2, "0").slice(0, 2)) / 100;
+}
+function enCorte(t) { return D.cortes.some(c => c.inicio <= t && t < c.fin); }
+
+// ---------- muestras ----------
+function muestra(t) {
+  const i = Math.min(D.muestras.length - 1, Math.max(0, Math.floor(t / D.paso)));
+  const a = D.muestras[i], b = D.muestras[Math.min(D.muestras.length - 1, i + 1)];
+  const e = { tipo: TIPOS[a[1]] };
+  if (a.length > 2) {
+    e.region = a.slice(2, 6); e.aspect = a[6]; e.auto = a.slice(7, 11);
+    if (b.length > 2 && b[1] === a[1] && b[2] === a[2] && b[3] === a[3]) {
+      const f = Math.min(1, Math.max(0, (t - a[0]) / D.paso));
+      e.auto = e.auto.map((v, k) => v + (b[7 + k] - v) * f);
+    }
+  }
+  return e;
+}
+function grupos() {
+  if (D._grupos) return D._grupos;
+  const g = [];
+  for (const m of D.muestras) {
+    const k = m[1] + "|" + (m.length > 2 ? m.slice(2, 6).join(",") : "");
+    if (g.length && g[g.length - 1].k === k) continue;
+    if (g.length) g[g.length - 1].fin = m[0];
+    g.push({ k, tipo: TIPOS[m[1]], inicio: m[0], fin: D.video.duracion });
+  }
+  return (D._grupos = g);
+}
+function grupoEn(t) { return grupos().find(g => g.inicio <= t && t < g.fin) || grupos()[grupos().length - 1]; }
+function ajusteEn(t) { return ajustes.find(a => a.inicio <= t && t < a.fin); }
+
+// misma cuenta que ventana_manual() del editor.py
+function ventanaManual(a, e) {
+  const [rx, ry, rw, rh] = e.region, asp = e.aspect;
+  const maxW = Math.min(rw, rh * asp);
+  const [ax, ay, aw, ah] = e.auto;
+  const z = Math.max(0.2, a.zoom || 1);
+  let cx, cy, w;
+  if (a.modo === "ajuste") { cx = ax + aw / 2 + (a.dx || 0); cy = ay + ah / 2 + (a.dy || 0); w = aw / z; }
+  else { cx = a.cx ?? ax + aw / 2; cy = a.cy ?? ay + ah / 2; w = maxW / Math.max(1, z); }
+  w = Math.max(16, Math.min(w, maxW));
+  const h = w / asp;
+  const x0 = Math.min(Math.max(cx - w / 2, rx), rx + rw - w);
+  const y0 = Math.min(Math.max(cy - h / 2, ry), ry + rh - h);
+  return [x0, y0, w, h];
+}
+function editable(e) { return !!e.auto; }
+function enTramo(t) { return tramo && tramo[0] <= t && t < tramo[1]; }
+function ventanaActual(t, e) {
+  if (!editable(e)) return null;
+  if (edit && enTramo(t)) return { r: ventanaManual(edit, e), cual: "edit" };
+  const a = ajusteEn(t);
+  if (a) return { r: ventanaManual(a, e), cual: "manual" };
+  return { r: e.auto, cual: "auto" };
+}
+// rectángulo -> parámetros del modo elegido
+function aParametros(r, e, m) {
+  const [x, y, w, h] = r, cx = x + w / 2, cy = y + h / 2;
+  if (m === "ajuste") {
+    const [ax, ay, aw, ah] = e.auto;
+    return { modo: "ajuste", dx: cx - (ax + aw / 2), dy: cy - (ay + ah / 2), zoom: aw / w };
+  }
+  const maxW = Math.min(e.region[2], e.region[3] * e.aspect);
+  return { modo: "fijo", cx, cy, zoom: maxW / w };
+}
+
+// ---------- dibujo ----------
+function escala() { return capa.width / D.video.ancho; }
+function dibujar() {
+  const t = video.currentTime;
+  const e = muestra(t);
+  const s = escala();
+  ctx.clearRect(0, 0, capa.width, capa.height);
+  const v = ventanaActual(t, e);
+  if (v) {
+    const [rx, ry, rw, rh] = e.region.map(x => x * s);
+    const [x, y, w, h] = v.r.map(x => x * s);
+    // oscurece lo que no se ve
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    ctx.beginPath(); ctx.rect(0, 0, capa.width, capa.height); ctx.rect(x, y + h, w, -h); ctx.fill("evenodd");
+    ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 1; ctx.setLineDash([]);
+    ctx.strokeRect(rx + .5, ry + .5, rw - 1, rh - 1);
+    if (v.cual !== "auto") {
+      const [ax, ay, aw, ah] = e.auto.map(x => x * s);
+      ctx.strokeStyle = "#facc15"; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+      ctx.strokeRect(ax, ay, aw, ah);
+    }
+    ctx.setLineDash(v.cual === "auto" ? [6, 5] : []);
+    ctx.strokeStyle = v.cual === "auto" ? "#facc15" : (v.cual === "edit" ? "#f97316" : "#22c55e");
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+    ctx.fillStyle = ctx.strokeStyle;
+    const k = 12 * devicePixelRatio;
+    for (const [px, py] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) ctx.fillRect(px - k / 2, py - k / 2, k, k);
+  } else {
+    ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(0, 0, capa.width, capa.height);
+    ctx.fillStyle = "#fff"; ctx.font = `${16 * devicePixelRatio}px system-ui`; ctx.textAlign = "center";
+    ctx.fillText(e.tipo === "contenida" ? "Aquí se ve el recuadro completo de Nacho (no se recorta)"
+      : "Aquí se ve una imagen o documento: no hay encuadre que mover", capa.width / 2, capa.height / 2);
+  }
+  dibujarPrevia(t, e, v);
+  dibujarLinea(t);
+  actualizarPanel(t, e, v);
+}
+
+function dibujarPrevia(t, e, v) {
+  const [W, H] = D.salida, PW = previa.width, PH = previa.height, s = PW / W;
+  pctx.fillStyle = "#111"; pctx.fillRect(0, 0, PW, PH);
+  if (!v) {
+    pctx.fillStyle = "#666"; pctx.font = "28px system-ui"; pctx.textAlign = "center";
+    pctx.fillText(e.tipo === "imagen" ? "imagen" : "recuadro completo", PW / 2, PH / 2);
+    return;
+  }
+  const area = e.tipo === "dividida" ? D.areas.dividida : (e.tipo === "video" ? [0, 0, W, H] : D.areas.persona);
+  const [ax, ay, aw, ah] = area.map(x => x * s);
+  const [x, y, w, h] = v.r;
+  try { pctx.drawImage(video, x, y, w, h, ax, ay, aw, ah); } catch (err) {}
+  if (e.tipo === "dividida") {
+    pctx.fillStyle = "#2a2f3c"; pctx.fillRect(0, ay + ah, PW, PH - ay - ah);
+    pctx.fillStyle = "#9aa1ad"; pctx.font = "26px system-ui"; pctx.textAlign = "center";
+    pctx.fillText("imagen / proyección", PW / 2, ay + ah + (PH - ay - ah) / 2);
+  }
+  if (tituloImg && tituloImg.complete && tituloImg.naturalWidth) pctx.drawImage(tituloImg, 0, 0, PW, PH);
+}
+
+function colorTipo(tipo) {
+  return getComputedStyle(document.documentElement).getPropertyValue("--c-" + (tipo === "contenida" ? "imagen" : tipo)).trim();
+}
+function dibujarLinea(t) {
+  const W = linea.width, H = linea.height, dpr = devicePixelRatio;
+  const [v0, v1] = vista, X = (s) => (s - v0) / (v1 - v0) * W;
+  lctx.clearRect(0, 0, W, H);
+  const yT = 16 * dpr, hT = 24 * dpr;
+  for (const g of grupos()) {
+    if (g.fin < v0 || g.inicio > v1) continue;
+    lctx.fillStyle = colorTipo(g.tipo);
+    lctx.fillRect(X(g.inicio), yT, Math.max(1, X(g.fin) - X(g.inicio) - 1), hT);
+  }
+  lctx.fillStyle = "#7f1d1d";
+  for (const c of D.cortes) {
+    if (c.fin < v0 || c.inicio > v1) continue;
+    lctx.fillRect(X(c.inicio), yT + hT, Math.max(1, X(c.fin) - X(c.inicio)), 6 * dpr);
+  }
+  lctx.fillStyle = "#16a34a";
+  for (const a of ajustes) lctx.fillRect(X(a.inicio), 3 * dpr, Math.max(2, X(a.fin) - X(a.inicio)), 10 * dpr);
+  if (tramo) {
+    lctx.strokeStyle = "#f97316"; lctx.lineWidth = 2 * dpr;
+    lctx.strokeRect(X(tramo[0]), 2 * dpr, X(tramo[1]) - X(tramo[0]), H - 4 * dpr);
+  }
+  lctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--texto");
+  lctx.fillRect(X(t) - dpr, 0, 2 * dpr, H);
+  lctx.font = `${10 * dpr}px system-ui`; lctx.textAlign = "left";
+  lctx.fillText(mmss(aEditado(v0)), 3 * dpr, H - 4 * dpr);
+  lctx.textAlign = "right"; lctx.fillText(mmss(aEditado(v1)), W - 3 * dpr, H - 4 * dpr);
+}
+
+function actualizarPanel(t, e, v) {
+  const te = aEditado(t);
+  $("tiempo").innerHTML = `${mmss(te)} <small>(original ${mmss(t)}${enCorte(t) ? " · pausa recortada" : ""})</small>`;
+  const sit = $("situacion");
+  if (edit) { sit.textContent = "Cambio sin aplicar: elige el tramo y presiona «Aplicar al tramo»"; sit.className = "pend"; }
+  else if (!v) { sit.textContent = NOMBRES[e.tipo]; sit.className = "no"; }
+  else if (v.cual === "manual") { sit.textContent = `${NOMBRES[e.tipo]} · corregido a mano`; sit.className = "manual"; }
+  else { sit.textContent = `${NOMBRES[e.tipo]} · automático`; sit.className = ""; }
+  $("b_aplicar").disabled = !edit;
+  $("b_cancelar").disabled = !edit;
+  $("b_quitar").disabled = !!edit || !ajusteEn(t);
+  if (!video.paused) {
+    // la vista de la línea sigue al cursor
+    if (t > vista[1] || t < vista[0]) { const w = vista[1] - vista[0]; vista = [t - w * 0.1, t + w * 0.9]; acotarVista(); }
+  }
+  for (const el of document.querySelectorAll(".item")) el.classList.toggle("actual", +el.dataset.i === ajustes.indexOf(ajusteEn(t)));
+}
+
+function bucle() { dibujar(); requestAnimationFrame(bucle); }
+
+// ---------- arrastrar el recuadro ----------
+let arrastre = null;
+function punto(ev) {
+  const r = capa.getBoundingClientRect(), s = D.video.ancho / r.width;
+  return [(ev.clientX - r.left) * s, (ev.clientY - r.top) * s];
+}
+function empezarEdicion(t, e) {
+  if (edit) return;
+  const a = ajusteEn(t);
+  if (a) { tramo = [a.inicio, a.fin]; modo = a.modo; }
+  else { const g = grupoEn(t); tramo = [g.inicio, g.fin]; }
+  marcarModo();
+  const v = ventanaActual(t, e);
+  edit = aParametros(v.r, e, modo);
+  escribirTramo();
+}
+function zonaDe(p, r) {
+  const [x, y, w, h] = r, k = 18 * D.video.ancho / capa.getBoundingClientRect().width;
+  const esq = [[x, y, "nw"], [x + w, y, "ne"], [x, y + h, "sw"], [x + w, y + h, "se"]];
+  for (const [ex, ey, n] of esq) if (Math.abs(p[0] - ex) < k && Math.abs(p[1] - ey) < k) return n;
+  if (p[0] > x && p[0] < x + w && p[1] > y && p[1] < y + h) return "mover";
+  return null;
+}
+function ponerRect(r, e) { edit = aParametros(r, e, modo); }
+
+function alPresionar(ev) {
+  const t = video.currentTime, e = muestra(t), v = ventanaActual(t, e);
+  if (!v) return;
+  const p = punto(ev), z = zonaDe(p, v.r);
+  if (!z) return;
+  video.pause();
+  empezarEdicion(t, e);
+  arrastre = { z, p0: p, r0: ventanaManual(edit, e).slice(), e };
+  capa.setPointerCapture(ev.pointerId);
+}
+function alMover(ev) {
+  const t = video.currentTime, e = muestra(t), v = ventanaActual(t, e);
+  if (!arrastre) {
+    const z = v ? zonaDe(punto(ev), v.r) : null;
+    capa.style.cursor = !z ? "default" : z === "mover" ? "move" : (z === "nw" || z === "se" ? "nwse-resize" : "nesw-resize");
+    return;
+  }
+  const p = punto(ev), [x, y, w, h] = arrastre.r0, asp = arrastre.e.aspect;
+  if (arrastre.z === "mover") {
+    ponerRect([x + p[0] - arrastre.p0[0], y + p[1] - arrastre.p0[1], w, h], arrastre.e);
+  } else {
+    // esquina contraria fija, conserva la proporción
+    const fx = arrastre.z.includes("w") ? x + w : x, fy = arrastre.z.includes("n") ? y + h : y;
+    let nw = Math.max(Math.abs(p[0] - fx), Math.abs(p[1] - fy) * asp, 40);
+    const nh = nw / asp;
+    const nx = arrastre.z.includes("w") ? fx - nw : fx, ny = arrastre.z.includes("n") ? fy - nh : fy;
+    ponerRect([nx, ny, nw, nh], arrastre.e);
+  }
+}
+function alSoltar() { arrastre = null; }
+function alRueda(ev) {
+  const t = video.currentTime, e = muestra(t), v = ventanaActual(t, e);
+  if (!v) return;
+  ev.preventDefault();
+  video.pause();
+  empezarEdicion(t, e);
+  const r = ventanaManual(edit, e), f = ev.deltaY > 0 ? 1.06 : 1 / 1.06;
+  const cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2, w = r[2] * f, h = w / e.aspect;
+  ponerRect([cx - w / 2, cy - h / 2, w, h], e);
+}
+function alDobleClic(ev) {
+  const t = video.currentTime, e = muestra(t), v = ventanaActual(t, e);
+  if (!v) return;
+  video.pause();
+  empezarEdicion(t, e);
+  const p = punto(ev), r = ventanaManual(edit, e);
+  ponerRect([p[0] - r[2] / 2, p[1] - r[3] / 2, r[2], r[3]], e);
+}
+
+// ---------- tramo ----------
+function escribirTramo() {
+  $("t_ini").value = tramo ? mmss(aEditado(tramo[0])) : "";
+  $("t_fin").value = tramo ? mmss(aEditado(tramo[1])) : "";
+}
+function leerTramo() {
+  const a = seg($("t_ini").value), b = seg($("t_fin").value);
+  if (a == null || b == null || isNaN(a) || isNaN(b)) return null;
+  const ia = aOriginal(a), ib = Math.min(D.video.duracion, aOriginal(b));
+  return ib - ia >= 0.05 ? [ia, ib] : null;
+}
+function marcarModo() {
+  for (const b of document.querySelectorAll(".modo")) b.classList.toggle("activo", b.dataset.modo === modo);
+}
+
+// ---------- guardar ----------
+async function guardar(lista, msg) {
+  estado("Guardando…", "pend");
+  try {
+    const r = await fetch("/enc/guardar", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ t: T, ajustes: lista }) });
+    if (!r.ok) throw new Error(await r.text());
+    ajustes = (await r.json()).ajustes;
+    pintarLista();
+    estado(msg + " Presiona «Renderizar de nuevo» cuando termines.", "ok");
+  } catch (err) { estado("No se pudo guardar: " + err.message, "err"); }
+}
+function recortarFuera(lista, a, b) {
+  // quita [a, b) de las correcciones existentes (partiéndolas si hace falta)
+  const out = [];
+  for (const x of lista) {
+    if (x.fin <= a || x.inicio >= b) { out.push(x); continue; }
+    if (x.inicio < a) out.push({ ...x, fin: a });
+    if (x.fin > b) out.push({ ...x, inicio: b });
+  }
+  return out;
+}
+async function aplicar() {
+  const tr = leerTramo();
+  if (!tr) { estado("Revisa los tiempos del tramo.", "err"); return; }
+  const nuevo = { ...edit, inicio: tr[0], fin: tr[1] };
+  const lista = recortarFuera(ajustes, tr[0], tr[1]);
+  lista.push(nuevo);
+  edit = null; tramo = null; escribirTramo();
+  await guardar(lista, "Encuadre guardado.");
+}
+async function quitar(i) {
+  const a = i == null ? ajusteEn(video.currentTime) : ajustes[i];
+  if (!a) return;
+  await guardar(ajustes.filter(x => x !== a), "Ese tramo vuelve al encuadre automático.");
+}
+function pintarLista() {
+  const l = $("lista");
+  if (!ajustes.length) { l.innerHTML = `<div style="color:var(--suave);font-size:13px">Todavía no hay correcciones.</div>`; return; }
+  l.innerHTML = "";
+  ajustes.forEach((a, i) => {
+    const d = document.createElement("div");
+    d.className = "item"; d.dataset.i = i;
+    d.innerHTML = `<span class="txt">${mmss(aEditado(a.inicio))} – ${mmss(aEditado(a.fin))} · ${a.modo === "ajuste" ? "sigue la cara" : "fijo"}</span>
+      <button class="btn">Ir</button><button class="btn peligro">Quitar</button>`;
+    const [bIr, bQ] = d.querySelectorAll("button");
+    bIr.onclick = () => { video.pause(); video.currentTime = a.inicio + 0.01; };
+    bQ.onclick = () => quitar(i);
+    l.appendChild(d);
+  });
+}
+
+// ---------- línea de tiempo ----------
+function acotarVista() {
+  const dur = D.video.duracion, w = Math.min(dur, Math.max(2, vista[1] - vista[0]));
+  let a = Math.max(0, Math.min(vista[0], dur - w));
+  vista = [a, a + w];
+}
+function tiempoLinea(ev) {
+  const r = linea.getBoundingClientRect();
+  return vista[0] + (ev.clientX - r.left) / r.width * (vista[1] - vista[0]);
+}
+function iniciarLinea() {
+  let presionado = false;
+  linea.addEventListener("pointerdown", (ev) => { presionado = true; linea.setPointerCapture(ev.pointerId); video.currentTime = Math.max(0, tiempoLinea(ev)); });
+  linea.addEventListener("pointermove", (ev) => { if (presionado) video.currentTime = Math.max(0, tiempoLinea(ev)); });
+  linea.addEventListener("pointerup", () => { presionado = false; });
+  linea.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    const tm = tiempoLinea(ev), f = ev.deltaY > 0 ? 1.25 : 0.8;
+    vista = [tm - (tm - vista[0]) * f, tm + (vista[1] - tm) * f];
+    acotarVista();
+  }, { passive: false });
+}
+
+function medir() {
+  const dpr = devicePixelRatio;
+  const r = capa.getBoundingClientRect();
+  capa.width = Math.round(r.width * dpr); capa.height = Math.round(r.height * dpr);
+  const l = linea.getBoundingClientRect();
+  linea.width = Math.round(l.width * dpr); linea.height = Math.round(l.height * dpr);
+}
+
+// ---------- inicio ----------
+async function iniciar() {
+  if (!T) { $("contenido").innerHTML = `<div class="vacio">Falta la carpeta de trabajo.</div>`; return; }
+  try {
+    const r = await fetch(`/enc/datos?t=${encodeURIComponent(T)}`);
+    if (!r.ok) throw new Error(await r.text());
+    D = await r.json();
+  } catch (err) { $("contenido").innerHTML = `<div class="vacio">No pude cargar los datos: ${err.message}</div>`; return; }
+  if (!D.soportado) { $("contenido").innerHTML = `<div class="vacio">${D.motivo}</div>`; return; }
+  ajustes = D.ajustes;
+  $("contenido").innerHTML = "";
+  $("contenido").appendChild($("plantilla").content.cloneNode(true));
+  video = $("video"); capa = $("capa"); ctx = capa.getContext("2d");
+  previa = $("previa"); pctx = previa.getContext("2d");
+  linea = $("linea"); lctx = linea.getContext("2d");
+  const [W, H] = D.salida;
+  previa.height = Math.round(previa.width * H / W);
+  previa.style.height = Math.round(230 * H / W) + "px";
+  vista = [0, D.video.duracion];
+  $("escenario").style.aspectRatio = `${D.video.ancho} / ${D.video.alto}`;
+  if (D.titulo) { tituloImg = new Image(); tituloImg.src = `/enc/titulo?t=${encodeURIComponent(T)}&v=${Date.now()}`; }
+
+  video.src = `/enc/video?t=${encodeURIComponent(T)}`;
+  video.addEventListener("loadedmetadata", () => { medir(); });
+  video.addEventListener("play", () => { $("b_play").textContent = "❚❚ Pausa"; });
+  video.addEventListener("pause", () => { $("b_play").textContent = "▶ Reproducir"; });
+  video.addEventListener("error", () => estado("El navegador no pudo abrir el video original.", "err"));
+  new ResizeObserver(medir).observe($("escenario"));
+  new ResizeObserver(medir).observe(linea);
+
+  capa.addEventListener("pointerdown", alPresionar);
+  capa.addEventListener("pointermove", alMover);
+  capa.addEventListener("pointerup", alSoltar);
+  capa.addEventListener("wheel", alRueda, { passive: false });
+  capa.addEventListener("dblclick", alDobleClic);
+  capa.addEventListener("click", () => { if (!arrastre && !edit) video.paused ? video.play() : video.pause(); });
+  iniciarLinea();
+
+  const fps = D.video.fps || 30;
+  const mover = (d) => { video.pause(); video.currentTime = Math.min(D.video.duracion, Math.max(0, video.currentTime + d)); };
+  $("b_play").onclick = () => video.paused ? video.play() : video.pause();
+  $("b_m1").onclick = () => mover(-1);
+  $("b_p1").onclick = () => mover(1);
+  $("b_mf").onclick = () => mover(-1 / fps);
+  $("b_pf").onclick = () => mover(1 / fps);
+  document.addEventListener("keydown", (ev) => {
+    if (ev.target.tagName === "INPUT") return;
+    if (ev.code === "Space") { ev.preventDefault(); video.paused ? video.play() : video.pause(); }
+    if (ev.code === "ArrowLeft") { ev.preventDefault(); mover(ev.shiftKey ? -1 : -1 / fps); }
+    if (ev.code === "ArrowRight") { ev.preventDefault(); mover(ev.shiftKey ? 1 : 1 / fps); }
+  });
+  for (const b of document.querySelectorAll(".modo")) b.onclick = () => {
+    const t = video.currentTime, e = muestra(t);
+    const r = edit && editable(e) ? ventanaManual(edit, e) : null;
+    modo = b.dataset.modo; marcarModo();
+    if (r) edit = aParametros(r, e, modo);
+  };
+  $("b_ini").onclick = () => { if (!tramo) return; tramo[0] = video.currentTime; escribirTramo(); };
+  $("b_fin").onclick = () => { if (!tramo) return; tramo[1] = video.currentTime; escribirTramo(); };
+  $("b_toma").onclick = () => { if (!tramo) return; const g = grupoEn(video.currentTime); tramo = [g.inicio, g.fin]; escribirTramo(); };
+  for (const id of ["t_ini", "t_fin"]) $(id).addEventListener("change", () => { const tr = leerTramo(); if (tr) tramo = tr; });
+  $("b_aplicar").onclick = aplicar;
+  $("b_cancelar").onclick = () => { edit = null; tramo = null; escribirTramo(); };
+  $("b_quitar").onclick = () => quitar(null);
+  pintarLista();
+  medir();
+  requestAnimationFrame(bucle);
+}
+iniciar();
+</script>
+</body>
+</html>

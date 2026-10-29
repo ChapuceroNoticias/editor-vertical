@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Movimiento de imágenes</title>
+<style>
+  :root {
+    --fondo: #f6f7fb; --panel: #ffffff; --texto: #1f2430; --suave: #6b7280; --borde: #e3e6ee;
+    --inicio: #22c55e; --final: #f59e0b; --acento: #5b5bd6; --rojo: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --fondo: #0f1117; --panel: #171a23; --texto: #e7e9ee; --suave: #9aa1ad; --borde: #2a2f3c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fondo); color: var(--texto); }
+  .barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; }
+  .tabs button { border: 1px solid var(--borde); background: var(--panel); color: var(--texto); padding: 6px 12px;
+    border-radius: 8px; cursor: pointer; font-weight: 600; }
+  .tabs button.activo { background: var(--acento); color: #fff; border-color: var(--acento); }
+  .info { color: var(--suave); margin-left: auto; }
+  button.quitar { color: var(--rojo); padding: 5px 10px; font-size: 13px; }
+  button.quitar:hover { border-color: var(--rojo); }
+  .area { display: flex; gap: 12px; padding: 0 12px; align-items: flex-start; flex-wrap: nowrap; }
+  @media (max-width: 620px) { .area { flex-wrap: wrap; } }
+  .panel { background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; padding: 10px; }
+  .foto-panel { flex: 1 1 340px; min-width: 280px; }
+  .titulo-panel { font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .titulo-panel small { font-weight: 400; color: var(--suave); }
+  #lienzo { position: relative; display: inline-block; user-select: none; touch-action: none; line-height: 0; max-width: 100%; }
+  #foto { max-width: 100%; max-height: 400px; display: block; border-radius: 6px; }
+  .marco { position: absolute; border: 3px solid; border-radius: 3px; cursor: move; }
+  .marco.inicio { border-color: var(--inicio); background: rgba(34,197,94,.08); }
+  .marco.final { border-color: var(--final); background: rgba(245,158,11,.08); border-style: dashed; }
+  .marco.arriba { z-index: 3; }
+  .marco .etq { position: absolute; top: -3px; left: -3px; transform: translateY(-100%); font: 700 11px/1 system-ui;
+    color: #000; padding: 4px 6px; border-radius: 4px 4px 0 0; white-space: nowrap; }
+  .marco.inicio .etq { background: var(--inicio); }
+  .marco.final .etq { top: auto; left: auto; bottom: -3px; right: -3px; transform: translateY(100%); border-radius: 0 0 4px 4px; }
+  .marco.final .etq { background: var(--final); }
+  .asa { position: absolute; width: 14px; height: 14px; background: #fff; border: 2px solid #000; border-radius: 3px; }
+  .asa.nw { left: -8px; top: -8px; cursor: nwse-resize; } .asa.ne { right: -8px; top: -8px; cursor: nesw-resize; }
+  .asa.sw { left: -8px; bottom: -8px; cursor: nesw-resize; } .asa.se { right: -8px; bottom: -8px; cursor: nwse-resize; }
+  #flecha { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+  .prev-panel { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; }
+  #previa { background: #000; border-radius: 8px; display: block; }
+  .controles-prev { display: flex; align-items: center; gap: 8px; margin-top: 8px; width: 100%; }
+  .controles-prev input[type=range] { flex: 1; }
+  .tiempo { font-variant-numeric: tabular-nums; color: var(--suave); min-width: 64px; text-align: right; }
+  .fila { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px 0; }
+  .fila .lbl { color: var(--suave); font-weight: 600; margin-right: 2px; }
+  button.btn { border: 1px solid var(--borde); background: var(--panel); color: var(--texto); padding: 7px 11px;
+    border-radius: 8px; cursor: pointer; font-weight: 600; }
+  button.btn:hover { border-color: var(--acento); }
+  button.prim { background: var(--acento); color: #fff; border-color: var(--acento); }
+  button.redondo { width: 36px; height: 36px; border-radius: 50%; padding: 0; font-size: 15px; }
+  .seg { display: inline-flex; border: 1px solid var(--borde); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: var(--panel); color: var(--texto); padding: 7px 11px; cursor: pointer; font-weight: 600; }
+  .seg button.activo { background: var(--acento); color: #fff; }
+  .seg button.ini.activo { background: var(--inicio); color: #000; }
+  .seg button.fin.activo { background: var(--final); color: #000; }
+  #estado { padding: 8px 12px 12px; color: var(--suave); min-height: 20px; }
+  #estado.ok { color: var(--inicio); } #estado.pend { color: var(--final); } #estado.err { color: var(--rojo); }
+  .ayuda { color: var(--suave); font-size: 12.5px; padding: 6px 12px 0; }
+  .vacio { padding: 40px 12px; color: var(--suave); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="barra">
+    <div class="tabs" id="tabs"></div>
+    <button class="btn quitar" id="quitarImg" title="Quitar esta imagen del momento">✕ Quitar esta imagen</button>
+    <span class="info" id="info"></span>
+  </div>
+
+  <div class="area">
+    <div class="panel foto-panel">
+      <div class="titulo-panel">
+        <span>Foto</span>
+        <span class="seg" title="Qué marco quieres mover cuando se enciman">
+          <button class="ini activo" id="selIni">Mover INICIO</button>
+          <button class="fin" id="selFin">Mover FINAL</button>
+        </span>
+      </div>
+      <div id="lienzo">
+        <img id="foto" alt="">
+        <div class="marco inicio arriba" id="mIni"><span class="etq">INICIO</span>
+          <i class="asa nw"></i><i class="asa ne"></i><i class="asa sw"></i><i class="asa se"></i></div>
+        <div class="marco final" id="mFin"><span class="etq">FINAL</span>
+          <i class="asa nw"></i><i class="asa ne"></i><i class="asa sw"></i><i class="asa se"></i></div>
+        <svg id="flecha"></svg>
+      </div>
+    </div>
+
+    <div class="panel prev-panel">
+      <div class="titulo-panel" style="width:100%"><span>Así se verá</span><small id="dur"></small></div>
+      <canvas id="previa"></canvas>
+      <div class="controles-prev">
+        <button class="btn redondo" id="play" title="Reproducir / pausar">❚❚</button>
+        <input type="range" id="scrub" min="0" max="1000" value="0">
+        <span class="tiempo" id="tiempo">0.0 s</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ayuda">Arrastra cada marco para moverlo y sus esquinas para agrandarlo o achicarlo. Lo que está dentro del marco
+    es exactamente lo que se ve. <b>Doble clic</b> en la foto centra el movimiento en ese punto.</div>
+
+  <div class="fila">
+    <span class="lbl">Movimiento rápido:</span>
+    <button class="btn" data-preset="acercar">🔍+ Acercar</button>
+    <button class="btn" data-preset="alejar">🔍− Alejar</button>
+    <button class="btn" data-preset="der">→ Paneo</button>
+    <button class="btn" data-preset="izq">← Paneo</button>
+    <button class="btn" data-preset="arr">↑ Paneo</button>
+    <button class="btn" data-preset="aba">↓ Paneo</button>
+    <button class="btn" data-preset="fijo">■ Fijo</button>
+    <span class="lbl" style="margin-left:8px">Cantidad:</span>
+    <input type="range" id="cantidad" min="10" max="80" value="35" style="width:120px">
+  </div>
+  <div class="fila">
+    <span class="lbl">Ritmo:</span>
+    <span class="seg"><button id="rSuave" class="activo">Suave</button><button id="rConst">Constante</button></span>
+    <button class="btn" id="invertir">⇄ Invertir</button>
+    <button class="btn" id="restablecer">↺ Automático</button>
+    <button class="btn prim" id="guardar" style="margin-left:auto">💾 Guardar movimiento</button>
+  </div>
+  <div id="estado"></div>
+</div>
+
+<script>
+(() => {
+  const q = new URLSearchParams(location.search);
+  const T = q.get("t"), N = q.get("n");
+  const $ = id => document.getElementById(id);
+  const foto = $("foto"), lienzo = $("lienzo"), mIni = $("mIni"), mFin = $("mFin"), svg = $("flecha");
+  const previa = $("previa"), ctx = previa.getContext("2d");
+
+  let datos = null, k = 0, A = 9 / 16;          // proporción (ancho/alto) del área donde va la imagen
+  let ini = [0, 0, 1, 1], fin = [0, 0, 1, 1];  // marcos normalizados [x, y, ancho, alto]
+  let suavizado = "suave", activo = "ini", cambios = false;
+  let reproduciendo = true, t0 = performance.now(), faseManual = 0;
+
+  const estado = (txt, cls = "") => { const e = $("estado"); e.textContent = txt; e.className = cls; };
+  const marcarCambio = () => { cambios = true; estado("Cambios sin guardar", "pend"); };
+
+  // ---------- geometría ----------
+  const iw = () => foto.naturalWidth || 1, ih = () => foto.naturalHeight || 1;
+  function maxAncho() {            // ancho normalizado máximo de un marco con proporción A
+    return Math.min(1, (ih() * A) / iw());
+  }
+  function ajustar(r) {            // fuerza proporción A y lo mete dentro de la foto
+    let [x, y, w] = r;
+    const cx = x + r[2] / 2, cy = y + r[3] / 2;
+    w = Math.min(Math.max(w, 0.04), maxAncho());
+    const h = (w * iw()) / A / ih();
+    x = Math.min(Math.max(cx - w / 2, 0), 1 - w);
+    y = Math.min(Math.max(cy - h / 2, 0), 1 - h);
+    return [x, y, w, h];
+  }
+  function centrado(cx, cy, w) {
+    const h = (w * iw()) / A / ih();
+    return ajustar([cx - w / 2, cy - h / 2, w, h]);
+  }
+  const curva = p => suavizado === "suave" ? 0.5 - 0.5 * Math.cos(Math.PI * p) : p;
+  const mezcla = p => { const c = curva(p); return ini.map((v, i) => v + (fin[i] - v) * c); };
+
+  // ---------- dibujo ----------
+  function pintarMarcos() {
+    const W = foto.clientWidth, H = foto.clientHeight;
+    for (const [el, r] of [[mIni, ini], [mFin, fin]]) {
+      el.style.left = r[0] * W + "px"; el.style.top = r[1] * H + "px";
+      el.style.width = r[2] * W + "px"; el.style.height = r[3] * H + "px";
+    }
+    mIni.classList.toggle("arriba", activo === "ini");
+    mFin.classList.toggle("arriba", activo === "fin");
+    $("selIni").classList.toggle("activo", activo === "ini");
+    $("selFin").classList.toggle("activo", activo === "fin");
+    // flecha del centro de INICIO al centro de FINAL
+    const a = [(ini[0] + ini[2] / 2) * W, (ini[1] + ini[3] / 2) * H];
+    const b = [(fin[0] + fin[2] / 2) * W, (fin[1] + fin[3] / 2) * H];
+    svg.setAttribute("width", W); svg.setAttribute("height", H);
+    const dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const zoomTxt = fin[2] < ini[2] * 0.97 ? "acerca" : fin[2] > ini[2] * 1.03 ? "aleja" : "";
+    svg.innerHTML = `
+      <defs><marker id="pt" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" refX="13" refY="8" orient="auto">
+        <path d="M0,0 L16,8 L0,16 z" fill="#fff" stroke="#000" stroke-width="1.5"/></marker></defs>
+      ${dist > 6 ? `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#000" stroke-width="5" opacity=".5"/>
+        <line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#fff" stroke-width="3" marker-end="url(#pt)"/>` : ""}
+      <circle cx="${a[0]}" cy="${a[1]}" r="5" fill="var(--inicio)" stroke="#000"/>
+      ${zoomTxt ? `<text x="${b[0] + 8}" y="${b[1] - 8}" font-size="13" font-weight="700" fill="#fff"
+        stroke="#000" stroke-width="3" paint-order="stroke">${zoomTxt}</text>` : ""}`;
+  }
+
+  function tamPrevia() {
+    const maxW = A > 1 ? 300 : 225, maxH = 400;
+    let w = maxW, h = w / A;
+    if (h > maxH) { h = maxH; w = h * A; }
+    previa.width = Math.round(w); previa.height = Math.round(h);
+  }
+
+  function dibujarPrevia(p) {
+    if (!foto.complete || !foto.naturalWidth) return;
+    const r = mezcla(p);
+    ctx.drawImage(foto, r[0] * iw(), r[1] * ih(), r[2] * iw(), r[3] * ih(), 0, 0, previa.width, previa.height);
+    const dur = duracion();
+    $("tiempo").textContent = (p * dur).toFixed(1) + " s";
+    $("scrub").value = Math.round(p * 1000);
+  }
+
+  const duracion = () => (datos ? datos.duracion_img : 3);
+  function bucle(ahora) {
+    if (reproduciendo) {
+      const dur = duracion() * 1000, pausa = 600;
+      const ciclo = (ahora - t0) % (dur + pausa);
+      dibujarPrevia(Math.min(1, ciclo / dur));
+    } else {
+      dibujarPrevia(faseManual);
+    }
+    requestAnimationFrame(bucle);
+  }
+
+  // ---------- arrastre ----------
+  function arrastre(el, cual) {
+    el.addEventListener("pointerdown", ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      activo = cual;
+      const asa = ev.target.classList.contains("asa") ? [...ev.target.classList].find(c => c !== "asa") : null;
+      const W = foto.clientWidth, H = foto.clientHeight;
+      const r0 = (cual === "ini" ? ini : fin).slice();
+      const x0 = ev.clientX, y0 = ev.clientY;
+      el.setPointerCapture(ev.pointerId);
+      const mover = e => {
+        const dx = (e.clientX - x0) / W, dy = (e.clientY - y0) / H;
+        let r;
+        if (!asa) {
+          r = ajustar([r0[0] + dx, r0[1] + dy, r0[2], r0[3]]);
+        } else {
+          // la esquina opuesta queda fija; el tamaño sigue al mouse manteniendo la proporción
+          const fijoX = asa.includes("w") ? r0[0] + r0[2] : r0[0];
+          const fijoY = asa.includes("n") ? r0[1] + r0[3] : r0[1];
+          const px = (asa.includes("w") ? r0[0] : r0[0] + r0[2]) + dx;
+          const py = (asa.includes("n") ? r0[1] : r0[1] + r0[3]) + dy;
+          let w = Math.abs(px - fijoX);
+          const wDesdeAlto = (Math.abs(py - fijoY) * ih() * A) / iw();
+          w = Math.max(w, wDesdeAlto);
+          w = Math.min(Math.max(w, 0.04), maxAncho());
+          const h = (w * iw()) / A / ih();
+          const x = asa.includes("w") ? fijoX - w : fijoX;
+          const y = asa.includes("n") ? fijoY - h : fijoY;
+          r = ajustar([x, y, w, h]);
+        }
+        if (cual === "ini") ini = r; else fin = r;
+        pintarMarcos(); marcarCambio();
+        if (!reproduciendo) dibujarPrevia(cual === "ini" ? 0 : 1);
+      };
+      const soltar = () => { el.removeEventListener("pointermove", mover); el.removeEventListener("pointerup", soltar); };
+      el.addEventListener("pointermove", mover);
+      el.addEventListener("pointerup", soltar);
+      pintarMarcos();
+    });
+  }
+  arrastre(mIni, "ini");
+  arrastre(mFin, "fin");
+  $("selIni").onclick = () => { activo = "ini"; pintarMarcos(); };
+  $("selFin").onclick = () => { activo = "fin"; pintarMarcos(); };
+
+  // doble clic: centra el movimiento en ese punto (conserva tamaños y dirección)
+  lienzo.addEventListener("dblclick", ev => {
+    const rect = foto.getBoundingClientRect();
+    const px = (ev.clientX - rect.left) / rect.width, py = (ev.clientY - rect.top) / rect.height;
+    const mx = (ini[0] + ini[2] / 2 + fin[0] + fin[2] / 2) / 2, my = (ini[1] + ini[3] / 2 + fin[1] + fin[3] / 2) / 2;
+    const dx = px - mx, dy = py - my;
+    ini = ajustar([ini[0] + dx, ini[1] + dy, ini[2], ini[3]]);
+    fin = ajustar([fin[0] + dx, fin[1] + dy, fin[2], fin[3]]);
+    pintarMarcos(); marcarCambio();
+  });
+
+  // ---------- movimientos rápidos ----------
+  function preset(tipo) {
+    const c = $("cantidad").value / 100;
+    const cx = (ini[0] + ini[2] / 2 + fin[0] + fin[2] / 2) / 2, cy = (ini[1] + ini[3] / 2 + fin[1] + fin[3] / 2) / 2;
+    const M = maxAncho();
+    if (tipo === "acercar" || tipo === "alejar") {
+      const grande = centrado(cx, cy, M), chico = centrado(cx, cy, M / (1 + c * 1.5));
+      [ini, fin] = tipo === "acercar" ? [grande, chico] : [chico, grande];
+    } else if (tipo === "fijo") {
+      ini = centrado(cx, cy, M / (1 + c * 0.5)); fin = ini.slice();
+    } else {
+      const w = M / (1 + c);
+      const h = (w * iw()) / A / ih();
+      const dx = tipo === "der" ? 1 : tipo === "izq" ? -1 : 0, dy = tipo === "aba" ? 1 : tipo === "arr" ? -1 : 0;
+      const despX = Math.min(c * w, (1 - w) / 2 + Math.abs(0.5 - cx)), despY = Math.min(c * h * 1.4, (1 - h) / 2 + Math.abs(0.5 - cy));
+      ini = centrado(cx - dx * despX / 2, cy - dy * despY / 2, w);
+      fin = centrado(cx + dx * despX / 2, cy + dy * despY / 2, w);
+    }
+    pintarMarcos(); marcarCambio(); reproducir(true);
+  }
+  document.querySelectorAll("[data-preset]").forEach(b => b.onclick = () => preset(b.dataset.preset));
+
+  function ritmo(v) {
+    suavizado = v;
+    $("rSuave").classList.toggle("activo", v === "suave");
+    $("rConst").classList.toggle("activo", v !== "suave");
+  }
+  $("rSuave").onclick = () => { ritmo("suave"); marcarCambio(); };
+  $("rConst").onclick = () => { ritmo("lineal"); marcarCambio(); };
+  $("invertir").onclick = () => { [ini, fin] = [fin, ini]; pintarMarcos(); marcarCambio(); };
+
+  // ---------- reproducción ----------
+  function reproducir(si) {
+    reproduciendo = si;
+    $("play").textContent = si ? "❚❚" : "▶";
+    if (si) t0 = performance.now();
+  }
+  $("play").onclick = () => reproducir(!reproduciendo);
+  $("scrub").addEventListener("input", e => { reproducir(false); faseManual = e.target.value / 1000; });
+
+  // ---------- datos ----------
+  async function api(ruta, cuerpo) {
+    const r = await fetch(ruta, cuerpo ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) } : {});
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  }
+
+  function elegir(nuevo) {
+    if (cambios && !confirm("Hay cambios sin guardar en esta imagen. ¿Cambiar de todos modos?")) return;
+    k = nuevo; cambios = false; estado("");
+    document.querySelectorAll("#tabs button").forEach((b, i) => b.classList.toggle("activo", i === k));
+    const im = datos.imagenes[k];
+    foto.onload = () => {
+      ini = ajustar(im.inicio); fin = ajustar(im.fin); ritmo(im.suavizado || "suave");
+      pintarMarcos(); reproducir(true);
+      estado(im.guardado ? "Movimiento guardado para esta imagen." : "Movimiento automático (aún no lo has ajustado).", im.guardado ? "ok" : "");
+    };
+    foto.src = im.url;
+  }
+
+  function pintarTabs() {
+    const n = datos.imagenes.length;
+    $("info").textContent = `Pantalla ${datos.estilo} · ${n} imagen${n > 1 ? "es" : ""} · cada una dura ${datos.duracion_img.toFixed(1)} s`;
+    $("dur").textContent = `${datos.duracion_img.toFixed(1)} s`;
+    $("tabs").innerHTML = datos.imagenes.map((_, i) => `<button>Imagen ${i + 1}</button>`).join("");
+    document.querySelectorAll("#tabs button").forEach((b, i) => b.onclick = () => elegir(i));
+  }
+
+  async function cargar() {
+    try {
+      datos = await api(`/mov/datos?t=${encodeURIComponent(T)}&n=${N}`);
+    } catch (e) {
+      document.getElementById("app").innerHTML = `<div class="vacio">No pude cargar el momento: ${e.message}</div>`;
+      return;
+    }
+    if (!datos.imagenes.length) {
+      document.getElementById("app").innerHTML = '<div class="vacio">Este momento no tiene imágenes. Búscalas o súbelas abajo.</div>';
+      return;
+    }
+    A = datos.area[0] / datos.area[1];
+    tamPrevia();
+    pintarTabs();
+    elegir(0);
+    requestAnimationFrame(bucle);
+  }
+
+  $("guardar").onclick = async () => {
+    try {
+      await api("/mov/guardar", { t: T, n: +N, k, inicio: ini, fin, suavizado });
+      datos.imagenes[k] = { ...datos.imagenes[k], inicio: ini, fin, suavizado, guardado: true };
+      cambios = false; estado("✓ Guardado. Ya se ve en la vista previa.", "ok");
+    } catch (e) { estado("No se pudo guardar: " + e.message, "err"); }
+  };
+  $("restablecer").onclick = async () => {
+    try {
+      const r = await api("/mov/restablecer", { t: T, n: +N, k });
+      datos.imagenes[k] = r; cambios = false; elegir(k);
+    } catch (e) { estado("Error: " + e.message, "err"); }
+  };
+  $("quitarImg").onclick = async () => {
+    const total = datos.imagenes.length;
+    const msg = total > 1
+      ? `¿Quitar la imagen ${k + 1} de este momento? Las demás se reparten el tiempo.`
+      : "Es la única imagen de este momento. Si la quitas, el momento no mostrará imágenes. ¿Quitarla?";
+    if (!confirm(msg)) return;
+    try {
+      await api("/mov/quitar_imagen", { t: T, n: +N, k });
+      cambios = false;
+      datos = await api(`/mov/datos?t=${encodeURIComponent(T)}&n=${N}`);
+      if (!datos.imagenes.length) {
+        document.getElementById("app").innerHTML = '<div class="vacio">Este momento ya no tiene imágenes. Búscalas o súbelas en «Cambiar imágenes de este momento», o quita el momento.</div>';
+        return;
+      }
+      pintarTabs();
+      elegir(Math.min(k, datos.imagenes.length - 1));
+      setTimeout(() => estado("Imagen quitada. Ya se ve en la vista previa.", "ok"), 700);
+    } catch (e) { estado("No se pudo quitar: " + e.message, "err"); }
+  };
+  window.addEventListener("resize", pintarMarcos);
+  cargar();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+﻿EDITOR VERTICAL · EL CHAPUCERO
+==============================
+
+Convierte los videos 16:9 de Nacho en videos verticales 9:16 con las plantillas de edición
+(Clips Chapuceros, Clips Fuera, Tiktoks Motivacionales, Tiktoks Yair, Solo subtítulos).
+Requisitos: Windows 10/11 de 64 bits, tarjeta NVIDIA (recomendada), internet durante la instalación,
+~25 GB libres.
+
+
+INSTALAR (en cada PC)
+---------------------
+Opción A, sin nada extra:
+  1. Descomprime esta carpeta completa.
+  2. Doble clic en  Instalar.bat
+  3. Se abre una ventana con el avance (11 pasos). Tarda de 15 a 40 minutos según el internet
+     (descarga Python, librerías de NVIDIA, ffmpeg, el modelo de Whisper, el lector de texto y Ollama
+     con su modelo).
+  4. Al final quedan en el escritorio:
+       · el acceso directo  «Editor Vertical»
+       · la carpeta  «VideosEdit»  → aquí van los videos a editar (y sus carpetas _trabajo)
+       · la carpeta  «Renders»     → aquí quedan los videos al exportar desde la plataforma
+
+Opción B, un solo .exe para repartir:
+  1. En tu PC instala Inno Setup 6 (gratis): https://jrsoftware.org/isdl.php
+  2. Abre  EditorVertical.iss  y presiona «Compile» (Ctrl+F9).
+  3. En la carpeta «Output» queda  Instalar_Editor_Vertical_1.0.0.exe : ese es el que pasas a las demás PCs.
+
+Si Windows muestra «Windows protegió su PC»: «Más información» → «Ejecutar de todas formas»
+(pasa porque el instalador no está firmado).
+
+El instalador detecta solo la tarjeta y se ajusta:
+  · 12 GB o más ........ Whisper large-v3 + Ollama qwen2.5:14b
+  · 8 a 12 GB .......... Whisper large-v3 + Ollama qwen2.5:7b
+  · 4 a 8 GB ........... Whisper large-v3 en modo ligero + Ollama qwen2.5:3b
+  · menos de 4 GB ...... Whisper medium + Ollama qwen2.5:3b
+  · sin NVIDIA ......... todo con el procesador (mucho más lento); «Solo tarjeta gráfica» queda desmarcado
+  · Driver viejo ....... avisa y abre la página de NVIDIA para actualizarlo
+Al final prueba que Whisper y la codificación de video funcionen con la tarjeta.
+
+
+USAR
+----
+1. Copia el video a editar en la carpeta «VideosEdit» del escritorio.
+2. Doble clic en «Editor Vertical» (escritorio). Se abre en el navegador (http://127.0.0.1:7860).
+3. Elige el video, escribe el título, el estilo de edición y «Analizar video».
+4. Revisa en «Edición» y «Subtítulos»; al terminar, «Exportar» → el video queda en la carpeta «Renders».
+El manual completo de la plataforma está en  app\LEEME.md.
+
+Para cerrarlo por completo: menú Inicio → «Cerrar Editor Vertical».
+Si algo falla: pestaña «Registro de la plataforma» y manda ese texto.
+Archivos de registro: %LOCALAPPDATA%\EditorVertical\  (instalacion.log, arranque.log, servidor.log)
+Quitar: «Agregar o quitar programas» → «Editor Vertical · El Chapucero» (no borra VideosEdit ni Renders).
+
+OpenCut (opcional): el botón «Abrir en OpenCut» necesita OpenCut corriendo en esa PC
+(ver «Corregir tiempos en OpenCut» en app\LEEME.md). El instalador no lo instala.
+
+
+ACTUALIZAR TODAS LAS PCs DESDE GITHUB
+-------------------------------------
+Cada PC, al abrir el Editor Vertical, revisa en GitHub el archivo  app/version.txt . Si es un número
+mayor que el que tiene instalado, baja el repositorio y copia la carpeta «app» nueva encima (si cambió
+requirements.txt, instala las librerías nuevas en una ventana con el avance). Luego abre normalmente.
+
+Para publicar una actualización:
+  1. Sube a GitHub los archivos cambiados dentro de  app/  (editor.py, interfaz.py, web/..., plantillas/...).
+  2. Cambia  app/version.txt  a un número mayor (ej. 1.0.0 → 1.0.1). SIN ESTE PASO NO SE ACTUALIZA NADA.
+  3. En cada PC: cerrar el editor (menú Inicio → «Cerrar Editor Vertical») y volver a abrirlo.
+
+El repositorio se configura en  instalar.ps1  ($REPO = "usuario/repositorio", $RAMA = "main") antes de
+instalar, o ya instalado en  %LOCALAPPDATA%\EditorVertical\programa\config.json  ("repo" y "rama").
+El repositorio tiene que ser PÚBLICO para que las PCs puedan bajar las actualizaciones sin contraseña.
+Para apagar la actualización automática en una PC:  "actualizar_solo": false  en ese config.json.

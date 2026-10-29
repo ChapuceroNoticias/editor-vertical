@@ -1,0 +1,70 @@
+{
+  "_nota": "Solo pone subtítulos a un clip ya editado. La posición se da para un video vertical de referencia (1080x1920) y uno horizontal (1920x1080) y se ajusta al tamaño real del video.",
+  "estilo": "solo_subtitulos",
+  "salida": {
+    "crf": 18,
+    "audio_kbps": 125
+  },
+  "nombre": "Solo subtítulos (estilo Motivacional)",
+  "subtitulos": {
+    "modo": "frases",
+    "fuente": "assets/Staatliches-Regular.ttf",
+    "tam": 74,
+    "tam_min": 58,
+    "interlineado": 1.1,
+    "max_lineas": 2,
+    "ancho_max": 845,
+    "centro": [
+      466,
+      1562
+    ],
+    "color": "#FFFFFF",
+    "contorno": 4,
+    "color_contorno": "#000000",
+    "sombra": [
+      3,
+      5
+    ],
+    "sombra_difusa": 2,
+    "sombra_opacidad": 0.75,
+    "max_caracteres": 42,
+    "mayusculas": true,
+    "caracteres_ideal": 26,
+    "pausa_forzada_seg": 0.7,
+    "puntuar_con_ia": true,
+    "_nota": "Subtítulos por idea: se cortan en la puntuación (cada pregunta aparte), en pausas largas y antes de 'y', 'pero', 'porque'; nunca terminan en 'el', 'de', 'que'. caracteres_ideal/max_caracteres: largo de cada subtítulo. puntuar_con_ia: el modelo local corrige ¿? . , antes de armarlos."
+  },
+  "referencia_vertical": {
+    "tam_video": [
+      1080,
+      1920
+    ],
+    "centro": [
+      540,
+      1520
+    ],
+    "ancho_max": 860
+  },
+  "referencia_horizontal": {
+    "tam_video": [
+      1920,
+      1080
+    ],
+    "centro": [
+      960,
+      930
+    ],
+    "ancho_max": 1400
+  },
+  "franja_azul": {
+    "_nota": "Si el clip tiene la franja azul de la pantalla dividida, los subtítulos van dentro de ella.",
+    "activar": true,
+    "x_ancho": [
+      30,
+      880
+    ],
+    "azul_fraccion": 0.7,
+    "azul_alto_min": 0.05,
+    "azul_alto_max": 0.2
+  }
+}

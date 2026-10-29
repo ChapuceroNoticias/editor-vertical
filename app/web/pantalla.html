@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pantalla por tramo</title>
+<style>
+  :root {
+    --fondo: #f6f7fb; --panel: #ffffff; --texto: #1f2430; --suave: #6b7280; --borde: #e3e6ee;
+    --acento: #5b5bd6; --ok: #16a34a; --pend: #d97706; --rojo: #dc2626;
+    --c-completa: #5b5bd6; --c-dividida: #0ea5e9; --c-nacho: #9ca3af; --c-cerca: #f59e0b; --c-lejos: #b45309;
+    --c-imagen: #16a34a; --c-quitar: #e5e7eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --fondo: #0f1117; --panel: #171a23; --texto: #e7e9ee; --suave: #9aa1ad; --borde: #2a2f3c; --c-quitar: #2a2f3c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fondo); color: var(--texto); }
+  .barra { position: sticky; top: 0; z-index: 5; padding: 10px 12px; background: var(--fondo); border-bottom: 1px solid var(--borde); }
+  .fila1 { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .fila1 .ayuda { color: var(--suave); flex: 1 1 320px; font-size: 13px; }
+  button.btn { border: 1px solid var(--borde); background: var(--panel); color: var(--texto); padding: 8px 14px;
+    border-radius: 8px; cursor: pointer; font-weight: 600; }
+  button.prim { background: var(--acento); color: #fff; border-color: var(--acento); }
+  button:disabled { opacity: .5; cursor: default; }
+  #estado { font-size: 13px; color: var(--suave); }
+  #estado.ok { color: var(--ok); } #estado.pend { color: var(--pend); } #estado.err { color: var(--rojo); }
+
+  /* línea de tiempo */
+  .linea { margin-top: 10px; }
+  .carril { position: relative; height: 26px; background: var(--panel); border: 1px solid var(--borde); border-radius: 6px; overflow: hidden; }
+  .carril + .carril { margin-top: 4px; height: 16px; }
+  .seg { position: absolute; top: 0; bottom: 0; cursor: pointer; border-right: 1px solid var(--fondo); }
+  .seg:hover { filter: brightness(1.15); }
+  .seg.sel { outline: 2px solid var(--texto); outline-offset: -2px; z-index: 2; }
+  .seg.cambiado { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.35) 0 4px, transparent 4px 8px); }
+  .reglas { display: flex; justify-content: space-between; font-size: 11px; color: var(--suave); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .leyenda { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--suave); margin-top: 6px; }
+  .leyenda span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px;
+    background: var(--c); vertical-align: -1px; }
+
+  .lista { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+  .tramo { display: flex; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--borde);
+    border-left: 6px solid var(--c, var(--borde)); border-radius: 12px; padding: 10px; flex-wrap: wrap; transition: box-shadow .3s; }
+  .tramo.cambiado { box-shadow: 0 0 0 2px var(--pend); }
+  .tramo.brillo { box-shadow: 0 0 0 3px var(--acento); }
+  .mini { width: 96px; height: 96px; border-radius: 8px; background: #000; object-fit: contain; flex: 0 0 auto; }
+  .datos { flex: 1 1 200px; min-width: 180px; }
+  .datos .tit { font-weight: 700; margin-bottom: 6px; }
+  .tiempos { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tiempos label { font-size: 12px; color: var(--suave); display: flex; flex-direction: column; gap: 2px; }
+  .tiempos input { width: 92px; padding: 6px 8px; border: 1px solid var(--borde); border-radius: 6px;
+    background: var(--fondo); color: var(--texto); font-variant-numeric: tabular-nums; }
+  .opciones { display: flex; gap: 8px; flex-wrap: wrap; }
+  .op { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 10px; border: 2px solid var(--borde);
+    border-radius: 10px; background: var(--panel); color: var(--texto); cursor: pointer; font-weight: 600; font-size: 12px; width: 108px; }
+  .op svg { width: 30px; height: 50px; }
+  .op.activo { border-color: var(--acento); background: color-mix(in srgb, var(--acento) 12%, var(--panel)); }
+  .vacio { padding: 40px 16px; color: var(--suave); }
+</style>
+</head>
+<body>
+<div class="barra">
+  <div class="fila1">
+    <div class="ayuda">Todo el video por tramos. Toca un tramo en la línea de tiempo o en la lista y elige cómo se ve.
+      Al terminar, <b>Guardar</b> y luego <b>Renderizar de nuevo</b>.</div>
+    <span id="estado"></span>
+    <button class="btn prim" id="guardar" disabled>Guardar</button>
+  </div>
+  <div class="linea" id="linea"></div>
+</div>
+<div class="lista" id="lista"><div class="vacio">Cargando…</div></div>
+
+<script>
+const q = new URLSearchParams(location.search);
+const T = q.get("t");
+const $ = (id) => document.getElementById(id);
+let tramos = [], originales = {}, duracion = 1;
+
+const MARCO = '<rect x="1" y="1" width="28" height="48" rx="4" fill="none" stroke="currentColor" stroke-width="2"/>';
+const ICONOS = {
+  completa: `<svg viewBox="0 0 30 50">${MARCO}<rect x="4" y="4" width="22" height="42" rx="2" fill="#5b5bd6"/><path d="M12 19l8 6-8 6z" fill="#fff"/></svg>`,
+  dividida: `<svg viewBox="0 0 30 50">${MARCO}<circle cx="15" cy="12" r="5" fill="currentColor"/><rect x="4" y="22" width="22" height="4" fill="#1e40af"/><rect x="4" y="28" width="22" height="18" rx="2" fill="#5b5bd6"/><path d="M13 33l6 4-6 4z" fill="#fff"/></svg>`,
+  nacho: `<svg viewBox="0 0 30 50">${MARCO}<circle cx="15" cy="18" r="7" fill="currentColor"/><path d="M5 46c1-10 6-14 10-14s9 4 10 14z" fill="currentColor"/></svg>`,
+  cerca: `<svg viewBox="0 0 30 50">${MARCO}<circle cx="15" cy="21" r="10" fill="currentColor"/><path d="M1 49c2-12 7-16 14-16s12 4 14 16z" fill="currentColor"/></svg>`,
+  lejos: `<svg viewBox="0 0 30 50">${MARCO}<circle cx="15" cy="22" r="5" fill="currentColor"/><path d="M8 40c1-7 4-10 7-10s6 3 7 10z" fill="currentColor"/></svg>`,
+  imagen: `<svg viewBox="0 0 30 50">${MARCO}<rect x="4" y="4" width="22" height="42" rx="2" fill="#16a34a"/><circle cx="11" cy="17" r="3" fill="#fff"/><path d="M5 40l8-10 5 6 3-3 5 7z" fill="#fff"/></svg>`,
+  quitar: `<svg viewBox="0 0 30 50">${MARCO}<path d="M8 17l14 16M22 17L8 33" stroke="#dc2626" stroke-width="3" stroke-linecap="round"/></svg>`,
+};
+const NOMBRES = { completa: "Pantalla completa", dividida: "Dividida", nacho: "Solo Nacho", cerca: "Nacho cerca",
+                  lejos: "Nacho lejos", imagen: "Imagen", quitar: "Quitar" };
+
+function estado(txt, clase) { $("estado").textContent = txt; $("estado").className = clase || ""; }
+function color(op) { return `var(--c-${op})`; }
+function seg(v) {
+  if (v === null || v === undefined) return null;
+  const p = String(v).trim().split(":");
+  if (p.length === 3) return (+p[0]) * 60 + (+p[1]) + (+(p[2].padEnd(2, "0").slice(0, 2))) / 100;
+  if (p.length === 2) return (+p[0]) * 60 + (+p[1]);
+  const n = parseFloat(p[0]); return isNaN(n) ? null : n;
+}
+function mmss(t) {
+  const cc = Math.round(Math.max(0, t) * 100);
+  return `${String(Math.floor(cc / 6000)).padStart(2, "0")}:${String(Math.floor(cc / 100) % 60).padStart(2, "0")}:${String(cc % 100).padStart(2, "0")}`;
+}
+function cambiado(tr) {
+  const o = originales[tr.k];
+  return o.pantalla !== tr.pantalla || o.inicio !== tr.inicio || o.fin !== tr.fin;
+}
+function actualizarBoton() {
+  const n = tramos.filter(cambiado).length;
+  $("guardar").disabled = n === 0;
+  if (n) estado(`${n} cambio${n > 1 ? "s" : ""} sin guardar`, "pend");
+}
+
+function pintarLinea() {
+  const L = $("linea");
+  if (!tramos.length) { L.innerHTML = ""; return; }
+  const imgs = tramos.filter(tr => tr.k[0] === "m");
+  const principal = tramos.filter(tr => tr.k[0] !== "m");
+  const carril = (lista) => {
+    const c = document.createElement("div"); c.className = "carril";
+    lista.forEach(tr => {
+      const a = seg(tr.inicio) ?? tr.ini_s, b = seg(tr.fin) ?? tr.fin_s;
+      const d = document.createElement("div");
+      d.className = "seg" + (cambiado(tr) ? " cambiado" : "");
+      d.style.left = (100 * a / duracion) + "%";
+      d.style.width = Math.max(0.4, 100 * (b - a) / duracion) + "%";
+      d.style.background = color(tr.pantalla);
+      d.title = `${tr.inicio} – ${tr.fin} · ${tr.tipo} · ${NOMBRES[tr.pantalla] || tr.pantalla}`;
+      d.onclick = () => irA(tr.k);
+      c.appendChild(d);
+    });
+    return c;
+  };
+  L.innerHTML = "";
+  L.appendChild(carril(principal));
+  if (imgs.length) L.appendChild(carril(imgs));
+  const r = document.createElement("div"); r.className = "reglas";
+  r.innerHTML = [0, .25, .5, .75, 1].map(f => `<span>${mmss(f * duracion).slice(0, 5)}</span>`).join("");
+  L.appendChild(r);
+  const usados = [...new Set(tramos.map(tr => tr.pantalla))];
+  const ley = document.createElement("div"); ley.className = "leyenda";
+  ley.innerHTML = usados.map(op => `<span style="--c:${color(op)}">${NOMBRES[op] || op}</span>`).join("") +
+    (imgs.length ? '<span style="--c:transparent">· la franja de abajo son las imágenes</span>' : "");
+  L.appendChild(ley);
+}
+
+function irA(k) {
+  const el = document.querySelector(`.tramo[data-k="${k}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.classList.add("brillo"); setTimeout(() => el.classList.remove("brillo"), 1200);
+}
+
+function pintar() {
+  const lista = $("lista");
+  pintarLinea();
+  const editables = tramos.filter(tr => tr.opciones && tr.opciones.length);
+  if (!editables.length) {
+    lista.innerHTML = `<div class="vacio">${window._mensaje || "No hay tramos que cambiar en este video."}</div>`;
+    return;
+  }
+  lista.innerHTML = "";
+  editables.forEach((tr, idx) => {
+    const div = document.createElement("div");
+    div.className = "tramo" + (cambiado(tr) ? " cambiado" : "");
+    div.dataset.k = tr.k;
+    div.style.setProperty("--c", color(tr.pantalla));
+    div.innerHTML = `
+      <img class="mini" loading="lazy" src="/pant/cuadro?t=${encodeURIComponent(T)}&k=${encodeURIComponent(tr.k)}" alt="">
+      <div class="datos">
+        <div class="tit">${idx + 1}. ${tr.tipo}</div>
+        <div class="tiempos">
+          <label>Inicio<input data-campo="inicio" value="${tr.inicio}"></label>
+          <label>Fin<input data-campo="fin" value="${tr.fin}"></label>
+        </div>
+      </div>
+      <div class="opciones">${tr.opciones.map(op =>
+        `<button class="op ${tr.pantalla === op ? "activo" : ""}" data-op="${op}">${ICONOS[op] || ""}${NOMBRES[op] || op}</button>`).join("")}
+      </div>`;
+    div.querySelectorAll(".op").forEach(b => b.onclick = () => {
+      tr.pantalla = b.dataset.op;
+      div.querySelectorAll(".op").forEach(x => x.classList.toggle("activo", x === b));
+      div.style.setProperty("--c", color(tr.pantalla));
+      div.classList.toggle("cambiado", cambiado(tr));
+      pintarLinea(); actualizarBoton();
+    });
+    div.querySelectorAll("input").forEach(inp => inp.oninput = () => {
+      tr[inp.dataset.campo] = inp.value.trim();
+      div.classList.toggle("cambiado", cambiado(tr));
+      pintarLinea(); actualizarBoton();
+    });
+    lista.appendChild(div);
+  });
+}
+
+async function cargar() {
+  const r = await fetch(`/pant/datos?t=${encodeURIComponent(T)}`);
+  const d = await r.json();
+  tramos = d.tramos || [];
+  duracion = Math.max(1, d.duracion || 1);
+  window._mensaje = d.mensaje;
+  originales = {};
+  tramos.forEach(tr => originales[tr.k] = { ...tr });
+  pintar();
+  actualizarBoton();
+  if ($("guardar").disabled) estado("");
+}
+
+$("guardar").onclick = async () => {
+  const cambios = tramos.filter(cambiado).map(tr => ({ k: tr.k, pantalla: tr.pantalla, inicio: tr.inicio, fin: tr.fin }));
+  $("guardar").disabled = true;
+  estado("Guardando…");
+  try {
+    const r = await fetch("/pant/guardar", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ t: T, cambios }) });
+    if (!r.ok) throw new Error(await r.text());
+    await cargar();
+    estado("Guardado ✓ Presiona «Renderizar de nuevo» para verlo.", "ok");
+  } catch (e) {
+    estado("No se pudo guardar: " + e.message, "err");
+    actualizarBoton();
+  }
+};
+
+if (T) cargar(); else $("lista").innerHTML = '<div class="vacio">Carga un video primero.</div>';
+</script>
+</body>
+</html>

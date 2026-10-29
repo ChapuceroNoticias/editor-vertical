@@ -1,0 +1,59 @@
+{
+  "_nota": "Solo pone subtítulos a un clip ya editado. La posición se da para un video vertical de referencia (1080x1920) y uno horizontal (1920x1080) y se ajusta al tamaño real del video.",
+  "estilo": "solo_subtitulos",
+  "salida": {
+    "crf": 18,
+    "audio_kbps": 125
+  },
+  "nombre": "Solo subtítulos (estilo Chapucero)",
+  "subtitulos": {
+    "fuente": "assets/AkuKamu.otf",
+    "tam": 72,
+    "tam_min": 56,
+    "max_lineas": 2,
+    "color": "#FFFFFF",
+    "contorno": 8,
+    "color_contorno": "#000000",
+    "color_resalte": "#A8002F",
+    "max_palabras": 4,
+    "espacio": 0.09,
+    "pausa_corte_seg": 0.45,
+    "mayusculas": true,
+    "puntuar_con_ia": true
+  },
+  "referencia_vertical": {
+    "tam_video": [
+      1080,
+      1920
+    ],
+    "area": [
+      40,
+      1490,
+      860,
+      200
+    ]
+  },
+  "referencia_horizontal": {
+    "tam_video": [
+      1920,
+      1080
+    ],
+    "area": [
+      260,
+      840,
+      1400,
+      200
+    ]
+  },
+  "franja_azul": {
+    "_nota": "Si el clip tiene la franja azul de la pantalla dividida, los subtítulos van dentro de ella.",
+    "activar": true,
+    "x_ancho": [
+      30,
+      880
+    ],
+    "azul_fraccion": 0.7,
+    "azul_alto_min": 0.05,
+    "azul_alto_max": 0.2
+  }
+}
