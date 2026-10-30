@@ -110,6 +110,11 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
 - Tiempos: minutos:segundos:centésimas (`01:05:30` = 1 min 5.3 s), siempre del video ya editado.
 - **Estilo de edición:** al procesar eliges el estilo:
   - *Clips Chapuceros*: barra roja de título, subtítulos palabra por palabra, pantalla dividida con imágenes, música.
+    **Transición de cambio de cámara:** cuando Nacho cambia de cámara pone la cortinilla «El Chapucero» en su video;
+    al pasarlo a vertical se veía cortada. Ahora al analizar se busca y en el video se tapa con la cortinilla limpia
+    vertical (`assets\transicion_camara.mp4`), con el audio original (por si Nacho habla durante la transición). Las
+    pausas recortadas no se la comen. Los trabajos analizados antes la buscan solos la próxima vez que se renderizan.
+    Se apaga con `transicion_camara.activar: false` en la plantilla.
     Si Nacho se calla y habla la persona del video que puso, ese rato el video va a pantalla completa centrado en quien habla.
   - *Tiktoks Motivacionales*: Nacho a pantalla completa alternando encuadre cerca/lejos en los cortes, título inicial
     en recuadro negro (AkuKamu), subtítulos por frase (Staatliches), pausas acortadas dejando silencios más largos al

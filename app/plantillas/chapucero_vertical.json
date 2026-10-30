@@ -203,5 +203,14 @@
   "margen_tam": 1.35,
   "min_seg": 1.5,
   "adelantar_corte": 1.5
+ },
+ "transicion_camara": {
+  "_nota": "Cuando Nacho cambia de cámara pone la cortinilla «El Chapucero» en su video (16:9); al pasarla a vertical se ve cortada. Al analizar se busca (amarillo pálido + negro + blanco) y en el video se tapa con la cortinilla limpia vertical de 'video' (sin su audio: se oye el audio original). Las pausas recortadas no se comen la cortinilla. activar=false la apaga.",
+  "activar": true,
+  "video": "assets/transicion_camara.mp4",
+  "min_amarillo": 0.08,
+  "min_paleta": 0.55,
+  "min_seg": 0.25,
+  "max_seg": 1.2
  }
 }

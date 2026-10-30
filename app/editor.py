@@ -2173,7 +2173,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-10-30a v1.1.0"
+VERSION = "2026-10-30b v1.1.1"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -2231,6 +2231,149 @@ def tomas_ligeras(video):
     c = cara_promedio(video, info)
     cara = [[0.0, c[0], c[1], c[2]]] if c else [[0.0, w / 2, h * 0.4, h * 0.35]]
     return [{"layout": "completa", "inicio": 0.0, "fin": info["duracion"], "cara": cara}], info
+
+
+# ----------------------------------------------------------------------------
+# Transición de cambio de cámara (cortinilla «El Chapucero» que pone Nacho en su video)
+# ----------------------------------------------------------------------------
+def _medida_cortinilla(rgb):
+    """(amarillo, paleta) de un cuadro chico RGB: la cortinilla es amarillo pálido, negro y blanco."""
+    s = rgb.reshape(-1, 3).astype(np.int16)
+    r, g, b = s[:, 0], s[:, 1], s[:, 2]
+    amarillo = (r > 200) & (g > 185) & (b < 195) & (r - b > 45)
+    negro = s.max(1) < 45
+    blanco = s.min(1) > 210
+    return float(amarillo.mean()), float((amarillo | negro | blanco).mean())
+
+
+def _cuadros_chicos(video, w=48, h=27):
+    """Todos los cuadros del video en chiquito (RGB), con ffmpeg (rápido, sin tocar la resolución original)."""
+    r = subprocess.Popen(["ffmpeg", "-v", "error", "-i", str(video), "-map", "0:v:0", "-vf", f"scale={w}:{h}",
+                          "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+    n = w * h * 3
+    while True:
+        buf = r.stdout.read(n)
+        if len(buf) < n:
+            break
+        yield np.frombuffer(buf, np.uint8).reshape(h, w, 3)
+    r.wait()
+
+
+def _es_cortinilla(med, cfg):
+    """El cuadro es casi todo amarillo pálido / negro / blanco (la cortinilla; un cuadro normal no pasa de ~0.2)."""
+    return med[1] >= cfg.get("min_paleta", 0.55)
+
+
+def info_transicion(cfg):
+    """De la cortinilla limpia (assets): duración y en qué segundo aparece el amarillo (para alinearla)."""
+    p = ruta(cfg.get("video", "assets/transicion_camara.mp4"))
+    if not p.exists():
+        return None
+    cap = cv2.VideoCapture(str(p))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 60
+    n, onset = 0, None
+    while True:
+        ok, fr = cap.read()
+        if not ok:
+            break
+        chico = cv2.cvtColor(cv2.resize(fr, (27, 48), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2RGB)
+        if onset is None and _es_cortinilla(_medida_cortinilla(chico), cfg):
+            onset = n / fps
+        n += 1
+    cap.release()
+    if not n:
+        return None
+    return {"ruta": str(p), "fps": fps, "cuadros": n, "duracion": n / fps, "onset": onset or 0.0}
+
+
+def detectar_transiciones(video, info, cfg):
+    """Dónde pone Nacho la cortinilla de cambio de cámara: [{inicio, fin}] en tiempo del video original, ya
+    alineado para tapar esa parte con la cortinilla limpia (vertical) de assets."""
+    it = info_transicion(cfg)
+    if not it:
+        log("No encontré la cortinilla limpia (assets/transicion_camara.mp4): no se reemplazan las transiciones")
+        return []
+    fps = info.get("fps") or 30
+    corridas, ini, ult, amar = [], None, None, 0.0
+    for k, chico in enumerate(_cuadros_chicos(video)):
+        med = _medida_cortinilla(chico)
+        if _es_cortinilla(med, cfg):
+            if ini is None or k - ult > max(1, int(0.07 * fps)):
+                if ini is not None:
+                    corridas.append((ini, ult, amar))
+                ini, amar = k, 0.0
+            ult = k
+            amar = max(amar, med[0])
+        if k % max(1, int(fps * 20)) == 0:
+            Progreso.paso(0.47, "Buscando las transiciones de cambio de cámara")
+    if ini is not None:
+        corridas.append((ini, ult, amar))
+    out = []
+    for a, b, amar in corridas:
+        dur = (b - a + 1) / fps
+        # una pantalla en negro también es «negro»: la cortinilla además trae amarillo y dura poco
+        if amar < cfg.get("min_amarillo", 0.08) or not (cfg.get("min_seg", 0.25) <= dur <= cfg.get("max_seg", 1.2)):
+            continue
+        inicio = max(0.0, a / fps - it["onset"])
+        out.append({"inicio": round(inicio, 4), "fin": round(min(info["duracion"], inicio + it["duracion"]), 4)})
+    log(f"{len(out)} transiciones de cambio de cámara (se tapan con la cortinilla limpia)")
+    return out
+
+
+def respetar_transiciones(cortes, trans, margen=0.08):
+    """Que las pausas recortadas no se coman la cortinilla (se vería cortada)."""
+    if not trans:
+        return cortes
+    out = []
+    for c in cortes:
+        partes = [(c["inicio"], c["fin"])]
+        for tr in trans:
+            a, b = tr["inicio"] - margen, tr["fin"] + margen
+            nuevas = []
+            for x, y in partes:
+                if y <= a or x >= b:
+                    nuevas.append((x, y))
+                    continue
+                if x < a:
+                    nuevas.append((x, a))
+                if y > b:
+                    nuevas.append((b, y))
+            partes = nuevas
+        for x, y in partes:
+            if y - x >= 0.05:
+                out.append(dict(c, inicio=round(x, 4), fin=round(y, 4)))
+    return out
+
+
+class Cortinilla:
+    """Cuadros de la cortinilla limpia a tamaño de salida (guardados comprimidos para no gastar memoria)."""
+
+    def __init__(self, cfg, W, H):
+        self.it = info_transicion(cfg)
+        self.cuadros = []
+        if not self.it:
+            return
+        cap = cv2.VideoCapture(self.it["ruta"])
+        while True:
+            ok, fr = cap.read()
+            if not ok:
+                break
+            if fr.shape[1] != W or fr.shape[0] != H:
+                fr = cv2.resize(fr, (W, H), interpolation=cv2.INTER_AREA)
+            self.cuadros.append(cv2.imencode(".jpg", fr, [cv2.IMWRITE_JPEG_QUALITY, 95])[1])
+        cap.release()
+        self._cache = (None, None)
+
+    def cuadro(self, dt):
+        """Cuadro a los dt segundos de empezada la cortinilla (o None si ya terminó)."""
+        if not self.cuadros or dt < 0:
+            return None
+        k = int(dt * self.it["fps"])
+        if k >= len(self.cuadros):
+            return None
+        if self._cache[0] != k:
+            self._cache = (k, cv2.imdecode(self.cuadros[k], cv2.IMREAD_COLOR))
+        return self._cache[1]
 
 
 def _cmd_analizar(args):
@@ -2293,8 +2436,15 @@ def _cmd_analizar(args):
         except Exception as e:
             log(f"No pude buscar subtítulos en los videos de Nacho ({e})")
             difuminar = []
+    transiciones = []
+    if (pl.get("transicion_camara") or {}).get("activar"):
+        try:
+            transiciones = detectar_transiciones(video, info, pl["transicion_camara"])
+        except Exception as e:
+            log(f"No pude buscar las transiciones de cambio de cámara ({e})")
     Progreso.paso(0.49, "Recortando pausas")
     cortes = [] if args.sin_cortes else calcular_cortes(video, info, proy, pl.get("cortes", {}))
+    cortes = respetar_transiciones(cortes, transiciones)
     Progreso.paso(0.50, "Entendiendo el tema del video")
 
     auto_img = IMAGENES_AUTOMATICAS or bool(args.imagenes)
@@ -2334,6 +2484,7 @@ def _cmd_analizar(args):
         "momentos": momentos,
         "cortes": cortes,
         "difuminar": difuminar,
+        "transiciones_camara": transiciones,
         **({"ligero": True} if ligero else {}),
         "_ayuda": ("Puedes editar: 'proyeccion' (borrar o cambiar inicio/fin), 'momentos' (inicio, fin, "
                    "estilo dividida|completa, imagenes: rutas), 'cortes' (borrar los que no quieras) "
@@ -3698,6 +3849,23 @@ def cmd_render(args):
                 tt += paso_t
             log(f"{len(ventanas_cort)} transiciones a pantalla dividida")
 
+    # cortinilla limpia encima de las transiciones de cambio de cámara de Nacho (el audio es el del video)
+    cfg_cam = pl.get("transicion_camara") or {}
+    if "transiciones_camara" not in plan and cfg_cam.get("activar"):
+        # trabajo analizado antes de esta función: se buscan ahora (una sola vez) y se guardan en el plan
+        try:
+            plan["transiciones_camara"] = detectar_transiciones(plan["video"], info, cfg_cam)
+            p_plan = cargar_json(trabajo / "plan.json")
+            p_plan["transiciones_camara"] = plan["transiciones_camara"]
+            guardar_json(trabajo / "plan.json", p_plan)
+        except Exception as e:
+            log(f"No pude buscar las transiciones de cambio de cámara ({e})")
+    trans_cam = plan.get("transiciones_camara") or []
+    cort_cam = Cortinilla(pl.get("transicion_camara") or {}, W, H) if trans_cam and \
+        (pl.get("transicion_camara") or {}).get("activar", True) else None
+    if cort_cam is not None and cort_cam.cuadros:
+        log(f"{len(trans_cam)} transiciones de cambio de cámara con la cortinilla limpia")
+
     idx, ti, ci, n_out = 0, 0, 0, 0
     total = info["cuadros"] or 1
     lienzo = np.zeros((H, W, 3), np.uint8)
@@ -3801,6 +3969,13 @@ def cmd_render(args):
                 k = min(len(cortinilla) - 1, int((te - a_c) / (b_c - a_c) * len(cortinilla)))
                 lienzo[:] = cortinilla[k]
                 break
+        if cort_cam is not None:
+            for tr in trans_cam:
+                if tr["inicio"] <= t < tr["fin"]:
+                    c_ = cort_cam.cuadro(t - tr["inicio"])
+                    if c_ is not None:
+                        lienzo[:] = c_
+                    break
         pegar(lienzo, titulo)
         vista.escribir(lienzo, te, lay)
 

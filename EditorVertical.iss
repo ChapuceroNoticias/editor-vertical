@@ -3,7 +3,7 @@
 ; El .exe resultante queda en la carpeta "Output" y es lo único que hay que pasar a las otras PCs.
 ; Al cambiar de versión, cambia también app\version.txt.
 
-#define Version "1.1.0"
+#define Version "1.1.1"
 
 [Setup]
 AppId={{5B7E2A61-3C1D-4F7A-9E2B-8D4C6A1F0E37}
