@@ -43,7 +43,7 @@
   .tiempo { font-variant-numeric: tabular-nums; font-weight: 700; }
   .tiempo small { color: var(--suave); font-weight: 500; }
   .linea { padding: 8px 12px 0; }
-  #linea { width: 100%; height: 122px; display: block; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde);
+  #linea { width: 100%; height: 150px; display: block; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde);
     cursor: pointer; }
   .leyenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--suave); padding: 6px 12px 0; }
   .difbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px 0; font-size: 12.5px; color: var(--suave); }
@@ -147,7 +147,8 @@
     <span><i style="background:var(--c-titulo)"></i>Título (motivacional: estira su orilla)</span>
     <span><i style="background:var(--c-difuminar)"></i>Difuminar subtítulos del video</span>
     <span>Clic en un bloque: seleccionarlo (⌨ Ctrl+C/V/X, Supr, Ctrl+B, [ ]) · arrástralo o estira sus orillas
-      (🧲 se pegan a cortes, pausas y otros bloques; con <b>Alt</b> libres) · <b>Ctrl + rueda</b>: acercar la línea</span>
+      (🧲 se pegan a cortes, pausas y otros bloques; con <b>Alt</b> libres) · <b>Ctrl + rueda</b>: acercar la línea ·
+      <b>Doble clic</b>: llevar ahí el cursor</span>
   </div>
 
   <div class="difbar" id="difbar">
@@ -724,7 +725,9 @@ function dibujarDifuminar(t, s, d) {   // franja difuminada (morada): se mueve y
 
 // ---------- línea de tiempo (tiempo del video editado) ----------
 function colorOp(op) { return getComputedStyle(document.documentElement).getPropertyValue("--c-" + op).trim() || "#666"; }
-const CARRILES = { p: [4, 22], m: [30, 22], en: [56, 13], ep: [72, 13], df: [88, 13] };
+const REGLA = 26;   // alto de la regla de tiempo (arriba de los carriles)
+const CARRILES = { p: [REGLA + 6, 24], m: [REGLA + 34, 24], en: [REGLA + 62, 14], ep: [REGLA + 80, 14], df: [REGLA + 98, 14] };
+let ratonX = null;   // tiempo bajo el ratón (línea guía), o null
 function itemsLinea() {
   const it = [];
   for (const x of P.tramos) {
@@ -743,6 +746,27 @@ function dibujarLinea(te) {
   const W = linea.width, H = linea.height, d = devicePixelRatio;
   lctx.clearRect(0, 0, W, H);
   const nombres = { p: "Pantalla", m: "Imágenes", en: "Encuadre Nacho", ep: "Encuadre pantalla", df: "Difuminar subtítulos" };
+  // regla: marcas grandes con su tiempo y chicas entre ellas; bandas alternas para ubicarse a simple vista
+  const seg = vista[1] - vista[0], pxs = W / Math.max(0.001, seg);
+  const pasos = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
+  const paso = pasos.find(x => x * pxs >= 90 * d) || 3600;
+  const menor = pasos.slice().reverse().find(x => x < paso && x * pxs >= 12 * d) || 0;
+  lctx.fillStyle = "#17171d"; lctx.fillRect(0, 0, W, REGLA * d);
+  const t0 = Math.floor(vista[0] / paso) * paso;
+  for (let t = t0, i = Math.round(t0 / paso); t <= vista[1]; t += paso, i++) {
+    if (i % 2 === 0) { lctx.fillStyle = "rgba(255,255,255,.025)"; lctx.fillRect(xDe(t), REGLA * d, paso * pxs, H - REGLA * d); }
+  }
+  if (menor) {
+    lctx.fillStyle = "#3a3a46";
+    for (let t = Math.floor(vista[0] / menor) * menor; t <= vista[1]; t += menor) lctx.fillRect(xDe(t), (REGLA - 6) * d, d, 6 * d);
+  }
+  lctx.font = `${10.5 * d}px system-ui`; lctx.textAlign = "left";
+  for (let t = t0; t <= vista[1]; t += paso) {
+    const x = xDe(t);
+    lctx.fillStyle = "#6b6b78"; lctx.fillRect(x, (REGLA - 12) * d, d, 12 * d);
+    lctx.fillStyle = "#b5b5c0"; lctx.fillText(etiquetaRegla(t, paso), x + 3 * d, (REGLA - 13) * d);
+  }
+  lctx.fillStyle = "#2a2a32"; lctx.fillRect(0, REGLA * d, W, d);
   for (const [c, [y, h]] of Object.entries(CARRILES)) {
     lctx.fillStyle = "rgba(255,255,255,.04)"; lctx.fillRect(0, y * d, W, h * d);
   }
@@ -779,7 +803,7 @@ function dibujarLinea(te) {
   for (const [c, [y, h]] of Object.entries(CARRILES)) lctx.fillText(nombres[c], 4 * d, (y + h - 3) * d);
   if (tramoE) {
     lctx.strokeStyle = "#f97316"; lctx.lineWidth = 2 * d;
-    lctx.strokeRect(xDe(aEditado(tramoE[0])), 2 * d, xDe(aEditado(tramoE[1])) - xDe(aEditado(tramoE[0])), 101 * d);
+    lctx.strokeRect(xDe(aEditado(tramoE[0])), (REGLA + 2) * d, xDe(aEditado(tramoE[1])) - xDe(aEditado(tramoE[0])), H - (REGLA + 4) * d);
   }
   if (arrLinea && arrLinea.guia) {   // dónde se pegó y por qué
     const gx = xDe(arrLinea.guia.t);
@@ -787,10 +811,35 @@ function dibujarLinea(te) {
     lctx.font = `600 ${10 * d}px system-ui`; lctx.textAlign = gx > W - 140 * d ? "right" : "left";
     lctx.fillText("🧲 " + arrLinea.guia.q, gx + (gx > W - 140 * d ? -4 : 4) * d, H - 16 * d);
   }
-  lctx.fillStyle = "#fff"; lctx.fillRect(xDe(te) - d, 0, 2 * d, H);
-  lctx.fillStyle = "rgba(255,255,255,.6)"; lctx.font = `${10 * d}px system-ui`;
-  lctx.textAlign = "left"; lctx.fillText(mmss(vista[0]), 4 * d, H - 4 * d);
-  lctx.textAlign = "right"; lctx.fillText(mmss(vista[1]), W - 4 * d, H - 4 * d);
+  // línea guía con el tiempo bajo el ratón
+  if (ratonX !== null && !arrLinea && ratonX >= vista[0] && ratonX <= vista[1]) {
+    const gx = xDe(ratonX);
+    lctx.fillStyle = "rgba(255,255,255,.35)"; lctx.fillRect(gx, 0, d, H);
+    pastilla(mmss(ratonX), gx, H - 18 * d, "rgba(0,0,0,.8)", "#fff");
+  }
+  // cursor (dónde vamos): rojo, con triángulo arriba y su tiempo
+  const cx = xDe(te);
+  if (cx >= -2 * d && cx <= W + 2 * d) {
+    lctx.save(); lctx.shadowColor = "rgba(255,59,71,.7)"; lctx.shadowBlur = 6 * d;
+    lctx.fillStyle = "#ff3b47"; lctx.fillRect(cx - d, 0, 2 * d, H); lctx.restore();
+    lctx.fillStyle = "#ff3b47"; lctx.beginPath();
+    lctx.moveTo(cx - 7 * d, 0); lctx.lineTo(cx + 7 * d, 0); lctx.lineTo(cx, 9 * d); lctx.closePath(); lctx.fill();
+    pastilla(mmss(te), cx, (REGLA + 2) * d, "#ff3b47", "#fff");
+  }
+}
+function etiquetaRegla(t, paso) {   // «1:05» o, con mucho zoom, «1:05.2»
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return paso < 1 ? `${m}:${s.toFixed(1).padStart(4, "0")}` : `${m}:${String(Math.round(s)).padStart(2, "0")}`;
+}
+function pastilla(txt, x, y, fondo, color) {   // etiqueta con fondo junto a una línea (se voltea en la orilla derecha)
+  const d = devicePixelRatio, W = linea.width;
+  lctx.font = `600 ${10.5 * d}px system-ui`;
+  const w = lctx.measureText(txt).width + 10 * d, h = 15 * d;
+  const izq = x + 6 * d + w > W ? x - 6 * d - w : x + 6 * d;
+  lctx.fillStyle = fondo; lctx.beginPath();
+  if (lctx.roundRect) lctx.roundRect(izq, y, w, h, 4 * d); else lctx.rect(izq, y, w, h);
+  lctx.fill();
+  lctx.fillStyle = color; lctx.textAlign = "left"; lctx.fillText(txt, izq + 5 * d, y + 11 * d);
 }
 function tocarLinea(ev) {   // qué bloque y qué parte (mover / inicio / fin) está bajo el cursor
   const r = linea.getBoundingClientRect(), d = devicePixelRatio;
@@ -1630,6 +1679,13 @@ async function iniciar() {
     }
     const h = tocarLinea(ev);
     linea.style.cursor = !h ? "col-resize" : (h.modo === "mover" ? "grab" : "ew-resize");
+    ratonX = Math.min(durE(), Math.max(0, tLinea(ev)));
+  });
+  linea.addEventListener("pointerleave", () => { ratonX = null; });
+  // doble clic: el cursor (dónde vamos) se va a ese punto
+  linea.addEventListener("dblclick", (ev) => {
+    ev.preventDefault(); video.pause();
+    irE(Math.min(durE(), Math.max(0, tLinea(ev))));
   });
   linea.addEventListener("pointerup", async (ev) => {
     presionado = false;

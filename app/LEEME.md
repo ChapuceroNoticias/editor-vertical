@@ -70,6 +70,9 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
     pantalla dividida). El video final se arma en **Exportar**. Se pone rojo («hay cambios») cuando la edición ya no
     corresponde a la vista previa; muestra el avance y se detiene con «⛔ Cancelar todo». La pestaña Subtítulos se
     actualiza sola al volver a ella (si tenía cambios sin guardar, avisa en lugar de recargar).
+  - **Línea de tiempo:** regla con minutos y segundos (con zoom llega a décimas), el cursor rojo con el tiempo por
+    el que va, una línea guía con el tiempo bajo el ratón y **doble clic** para llevar el cursor a ese punto
+    (igual que en Video largo). **Ctrl + rueda** acerca o aleja.
   - **«9:16» (Pantalla en este momento):** además de Pantalla completa, Dividida y Solo Nacho, en Clips Chapuceros y
     Clips Fuera hay **9:16**: todo el cuadro vertical sale de **cualquier parte del video completo** (no solo de la
     pantalla de Nacho), como si fuera un video de pantalla. Empieza centrado en Nacho; con el recuadro azul
