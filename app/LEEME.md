@@ -70,6 +70,10 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
     pantalla dividida). El video final se arma en **Exportar**. Se pone rojo («hay cambios») cuando la edición ya no
     corresponde a la vista previa; muestra el avance y se detiene con «⛔ Cancelar todo». La pestaña Subtítulos se
     actualiza sola al volver a ella (si tenía cambios sin guardar, avisa en lugar de recargar).
+  - **«9:16» (Pantalla en este momento):** además de Pantalla completa, Dividida y Solo Nacho, en Clips Chapuceros y
+    Clips Fuera hay **9:16**: todo el cuadro vertical sale de **cualquier parte del video completo** (no solo de la
+    pantalla de Nacho), como si fuera un video de pantalla. Empieza centrado en Nacho; con el recuadro azul
+    («Vista 9:16») sobre el video original lo mueves o lo acercas a la parte que quieras. Morado en la línea de tiempo.
   - **Música de fondo y volumen** (abajo del video, junto al tiempo): Clips Chapuceros, Clips Fuera y Tiktoks Yair
     llevan la música de fondo de siempre, a **volumen fijo** (ya no baja ni sube sola cuando hablan) y solo dura lo
     que dura el video. **🎵 Fondo** sube o baja solo la música; **🔊 Video** sube o baja el audio del video (la voz).

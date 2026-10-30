@@ -209,9 +209,11 @@
   "activar": true,
   "video": "assets/transicion_camara.mp4",
   "min_amarillo": 0.08,
-  "min_paleta": 0.5,
+  "min_paleta": 0.88,
   "min_seg": 0.25,
   "max_seg": 2.0,
-  "hueco_seg": 0.2
+  "hueco_seg": 0.2,
+  "min_paleta_nucleo": 0.6,
+  "extender_seg": 1.0
  }
 }

@@ -8,7 +8,7 @@
   :root {
     --fondo: #0b0b0d; --panel: #15151a; --panel2: #1c1c22; --texto: #ececf1; --suave: #9a9aa6; --borde: #2a2a32;
     --acento: #d91e2b; --acento2: #ff4553; --ok: #22c55e; --pend: #f59e0b; --rojo: #ff4553;
-    --c-completa: #e11d48; --c-dividida: #0ea5e9; --c-nacho: #52525b; --c-cerca: #f59e0b; --c-lejos: #b45309;
+    --c-completa: #e11d48; --c-dividida: #0ea5e9; --c-nacho: #52525b; --c-916: #a855f7; --c-cerca: #f59e0b; --c-lejos: #b45309;
     --c-imagen: #22c55e; --c-quitar: #3f3f46; --c-manual: #22c55e; --c-pantallaman: #38bdf8; --c-titulo: #e5e7eb; --c-difuminar: #d946ef;
   }
   * { box-sizing: border-box; }
@@ -140,6 +140,7 @@
     <span><i style="background:var(--c-completa)"></i>Pantalla completa</span>
     <span><i style="background:var(--c-dividida)"></i>Dividida</span>
     <span><i style="background:var(--c-nacho)"></i>Solo Nacho</span>
+    <span><i style="background:var(--c-916)"></i>9:16 (vista vertical de todo el video)</span>
     <span><i style="background:var(--c-imagen)"></i>Imagen</span>
     <span><i style="background:var(--c-manual)"></i>Encuadre de Nacho corregido</span>
     <span><i style="background:var(--c-pantallaman)"></i>Pantalla de Nacho acomodada</span>
@@ -319,7 +320,7 @@ const $ = (id) => document.getElementById(id);
 const TIPOS = ["persona", "dividida", "video", "imagen", "contenida"];
 const NOMBRES_ESC = { persona: "Nacho a pantalla completa", dividida: "Nacho arriba (dividida)",
   video: "Video de la proyección a pantalla completa", imagen: "Imagen o documento", contenida: "Recuadro completo de Nacho" };
-const OPS = { completa: "Pantalla completa", dividida: "Dividida", nacho: "Solo Nacho", cerca: "Nacho cerca",
+const OPS = { completa: "Pantalla completa", dividida: "Dividida", nacho: "Solo Nacho", "916": "9:16", cerca: "Nacho cerca",
   lejos: "Nacho lejos", imagen: "Imagen", quitar: "Quitar" };
 let E = null, P = null, X = null;     // armado, tramos de pantalla, datos de edición
 let video, capa, ctx, previa, pctx, linea, lctx;
@@ -699,7 +700,10 @@ function dibujarEscenario(t, e, v, vp, pe) {
     const [a1, a2] = [vp.ini, vp.fin].map(r => [(r[0] + r[2] / 2) * s, (r[1] + r[3] / 2) * s]);
     ctx.strokeStyle = "#fb923c"; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(...a1); ctx.lineTo(...a2); ctx.stroke(); ctx.setLineDash([]);
-  } else if (vp) marco(vp, pe.region, pe.auto, "#38bdf8", "#38bdf8", "Pantalla de Nacho");
+  } else if (vp) {
+    const todo = pe.region[0] <= 0.5 && pe.region[1] <= 0.5 && Math.abs(pe.region[2] - E.video.ancho) < 1 && Math.abs(pe.region[3] - E.video.alto) < 1;
+    marco(vp, pe.region, pe.auto, "#38bdf8", "#38bdf8", todo ? "Vista 9:16" : "Pantalla de Nacho");
+  }
   dibujarDifuminar(t, s, d);
 }
 function difEn(t) { return (E.difuminar || []).filter(x => x.inicio <= t && t < x.fin); }

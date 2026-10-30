@@ -277,12 +277,27 @@ def tramos_pantalla(t):
                 tipo = "Video de celular"
             if p.get("habla_otro"):
                 tipo += " (habla la persona del video)"
-            add(f"p{i}", p["inicio"], p["fin"], tipo, ed.pantalla_de(p, cfg_p), ["completa", "dividida", "nacho"])
+            add(f"p{i}", p["inicio"], p["fin"], tipo, ed.pantalla_de(p, cfg_p), ["completa", "dividida", "nacho", "916"])
         # ratos de pantalla partida donde no se usa lo que Nacho proyecta (sale solo Nacho)
         for i, sg in enumerate(plan.get("tomas", [])):
             if sg.get("layout") != "dividida":
-                # aunque la plataforma no viera pantalla partida aquí, se puede poner a mano (dividida o completa)
-                add(f"n{i}", sg["inicio"], sg["fin"], "Nacho (sin pantalla)", "nacho", ["completa", "dividida", "nacho"])
+                # aunque la plataforma no viera pantalla partida aquí, se puede poner a mano (dividida, completa o
+                # 9:16); los ratos que ya tienen su tramo de pantalla (p. ej. un «9:16») no se repiten
+                libres_n = [(sg["inicio"], sg["fin"])]
+                for p in proy:
+                    nuevos = []
+                    for a, b in libres_n:
+                        if p["fin"] <= a or p["inicio"] >= b:
+                            nuevos.append((a, b))
+                            continue
+                        if p["inicio"] > a:
+                            nuevos.append((a, p["inicio"]))
+                        if p["fin"] < b:
+                            nuevos.append((p["fin"], b))
+                    libres_n = nuevos
+                for a, b in libres_n:
+                    add(f"n{i}" if len(libres_n) == 1 else f"n{i}@{a:.3f}", a, b, "Nacho (sin pantalla)", "nacho",
+                        ["completa", "dividida", "nacho", "916"])
                 continue
             libres = [(sg["inicio"], sg["fin"])]
             for p in proy:
@@ -299,7 +314,7 @@ def tramos_pantalla(t):
             for a, b in libres:
                 if b - a >= 1.0:
                     add(f"g{a:.3f}_{b:.3f}", a, b, "Lo que proyecta (no se está usando)", "nacho",
-                        ["completa", "dividida", "nacho"])
+                        ["completa", "dividida", "nacho", "916"])
         for i, m in enumerate(plan.get("momentos", [])):
             if m.get("imagenes"):
                 add(f"m{i}", m["inicio"], m["fin"], "Imagen de internet: " + (m.get("busqueda") or "")[:40],
@@ -359,7 +374,7 @@ def aplicar_pantalla(t, cambios):
         k, op = str(c.get("k", "")), c.get("pantalla")
         if k.startswith("p") and k[1:].isdigit() and int(k[1:]) < len(proy):
             p = proy[int(k[1:])]
-            if op in ("completa", "dividida", "nacho"):
+            if op in ("completa", "dividida", "nacho", "916"):
                 p["pantalla"] = op
             p["inicio"], p["fin"] = tiempos(c, p["inicio"], p["fin"])
         elif k.startswith("g"):
@@ -367,22 +382,22 @@ def aplicar_pantalla(t, cambios):
                 a0, b0 = [float(x) for x in k[1:].split("_")]
             except ValueError:
                 continue
-            if op not in ("completa", "dividida"):
+            if op not in ("completa", "dividida", "916"):
                 continue
             a, b = tiempos(c, a0, b0)
             # misma caja que el tramo de proyección más cercano (o la de la plantilla)
             cerca = sorted(proy, key=lambda p: min(abs(p["inicio"] - b), abs(p["fin"] - a)))
             caja = (cerca[0].get("caja") if cerca else None) or caja_proyeccion(pl_px, plan)
             item = {"tipo": "video", "inicio": a, "fin": b, "caja": caja, "pantalla": op, "manual": True}
-            cara = pista_cara_en(plan["video"], caja, a, b)
+            cara = pista_cara_en(plan["video"], caja, a, b) if op != "916" else None   # 9:16 no la necesita
             if cara:
                 item["cara"] = cara
             nuevos_proy.append(item)
-        elif k.startswith("n") and k[1:].isdigit():
+        elif k.startswith("n") and k[1:].split("@")[0].isdigit():
             # rato que la plataforma tomó como «solo Nacho»: se vuelve pantalla partida con lo que proyecta Nacho
             tomas = plan.get("tomas", [])
-            i = int(k[1:])
-            if i >= len(tomas) or op not in ("completa", "dividida"):
+            i = int(k[1:].split("@")[0])
+            if i >= len(tomas) or op not in ("completa", "dividida", "916"):
                 continue
             sg = tomas[i]
             a, b = tiempos(c, sg["inicio"], sg["fin"])
@@ -392,13 +407,13 @@ def aplicar_pantalla(t, cambios):
             partes = []
             if a - sg["inicio"] >= 0.05:
                 partes.append(dict(sg, fin=a))
-            partes.append(dict(sg, inicio=a, fin=b, layout="dividida", manual=True))
+            partes.append(dict(sg, inicio=a, fin=b, layout=sg.get("layout") if op == "916" else "dividida", manual=True))
             if sg["fin"] - b >= 0.05:
                 partes.append(dict(sg, inicio=b))
             tomas_partidas[i] = partes
             caja = caja_proyeccion(pl_px, plan)
             item = {"tipo": "video", "inicio": a, "fin": b, "caja": caja, "pantalla": op, "manual": True}
-            cara = pista_cara_en(plan["video"], caja, a, b)
+            cara = pista_cara_en(plan["video"], caja, a, b) if op != "916" else None   # 9:16 no la necesita
             if cara:
                 item["cara"] = cara
             nuevos_proy.append(item)

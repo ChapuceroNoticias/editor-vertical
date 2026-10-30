@@ -2173,7 +2173,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-10-30c v1.1.2"
+VERSION = "2026-10-30e v1.1.4"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -2279,7 +2279,7 @@ def info_transicion(cfg):
         if not ok:
             break
         chico = cv2.cvtColor(cv2.resize(fr, (27, 48), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2RGB)
-        if onset is None and _es_cortinilla(_medida_cortinilla(chico), cfg):
+        if onset is None and _medida_cortinilla(chico)[1] >= cfg.get("min_paleta", 0.88):
             onset = n / fps
         n += 1
     cap.release()
@@ -2290,35 +2290,44 @@ def info_transicion(cfg):
 
 def detectar_transiciones(video, info, cfg):
     """Dónde pone Nacho la cortinilla de cambio de cámara: [{inicio, fin}] en tiempo del video original, ya
-    alineado para tapar esa parte con la cortinilla limpia (vertical) de assets."""
+    alineado para tapar esa parte con la cortinilla limpia (vertical) de assets.
+    1) núcleo: cuadros con el amarillo de la cortinilla; 2) se extiende a los lados mientras el cuadro siga siendo
+    casi todo amarillo / negro / blanco (la entrada en negro y la salida), sin pasar de ~1 s por lado."""
     it = info_transicion(cfg)
     if not it:
         log("No encontré la cortinilla limpia (assets/transicion_camara.mp4): no se reemplazan las transiciones")
         return []
     fps = info.get("fps") or 30
-    corridas, ini, ult, amar = [], None, None, 0.0
+    meds = []
     for k, chico in enumerate(_cuadros_chicos(video)):
-        med = _medida_cortinilla(chico)
-        if _es_cortinilla(med, cfg):
-            if ini is None or k - ult > max(2, int(cfg.get("hueco_seg", 0.2) * fps)):
-                if ini is not None:
-                    corridas.append((ini, ult, amar))
-                ini, amar = k, 0.0
-            ult = k
-            amar = max(amar, med[0])
+        meds.append(_medida_cortinilla(chico))
         if k % max(1, int(fps * 20)) == 0:
             Progreso.paso(0.47, "Buscando las transiciones de cambio de cámara")
-    if ini is not None:
-        corridas.append((ini, ult, amar))
+    min_am, min_pal = cfg.get("min_amarillo", 0.08), cfg.get("min_paleta", 0.88)
+    hueco = max(2, int(cfg.get("hueco_seg", 0.2) * fps))
+    nucleos = []
+    for k, (am, pal) in enumerate(meds):
+        if am >= min_am and pal >= cfg.get("min_paleta_nucleo", 0.6):
+            if nucleos and k - nucleos[-1][1] <= hueco:
+                nucleos[-1][1] = k
+            else:
+                nucleos.append([k, k])
+    lado = int(cfg.get("extender_seg", 1.0) * fps)
     out = []
-    for a, b, amar in corridas:
+    for a, b in nucleos:
+        a0, b0 = a, b
+        while a > 0 and a0 - a < lado and meds[a - 1][1] >= min_pal:
+            a -= 1
+        while b + 1 < len(meds) and b - b0 < lado and meds[b + 1][1] >= min_pal:
+            b += 1
         dur = (b - a + 1) / fps
-        # una pantalla en negro también es «negro»: la cortinilla además trae amarillo y dura poco
-        if amar < cfg.get("min_amarillo", 0.08) or not (cfg.get("min_seg", 0.25) <= dur <= cfg.get("max_seg", 1.2)):
+        if not (cfg.get("min_seg", 0.25) <= dur <= cfg.get("max_seg", 2.0)):
             continue
         inicio = max(0.0, a / fps - it["onset"])
         # si la de Nacho dura más que la limpia, la limpia se estira para taparla completa
         fin = max(inicio + it["duracion"], (b + 1) / fps)
+        if out and inicio < out[-1]["fin"]:
+            continue
         out.append({"inicio": round(inicio, 4), "fin": round(min(info["duracion"], fin), 4)})
     log(f"{len(out)} transiciones de cambio de cámara (se tapan con la cortinilla limpia)")
     return out
@@ -3113,6 +3122,12 @@ def escena_en(plan, pl, t):
         pv, i_pv, modo_pv = None, -1, None
     mom = sobre or (dentro(t, momentos) if not pv else None)
     extra = {"mom": next((k for k, m in enumerate(todos) if m is mom), -1), "pv": i_pv}
+    if pv and modo_pv == "916":
+        fw, fh = plan["info"]["ancho"], plan["info"]["alto"]
+        cara = interp_cara(toma["cara"], t) if toma.get("cara") else None
+        return {"tipo": "imagen", **extra,
+                "pv_ventana": {"region": [0.0, 0.0, float(fw), float(fh)], "aspect": W / H,
+                               "auto": list(ventana_916(fw, fh, W, H, cara))}}
     if pv and modo_pv == "completa" and (pv["tipo"] == "video" or pv.get("vertical") or not cfg_p.get("imagen_izquierda")):
         cx = cy = None
         if pv.get("cara") and len(pv["cara"]) > 1:
@@ -3256,10 +3271,17 @@ def cuadro_lectura(frame, pv, t, w, h, cfg):
     return cv2.warpAffine(frame, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
 
 
+def ventana_916(fw, fh, W, H, cara=None):
+    """«9:16»: una ventana vertical tomada de TODO el cuadro del video (no solo de la pantalla de Nacho);
+    de inicio centrada en la cara de Nacho (o al centro). Se mueve / acerca con el recuadro azul en Edición."""
+    cx = cara[0] if cara else fw / 2
+    return ventana_cubrir([0.0, 0.0, float(fw), float(fh)], W / H, cx, fh / 2)
+
+
 def pantalla_de(pv, cfg_p):
     """Cómo se muestra un tramo de la proyección: 'completa', 'dividida' o 'nacho' (no se muestra).
     Se puede forzar por tramo con el campo 'pantalla' (lo cambia la interfaz)."""
-    if pv.get("pantalla") in ("completa", "dividida", "nacho"):
+    if pv.get("pantalla") in ("completa", "dividida", "nacho", "916"):
         return pv["pantalla"]
     aprendido = (cfg_p.get("aprendido_pantalla") or {}).get(clase_pantalla(pv))
     if aprendido in ("completa", "dividida", "nacho"):
@@ -3920,7 +3942,15 @@ def cmd_render(args):
         mom = sobre or (dentro(t, momentos) if not pv else None)
         lienzo[:] = 0
 
-        if pv and modo_pv == "completa" and (pv["tipo"] == "video" or pv.get("vertical") or not cfg_p.get("imagen_izquierda")):
+        if pv and modo_pv == "916":
+            # «9:16»: una vista vertical de cualquier parte del video completo (recuadro azul en Edición)
+            fh_, fw_ = frame.shape[:2]
+            vent = ventana_916(fw_, fh_, W, H, interp_cara(toma["cara"], t) if toma.get("cara") else None)
+            if manual_p:
+                vent = ventana_manual(manual_p, t, [0, 0, fw_, fh_], W / H, vent)
+            lienzo[:] = enfocar(recortar(frame, vent, W, H), 0.3)
+            lay = "persona"
+        elif pv and modo_pv == "completa" and (pv["tipo"] == "video" or pv.get("vertical") or not cfg_p.get("imagen_izquierda")):
             # video de la proyección a pantalla completa, centrado en quien habla (la cara más grande)
             # o en lo que se mueve; con un poco de acercamiento si hay una persona
             cx = cy = None
