@@ -23,7 +23,7 @@ Opción A, sin nada extra:
 Opción B, un solo .exe para repartir:
   1. En tu PC instala Inno Setup 6 (gratis): https://jrsoftware.org/isdl.php
   2. Abre  EditorVertical.iss  y presiona «Compile» (Ctrl+F9).
-  3. En la carpeta «Output» queda  Instalar_Editor_Vertical_1.0.0.exe : ese es el que pasas a las demás PCs.
+  3. En la carpeta «Output» queda  Instalar_Editor_Vertical_1.1.0.exe : ese es el que pasas a las demás PCs.
 
 Si Windows muestra «Windows protegió su PC»: «Más información» → «Ejecutar de todas formas»
 (pasa porque el instalador no está firmado).
@@ -46,7 +46,7 @@ USAR
 4. Revisa en «Edición» y «Subtítulos»; al terminar, «Exportar» → el video queda en la carpeta «Renders».
 El manual completo de la plataforma está en  app\LEEME.md.
 
-Para cerrarlo por completo: menú Inicio → «Cerrar Editor Vertical».
+Para cerrarlo por completo: botón «⏻ Cerrar» arriba en la plataforma (o menú Inicio → «Cerrar Editor Vertical»).
 Si algo falla: pestaña «Registro de la plataforma» y manda ese texto.
 Archivos de registro: %LOCALAPPDATA%\EditorVertical\  (instalacion.log, arranque.log, servidor.log)
 Quitar: «Agregar o quitar programas» → «Editor Vertical · El Chapucero» (no borra VideosEdit ni Renders).

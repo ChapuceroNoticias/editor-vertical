@@ -434,10 +434,27 @@ def guardar_plan(trabajo, plan):
 
 
 def ruta_export(trabajo):
-    """Dónde queda el video final al exportar: carpeta «Renders» del escritorio."""
+    """Dónde queda el video final al exportar: carpeta «Renders» del escritorio, con el TÍTULO del cuadro «Título»
+    como nombre (sin título: nombre del video). Si ya hay otro video con ese nombre, se le agrega (2), (3)..."""
     plan, _ = cargar(trabajo)
-    fin = "_subtitulado.mp4" if estilo_de(plan) == "solo_subtitulos" else "_vertical.mp4"
-    return CARPETA_RENDERS / (Path(plan["video"]).stem + fin)
+    titulo = (plan.get("titulo") or "").strip()
+    if titulo:
+        base = nombre_archivo(titulo)
+    else:
+        base = Path(plan["video"]).stem + ("_subtitulado" if estilo_de(plan) == "solo_subtitulos" else "_vertical")
+    p, k = CARPETA_RENDERS / f"{base}.mp4", 2
+    while p.exists() and str(p) != exportado_de(trabajo):
+        p = CARPETA_RENDERS / f"{base} ({k}).mp4"
+        k += 1
+    return p
+
+
+def exportado_de(trabajo):
+    """Último video exportado de este trabajo (se anota aparte para no tocar plan.json)."""
+    try:
+        return (Path(trabajo) / "exportado.txt").read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
 
 
 def video_salida(trabajo):
@@ -445,12 +462,9 @@ def video_salida(trabajo):
     if not trabajo:
         return None
     plan, _ = cargar(trabajo)
-    try:
-        p = ruta_export(trabajo)
-        if p.exists():
-            return str(p)
-    except OSError:
-        pass
+    ex = exportado_de(trabajo)
+    if ex and Path(ex).exists():
+        return ex
     for fin in ("_vertical.mp4", "_subtitulado.mp4"):
         p = Path(trabajo) / (Path(plan["video"]).stem + fin)
         if p.exists():
@@ -987,11 +1001,12 @@ def cancelar_todo():
     en_cola = 0
     while True:   # los fragmentos que esperaban en la cola ya no se hacen
         try:
-            nombre, fid, _gpu = _COLA.get_nowait()
+            nombre, fids, _gpu = _COLA.get_nowait()
         except queue.Empty:
             break
         try:
-            actualizar_frag(carpeta_frag(nombre)[1], fid, estado="cancelado", detalle="Cancelado")
+            for fid in (fids if isinstance(fids, (list, tuple)) else [fids]):
+                actualizar_frag(carpeta_frag(nombre)[1], fid, estado="cancelado", detalle="Cancelado")
         except Exception:
             pass
         _COLA.task_done()
@@ -1112,8 +1127,37 @@ def datos_edicion(t):
             "previa_vieja": previa_vieja, "render": estado_render_edicion(t),
             "titulo_fin": plan.get("titulo_fin") if estilo_de(plan) == "motivacional" and plan.get("titulo") else None,
             "pausas": pausas,
+            "audio": datos_audio(plan),
             "estilo": estilo_de(plan), "historial": len(list((Path(t) / ".historial").glob("*_plan.json")))
             if (Path(t) / ".historial").exists() else 0}
+
+
+def musica_de(plan):
+    """Archivo de la música de fondo de la plantilla del trabajo (o None)."""
+    try:
+        m = (plantilla(plan).get("audio") or {}).get("musica")
+    except Exception:
+        return None
+    p = ed.ruta(m) if m else None
+    return p if p and Path(p).exists() else None
+
+
+def datos_audio(plan):
+    pl_a = (plantilla(plan).get("audio") or {}) if estilo_de(plan) != "solo_subtitulos" else {}
+    return {"musica": bool(musica_de(plan)) and estilo_de(plan) != "solo_subtitulos",
+            "base": pl_a.get("volumen_musica", 0.5), "mezcla": ed.mezcla_de(plan)}
+
+
+def guardar_audio(t, musica, voz):
+    plan, _ = cargar(t)
+    respaldar(t)
+    mez = {"musica": round(min(3.0, max(0.0, float(musica))), 3), "voz": round(min(3.0, max(0.0, float(voz))), 3)}
+    if mez == {"musica": 1.0, "voz": 1.0}:
+        plan.pop("audio_mezcla", None)
+    else:
+        plan["audio_mezcla"] = mez
+    guardar_plan(t, plan)
+    return mez
 
 
 def accion_momento_http(t, d):
@@ -1356,7 +1400,9 @@ def integrar_sugerencias(d):
         datos = leer_frag(d)
         if datos.get("sugerencias_fecha") == sug.get("fecha"):
             return
+        hist = datos.setdefault("sugeridas_historial", [])   # para «Lo aprendido»: qué sugirió la IA
         for c in sug.get("clips", []):
+            hist.append({"inicio": c["inicio"], "fin": c["fin"], "titulo": c.get("titulo") or "", "tema": c.get("tema", "")})
             datos["fragmentos"].append({"id": datos.get("siguiente", 1), "inicio": c["inicio"], "fin": c["fin"],
                                         "titulo": c.get("titulo") or "", "tema": c.get("tema", ""), "estilo": datos.get("estilo", "Clips Chapuceros"),
                                         "estado": "pendiente", "sugerido": True, "marcado": True})
@@ -1377,7 +1423,8 @@ def datos_frag(nombre):
         pausas = [round((a["f"] + b["i"]) / 2, 2) for a, b in zip(pal, pal[1:]) if b["i"] - a["f"] >= 0.35]
     return {"video": v.name, "mp4": v.suffix.lower() in (".mp4", ".webm", ".m4v"), "duracion": ed.duracion_video(v),
             "fragmentos": datos["fragmentos"], "estilo": datos.get("estilo", "Clips Chapuceros"),
-            "estilos": list(ESTILOS), "pausas": pausas, "transcrito": tp.exists(), "sugerir": estado_sugerir(d)}
+            "estilos": list(ESTILOS), "pausas": pausas, "transcrito": tp.exists(), "sugerir": estado_sugerir(d),
+            "gpu": GPU_INICIAL}
 
 
 def guardar_frag(nombre, lista, estilo=None):
@@ -1396,9 +1443,21 @@ def guardar_frag(nombre, lista, estilo=None):
             a, b = float(f["inicio"]), float(f["fin"])
             if b - a < 1.0:
                 continue
+            g = f.get("grupo")
             nuevos.append({**base, "id": fid, "inicio": round(a, 3), "fin": round(b, 3),
                            "titulo": str(f.get("titulo", ""))[:120], "estilo": f.get("estilo") or base.get("estilo") or "Clips Chapuceros",
-                           "marcado": bool(f.get("marcado", True)), "sugerido": bool(f.get("sugerido", base.get("sugerido", False)))})
+                           "marcado": bool(f.get("marcado", True)), "sugerido": bool(f.get("sugerido", base.get("sugerido", False))),
+                           "grupo": int(g) if isinstance(g, (int, float)) and g > 0 else None})
+            if not nuevos[-1]["grupo"]:
+                nuevos[-1].pop("grupo")
+        # un grupo de un solo fragmento ya no es grupo
+        cuenta = {}
+        for x in nuevos:
+            if x.get("grupo"):
+                cuenta[x["grupo"]] = cuenta.get(x["grupo"], 0) + 1
+        for x in nuevos:
+            if x.get("grupo") and cuenta[x["grupo"]] < 2:
+                x.pop("grupo")
         datos["fragmentos"] = sorted(nuevos, key=lambda x: x["inicio"])
         if estilo in ESTILOS:
             datos["estilo"] = estilo
@@ -1413,71 +1472,127 @@ def slug(txt, n=40):
     return t[:n] or "clip"
 
 
+def nombre_archivo(titulo, n=100):
+    """Título -> nombre de archivo válido en Windows (conserva espacios y acentos)."""
+    t = _re.sub(r'[<>:"/\\|?*\x00-\x1f]+', " ", str(titulo or ""))
+    t = _re.sub(r"\s+", " ", t).strip().rstrip(". ")
+    return t[:n].rstrip(". ") or "clip"
+
+
+def ruta_fragmento(titulo):
+    """Archivo del clip en VideosEdit con el TÍTULO como nombre (si ya existe otro, se le agrega (2), (3)...)."""
+    base = nombre_archivo(titulo)
+    salida, k = CARPETA_VIDEOS / f"{base}.mp4", 2
+    while salida.exists() or salida.with_name(salida.stem + "_trabajo").exists():
+        salida = CARPETA_VIDEOS / f"{base} ({k}).mp4"
+        k += 1
+    return salida
+
+
+def _estado_varios(d, fids, **cambios):
+    for fid in fids:
+        actualizar_frag(d, fid, **cambios)
+
+
 def trabajador_cola():
-    """Corta y analiza los fragmentos en cola, uno tras otro (en segundo plano)."""
+    """Corta y analiza los fragmentos en cola, uno tras otro (en segundo plano). Un GRUPO de fragmentos
+    (Ctrl+G en Video largo) se une en un solo video, en orden, y se analiza como uno solo."""
     while True:
-        nombre, fid, gpu = _COLA.get()
+        nombre, fids, gpu = _COLA.get()
+        fids = list(fids) if isinstance(fids, (list, tuple)) else [fids]
+        d = None
         try:
             v, d = carpeta_frag(nombre)
-            f = next((x for x in leer_frag(d)["fragmentos"] if x["id"] == fid), None)
-            if not f:
+            todos = {x["id"]: x for x in leer_frag(d)["fragmentos"]}
+            partes = sorted([todos[i] for i in fids if i in todos], key=lambda x: x["inicio"])
+            if not partes:
                 continue
+            titulo = (next((p.get("titulo") for p in partes if (p.get("titulo") or "").strip()), "") or "").strip()
+            estilo = partes[0].get("estilo")
             registrar("─" * 60)
-            registrar(f"▶ Video largo «{v.name}»: fragmento {fid} «{f.get('titulo', '')}»")
-            actualizar_frag(d, fid, estado="cortando", detalle="")
-            salida = CARPETA_VIDEOS / f"{v.stem}_parte{fid:02d}_{slug(f.get('titulo'))}.mp4"
-            k = 2
-            while salida.exists() and (salida.with_name(salida.stem + "_trabajo") / "plan.json").exists():
-                salida = CARPETA_VIDEOS / f"{v.stem}_parte{fid:02d}_{slug(f.get('titulo'))}_{k}.mp4"
-                k += 1
-            ed.cortar_fragmento(v, f["inicio"], f["fin"], salida)
+            registrar(f"▶ Video largo «{v.name}»: " + (f"grupo de {len(partes)} fragmentos" if len(partes) > 1
+                                                     else f"fragmento {partes[0]['id']}") + f" «{titulo}»")
+            _estado_varios(d, fids, estado="cortando", detalle="")
+            salida = ruta_fragmento(titulo or f"{v.stem} parte {partes[0]['id']:02d}")
+            if len(partes) == 1:
+                ed.cortar_fragmento(v, partes[0]["inicio"], partes[0]["fin"], salida)
+            else:
+                ed.unir_fragmentos(v, [(p["inicio"], p["fin"]) for p in partes], salida)
             registrar(f"   cortado: {salida.name}")
-            # la transcripción del video largo se reutiliza (no se vuelve a transcribir)
+            # la transcripción del video largo se reutiliza (no se vuelve a transcribir); en un grupo, cada pedazo
+            # se recorre a su lugar en el video unido
             cmd_extra = []
             tp = d / "transcripcion.json"
             if tp.exists():
-                pal = [{"p": p["p"], "i": round(p["i"] - f["inicio"], 3), "f": round(p["f"] - f["inicio"], 3)}
-                       for p in ed.cargar_json(tp) if f["inicio"] - 0.05 <= p["i"] and p["f"] <= f["fin"] + 0.05]
-                tf = d / f"parte{fid:02d}_transcripcion.json"
+                todas = ed.cargar_json(tp)
+                pal, desp = [], 0.0
+                for p in partes:
+                    pal += [{"p": w["p"], "i": round(w["i"] - p["inicio"] + desp, 3), "f": round(w["f"] - p["inicio"] + desp, 3)}
+                            for w in todas if p["inicio"] - 0.05 <= w["i"] and w["f"] <= p["fin"] + 0.05]
+                    desp += p["fin"] - p["inicio"]
+                tf = d / f"parte{partes[0]['id']:02d}_transcripcion.json"
                 ed.guardar_json(tf, pal)
                 cmd_extra = ["--transcripcion", str(tf)]
-            actualizar_frag(d, fid, estado="analizando", salida=str(salida))
-            plantilla_est = str(BASE / ESTILOS.get(f.get("estilo"), ESTILOS["Clips Chapuceros"]))
-            cmd = [sys.executable, str(BASE / "editor.py"), "analizar", str(salida), "--titulo", f.get("titulo") or "",
-                   "--plantilla", plantilla_est, "--vista-previa", *cmd_extra] + \
+            _estado_varios(d, fids, estado="analizando", salida=str(salida))
+            plantilla_est = str(BASE / ESTILOS.get(estilo, ESTILOS["Clips Chapuceros"]))
+            # sin pre-acomodo: solo limpieza de pausas y subtítulos (Nacho y la pantalla se acomodan a mano)
+            cmd = [sys.executable, str(BASE / "editor.py"), "analizar", str(salida), "--titulo", titulo,
+                   "--plantilla", plantilla_est, "--vista-previa", "--ligero", *cmd_extra] + \
                   (["--solo-gpu", "--dispositivo", "cuda"] if gpu else [])
             final = None
             for _html, fin in correr(cmd):
                 if fin is not None:
                     final = fin
             if final and final.get("ok"):
-                actualizar_frag(d, fid, estado="listo", trabajo=final.get("trabajo"), detalle="")
+                try:   # de dónde salió (para «Lo aprendido»)
+                    pt = Path(final["trabajo"]) / "plan.json"
+                    plan = ed.cargar_json(pt)
+                    plan["origen_video_largo"] = {"video": v.name, "tramos": [[p["inicio"], p["fin"]] for p in partes]}
+                    ed.guardar_json(pt, plan)
+                except Exception:
+                    pass
+                _estado_varios(d, fids, estado="listo", trabajo=final.get("trabajo"), detalle="")
             elif final and final.get("cancelado"):
-                actualizar_frag(d, fid, estado="cancelado", detalle="Cancelado")
+                _estado_varios(d, fids, estado="cancelado", detalle="Cancelado")
             else:
-                actualizar_frag(d, fid, estado="error", detalle="El análisis falló (mira el Registro)")
+                _estado_varios(d, fids, estado="error", detalle="El análisis falló (mira el Registro)")
         except Exception as e:
             try:
-                actualizar_frag(d, fid, estado="error", detalle=str(e)[:300])
+                if d is not None:
+                    _estado_varios(d, fids, estado="error", detalle=str(e)[:300])
             except Exception:
                 pass
-            registrar(f"✖ Fragmento {fid}: {e}")
+            registrar(f"✖ Fragmento(s) {fids}: {e}")
         finally:
             _COLA.task_done()
 
 
 def mandar_a_editar(nombre, ids, gpu):
+    """Manda a la cola los fragmentos marcados. Los de un mismo grupo van juntos como UN solo video."""
     v, d = carpeta_frag(nombre)
     if _TRABAJADOR[0] is None or not _TRABAJADOR[0].is_alive():
         _TRABAJADOR[0] = threading.Thread(target=trabajador_cola, daemon=True)
         _TRABAJADOR[0].start()
-    n = 0
-    for f in leer_frag(d)["fragmentos"]:
-        if f["id"] in ids and f.get("estado") not in ("en cola", "cortando", "analizando"):
-            actualizar_frag(d, f["id"], estado="en cola", detalle="")
-            _COLA.put((nombre, f["id"], gpu))
-            n += 1
-    return n
+    frs = leer_frag(d)["fragmentos"]
+    ocupados = ("en cola", "cortando", "analizando")
+    trabajos, vistos = [], set()
+    for f in sorted(frs, key=lambda x: x["inicio"]):
+        if f["id"] not in ids or f["id"] in vistos or f.get("estado") in ocupados:
+            continue
+        if f.get("grupo"):
+            miembros = [x["id"] for x in frs if x.get("grupo") == f["grupo"] and x.get("estado") not in ocupados]
+        else:
+            miembros = [f["id"]]
+        vistos.update(miembros)
+        trabajos.append(miembros)
+    for miembros in trabajos:
+        _estado_varios(d, miembros, estado="en cola", detalle="")
+        _COLA.put((nombre, tuple(miembros), gpu))
+    try:   # lo que se eligió y lo que se descartó (para «Lo aprendido»)
+        aprendizaje.observar_video_largo(d, v.name, ed)
+    except Exception as e:
+        registrar(f"⚠ No pude aprender de este video largo: {e}")
+    return len(trabajos)
 
 
 def guardar_encuadre(t, ajustes, clave="encuadre_manual"):
@@ -1823,6 +1938,36 @@ def crear_app():
     @app.get("/edi/datos")
     def edi_datos(t: str):
         return JSONResponse(datos_edicion(validar(t)))
+
+    @app.post("/app/cerrar")
+    def app_cerrar():
+        """Botón «Cerrar»: detiene todos los procesos de la plataforma y la apaga."""
+        try:
+            cancelar_todo()
+        except Exception:
+            pass
+        for proc in list(_SUGERIR.values()) + list(_PROXY_TRABAJOS.values()):
+            try:
+                if proc.poll() is None:
+                    _matar(proc)
+            except Exception:
+                pass
+        registrar("⏻ Editor cerrado desde el botón «Cerrar»")
+        threading.Timer(0.8, lambda: os._exit(0)).start()
+        return {"ok": True}
+
+    @app.get("/edi/musica")
+    def edi_musica(t: str):
+        plan, _ = cargar(validar(t))
+        m = musica_de(plan)
+        if not m:
+            raise HTTPException(404, "Este estilo no lleva música de fondo")
+        return FileResponse(m, media_type="audio/mpeg")
+
+    @app.post("/edi/audio")
+    def edi_audio(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        return {"ok": True, "mezcla": guardar_audio(t, d.get("musica", 1.0), d.get("voz", 1.0))}
 
     def _ok(fn):
         try:
@@ -2192,6 +2337,15 @@ body, .gradio-container { background: #0b0b0d !important; }
 
 TEMA_JS = "() => { document.body.classList.add('dark'); }"
 
+JS_CERRAR = """() => {
+  if (!confirm('¿Cerrar el Editor Vertical? Se detiene todo lo que esté trabajando (análisis, exportación, vistas previas, video largo).')) return;
+  fetch('/app/cerrar', {method: 'POST'}).catch(() => {});
+  document.body.innerHTML = '<div style="font:600 20px system-ui;color:#ececf1;background:#0b0b0d;height:100vh;display:flex;' +
+    'flex-direction:column;align-items:center;justify-content:center;gap:10px"><div>El Editor Vertical se cerró.</div>' +
+    '<div style="font-weight:400;font-size:14px;color:#9a9aa6">Puedes cerrar esta pestaña. Para volver a usarlo, abre «Editor Vertical» desde el escritorio.</div></div>';
+  setTimeout(() => { try { window.close(); } catch (e) {} }, 300);
+}"""
+
 
 def tema():
     t = gr.themes.Base(primary_hue=gr.themes.colors.red, secondary_hue=gr.themes.colors.red,
@@ -2211,8 +2365,12 @@ def construir():
     extra = {"theme": tema(), "css": TEMA_CSS, "js": TEMA_JS} if _TEMA_EN_BLOCKS else {}
     with gr.Blocks(title="Editor vertical · El Chapucero", fill_width=True, **extra) as demo:
         trabajo = gr.State("")
-        gr.HTML('<div id="cabecera"><span class="marca">EDITOR <b>VERTICAL</b></span>'
-                '<span class="sub">El Chapucero · 16:9 → 9:16</span></div>')
+        with gr.Row(equal_height=True):
+            gr.HTML('<div id="cabecera"><span class="marca">EDITOR <b>VERTICAL</b></span>'
+                    '<span class="sub">El Chapucero · 16:9 → 9:16</span></div>')
+            btn_cerrar = gr.Button("⏻ Cerrar", variant="stop", scale=0, min_width=120, elem_id="btn_cerrar")
+        # Cerrar: detiene todo lo que esté trabajando, apaga la plataforma y deja la pestaña en blanco
+        btn_cerrar.click(None, None, None, js=JS_CERRAR)
 
         with gr.Tabs():
             # ======================== Editor ========================
@@ -2251,8 +2409,15 @@ def construir():
                         btn_render = gr.Button("Exportar video final", variant="primary")
                         video = gr.Video(label="Video final", height=620, interactive=False)
 
-            # «Video largo» y «Lo aprendido» se activan en una actualización posterior
-            # (su código sigue en el programa: /frag/editor y /apr/editor).
+            # ======================== Video largo ========================
+            with gr.Tab("Video largo"):
+                gr.HTML('<iframe src="/frag/editor" style="width:100%;height:1750px;border:0;border-radius:12px;'
+                        'background:#0b0b0d"></iframe>')
+
+            # ======================== Lo aprendido ========================
+            with gr.Tab("Lo aprendido"):
+                gr.HTML('<iframe src="/apr/editor" style="width:100%;height:1300px;border:0;border-radius:12px;'
+                        'background:#0b0b0d"></iframe>')
 
             # ======================== Registro ========================
             with gr.Tab("Registro de la plataforma"):
@@ -2361,6 +2526,13 @@ def construir():
                 (["--gpu", "--solo-gpu"] if gpu else [])
             for html, final in correr(cmd):
                 if final is not None and final.get("ok"):
+                    try:   # el video exportado de este trabajo (si cambia el título, el siguiente sale con el nombre nuevo)
+                        viejo = exportado_de(t)
+                        (Path(t) / "exportado.txt").write_text(str(destino), encoding="utf-8")
+                        if viejo and viejo != str(destino) and Path(viejo).exists():
+                            registrar(f"   (el export anterior sigue en {viejo})")
+                    except Exception:
+                        pass
                     try:   # lo que corregiste en este video queda como propuesta en «Lo aprendido»
                         r = aprendizaje.aprender_de(t, ed)
                         if r:

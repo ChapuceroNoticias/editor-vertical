@@ -2173,7 +2173,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-10-29c subs-tramos"
+VERSION = "2026-10-30a v1.1.0"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -2202,6 +2202,37 @@ def cmd_analizar(args):
     return trabajo
 
 
+def cara_promedio(video, info, n=12):
+    """Cara de Nacho (mediana de unas cuantas muestras): [cx, cy, alto] o None."""
+    det = DetectorCara()
+    cap = cv2.VideoCapture(str(video))
+    total = info.get("cuadros") or int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+    caras = []
+    for k in range(n):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int((k + 0.5) * total / n))
+        ok, fr = cap.read()
+        if not ok:
+            continue
+        c = det.mayor(fr)
+        if c and c[3] > 0.06 * fr.shape[0]:
+            caras.append([c[0] + c[2] / 2, c[1] + c[3] / 2, c[3]])
+    cap.release()
+    if not caras:
+        return None
+    a = np.array(caras, float)
+    return [float(v) for v in np.median(a, axis=0)]
+
+
+def tomas_ligeras(video):
+    """Una sola toma «Nacho a pantalla completa» con el encuadre centrado en su cara (sin seguirla)."""
+    fps, n, w, h = info_video(video)
+    info = {"fps": fps, "cuadros": n, "ancho": w, "alto": h, "duracion": n / fps if fps else 0,
+            "audio": tiene_audio(video)}
+    c = cara_promedio(video, info)
+    cara = [[0.0, c[0], c[1], c[2]]] if c else [[0.0, w / 2, h * 0.4, h * 0.35]]
+    return [{"layout": "completa", "inicio": 0.0, "fin": info["duracion"], "cara": cara}], info
+
+
 def _cmd_analizar(args):
     log(f"editor.py versión {VERSION}")
     video = Path(args.video.strip().strip('"')).resolve()
@@ -2221,11 +2252,20 @@ def _cmd_analizar(args):
     if pl.get("estilo") == "solo_subtitulos":
         return estilo_solo_subtitulos().analizar(args, video, pl, pl_path, trabajo)
 
-    Progreso.paso(0.0, "Analizando las tomas del video")
-    geometria = calibrar_geometria(video, pl)
-    aplicar_geometria(pl, geometria)
-    segs, info = analizar_tomas(video, pl)
-    proy = analizar_proyeccion(segs, pl)
+    ligero = bool(getattr(args, "ligero", False))
+    if ligero:
+        # Video largo: sin pre-acomodo (más rápido). Todo es «Nacho a pantalla completa» y el encuadre se centra en
+        # la cara (unas cuantas muestras); la pantalla dividida, imágenes y encuadres se ponen a mano en Edición.
+        Progreso.paso(0.0, "Preparando (sin acomodo automático)")
+        geometria = None
+        segs, info = tomas_ligeras(video)
+        proy = []
+    else:
+        Progreso.paso(0.0, "Analizando las tomas del video")
+        geometria = calibrar_geometria(video, pl)
+        aplicar_geometria(pl, geometria)
+        segs, info = analizar_tomas(video, pl)
+        proy = analizar_proyeccion(segs, pl)
     for s in segs:
         log(f"  toma {s['layout']:9s} {s['inicio']:7.2f} -> {s['fin']:7.2f}")
 
@@ -2236,20 +2276,23 @@ def _cmd_analizar(args):
     else:
         palabras = transcribir(video, args.whisper_modelo, args.dispositivo)
 
-    Progreso.paso(0.46, "Leyendo el texto de la pantalla")
-    proy = analizar_lectura(video, segs, proy, palabras, pl)
-    proy = presentar_videos(segs, proy, pl, video)
-    proy = mostrar_al_que_habla(segs, proy, pl, video)
+    difuminar = []
+    if not ligero:
+        Progreso.paso(0.46, "Leyendo el texto de la pantalla")
+        proy = analizar_lectura(video, segs, proy, palabras, pl)
+        proy = presentar_videos(segs, proy, pl, video)
+        proy = mostrar_al_que_habla(segs, proy, pl, video)
     for s in segs:
         s.pop("muestras", None)
     for p in proy:
         log(f"  proyección {p['tipo']:8s} {p['inicio']:7.2f} -> {p['fin']:7.2f}")
-    Progreso.paso(0.48, "Buscando subtítulos en los videos que pone Nacho")
-    try:
-        difuminar = detectar_subtitulos_video(video, proy, pl.get("difuminar"))
-    except Exception as e:
-        log(f"No pude buscar subtítulos en los videos de Nacho ({e})")
-        difuminar = []
+    if not ligero:
+        Progreso.paso(0.48, "Buscando subtítulos en los videos que pone Nacho")
+        try:
+            difuminar = detectar_subtitulos_video(video, proy, pl.get("difuminar"))
+        except Exception as e:
+            log(f"No pude buscar subtítulos en los videos de Nacho ({e})")
+            difuminar = []
     Progreso.paso(0.49, "Recortando pausas")
     cortes = [] if args.sin_cortes else calcular_cortes(video, info, proy, pl.get("cortes", {}))
     Progreso.paso(0.50, "Entendiendo el tema del video")
@@ -2291,6 +2334,7 @@ def _cmd_analizar(args):
         "momentos": momentos,
         "cortes": cortes,
         "difuminar": difuminar,
+        **({"ligero": True} if ligero else {}),
         "_ayuda": ("Puedes editar: 'proyeccion' (borrar o cambiar inicio/fin), 'momentos' (inicio, fin, "
                    "estilo dividida|completa, imagenes: rutas), 'cortes' (borrar los que no quieras) "
                    "y volver a correr 'render'. O usa interfaz.py para pedirlo por chat."),
@@ -2943,9 +2987,24 @@ def escena_en(plan, pl, t):
             "auto": list(recorte_persona(region, cara, (aw, ah), cfg["persona"])), **extra}
 
 
-def filtro_audio(pl, info, hay_musica, cortes):
-    """Voz (sin pausas, nivelada) + música en loop que baja sola cuando la persona habla (sidechain)."""
+def mezcla_de(plan):
+    """Volumen elegido en la pestaña Edición (1 = como viene): {"musica": x, "voz": y}."""
+    m = (plan or {}).get("audio_mezcla") or {}
+    def v(k):
+        try:
+            return min(3.0, max(0.0, float(m.get(k, 1.0))))
+        except (TypeError, ValueError):
+            return 1.0
+    return {"musica": v("musica"), "voz": v("voz")}
+
+
+def filtro_audio(pl, info, hay_musica, cortes, mezcla=None):
+    """Voz (sin pausas, nivelada) + música de fondo en loop a volumen FIJO (ya no baja sola cuando la persona
+    habla): solo dura lo que dura el video. 'mezcla' = volúmenes elegidos en la pestaña Edición."""
     a = pl.get("audio", {})
+    mezcla = mezcla or {"musica": 1.0, "voz": 1.0}
+    if mezcla.get("musica", 1.0) <= 0.001:
+        hay_musica = False
     if not info.get("audio"):
         return None, None
     voz = "[1:a:0]"
@@ -2971,13 +3030,14 @@ def filtro_audio(pl, info, hay_musica, cortes):
         partes += "".join(f"[q{k}]" for k in range(n)) + f"concat=n={n}:v=0:a=1[vcort];"
         voz = partes + "[vcort]"
     voz += ("dynaudnorm=f=150:g=15:p=0.9:m=8," if a.get("nivelar_voz", True) else "") + "aresample=48000"
+    if abs(mezcla.get("voz", 1.0) - 1.0) > 0.001:
+        voz += f",volume={mezcla['voz']:.3f}"
     if not hay_musica:
-        return voz + "[a]", "[a]"
-    f = (f"{voz},asplit=2[voz][sc];"
-         f"[2:a]aresample=48000,volume={a.get('volumen_musica', 0.5)}[mus];"
-         f"[mus][sc]sidechaincompress=threshold={a.get('duck_umbral', 0.02)}:ratio={a.get('duck_ratio', 6)}"
-         f":attack={a.get('duck_ataque_ms', 20)}:release={a.get('duck_liberacion_ms', 400)}[mduck];"
-         f"[voz][mduck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]")
+        return voz + ",alimiter=limit=0.95[a]" if mezcla.get("voz", 1.0) > 1.0 else voz + "[a]", "[a]"
+    vol_m = a.get("volumen_musica", 0.5) * mezcla.get("musica", 1.0)
+    f = (f"{voz}[voz];"
+         f"[2:a]aresample=48000,volume={vol_m:.3f}[mus];"
+         f"[voz][mus]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]")
     return f, "[a]"
 
 
@@ -3209,6 +3269,25 @@ def sugerir_fragmentos(palabras, duracion, ia, cfg=None):
     cfg = cfg or {}
     dmin, dmax = cfg.get("min_seg", 30), cfg.get("max_seg", 120)
     props = []
+    # lo aprendido de cómo eliges y limpias los clips (reglas aprobadas en «Lo aprendido»)
+    vl = (_APRENDIDO or {}).get("video_largo") or {}
+    guia = ""
+    if vl.get("temas"):
+        el = [e for e in vl["temas"].get("elegidos", []) if e.get("titulo") or e.get("texto")][-8:]
+        de = [e for e in vl["temas"].get("descartados", []) if e.get("titulo") or e.get("texto")][-6:]
+        if el:
+            guia += ("\nEl editor suele ELEGIR clips como estos (tema e información parecida):\n" +
+                     "\n".join(f"- {e.get('titulo') or e.get('tema')}: {e.get('texto', '')[:110]}" for e in el))
+        if de:
+            guia += ("\nY suele DESCARTAR clips como estos (no los propongas):\n" +
+                     "\n".join(f"- {e.get('titulo') or e.get('tema')}: {e.get('texto', '')[:110]}" for e in de))
+    if vl.get("duracion"):
+        guia += f"\nLos clips que el editor exporta duran unos {vl['duracion'].get('seg', 60):.0f} segundos."
+    if vl.get("borra"):
+        guia += ("\nEl editor siempre QUITA de los clips partes como estas; déjalas fuera (que el clip no empiece ni "
+                 "termine con ellas):\n" + "\n".join(f"- «{t[:90]}»" for t in vl["borra"].get("ejemplos", [])[-8:]))
+    if guia:
+        log("Uso lo aprendido de tus clips anteriores para sugerir")
     if ia and ia.disponible and palabras:
         ventana, paso = 600.0, 540.0
         t0, n_v = 0.0, max(1, int(math.ceil(max(1.0, duracion - 60) / paso)))
@@ -3226,7 +3305,7 @@ def sugerir_fragmentos(palabras, duracion, ia, cfg=None):
                     "claro, que empiece al inicio de una idea y termine al cerrarla (sin cortar a media frase). "
                     "Prefiere momentos con gancho: una opinión fuerte, un dato, una denuncia, una predicción. "
                     "No repitas el mismo tema dos veces. Si no hay nada bueno, devuelve una lista vacía.\n"
-                    "El título: corto (máximo 8 palabras), llamativo, en español, como titular.\n"
+                    "El título: corto (máximo 8 palabras), llamativo, en español, como titular.\n" + guia + "\n"
                     "Responde SOLO JSON: {\"clips\": [{\"inicio\": segundos, \"fin\": segundos, \"titulo\": \"...\", "
                     "\"tema\": \"una frase\"}]}\n\n"
                     f"Transcripción (del segundo {t0:.0f} al {t0 + ventana:.0f}):\n{texto_con_tiempos(trozo, 14)}"
@@ -3316,6 +3395,29 @@ def cortar_fragmento(video, a, b, salida):
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(r.stderr[-400:] or "ffmpeg falló al cortar")
+    return salida
+
+
+def unir_fragmentos(video, tramos, salida):
+    """Une varios tramos [(a, b), ...] del video (en ese orden) en un solo video, preciso al cuadro."""
+    gpu = SOLO_GPU or nvenc_disponible()
+    audio = tiene_audio(video)
+    cmd = ["ffmpeg", "-y", "-loglevel", "error"]
+    for a, b in tramos:
+        cmd += ["-ss", f"{a:.3f}", "-t", f"{b - a:.3f}", "-i", str(video)]
+    n = len(tramos)
+    if audio:
+        filtro = "".join(f"[{k}:v:0][{k}:a:0]" for k in range(n)) + f"concat=n={n}:v=1:a=1[v][a]"
+        mapas = ["-map", "[v]", "-map", "[a]", "-c:a", "aac", "-b:a", "192k"]
+    else:
+        filtro = "".join(f"[{k}:v:0]" for k in range(n)) + f"concat=n={n}:v=1:a=0[v]"
+        mapas = ["-map", "[v]"]
+    cmd += ["-filter_complex", filtro, *mapas,
+            *(["-c:v", "h264_nvenc", "-preset", "p5", "-cq", "18"] if gpu else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "17"]),
+            "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(salida)]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr[-400:] or "ffmpeg falló al unir los fragmentos")
     return salida
 
 
@@ -3556,7 +3658,7 @@ def cmd_render(args):
 
     musica = ruta(pl.get("audio", {}).get("musica")) if not args.sin_musica else None
     hay_musica = bool(musica and Path(musica).exists())
-    f_audio, map_audio = filtro_audio(pl, info, hay_musica, cortes)
+    f_audio, map_audio = filtro_audio(pl, info, hay_musica, cortes, mezcla_de(plan))
 
     cmd, salida, paso, tam = salida_render(args, trabajo, plan, pl, W, H, fps, hay_musica, musica, f_audio, map_audio,
                                            salida)
@@ -3774,6 +3876,9 @@ def main():
         p.add_argument("--sin-verificar", action="store_true", help="No verificar las imágenes con el modelo de visión")
         p.add_argument("--url-ollama", default="http://localhost:11434")
         p.add_argument("--solo-gpu", action="store_true", help="Todo lo pesado en la tarjeta gráfica; nunca cae al procesador")
+        p.add_argument("--ligero", action="store_true",
+                       help="Sin pre-acomodo (Video largo): no busca tomas, pantalla, lectura ni subtítulos del video; "
+                            "solo limpia pausas y hace los subtítulos. Nacho a pantalla completa, para acomodar a mano")
 
     def opciones_render(p):
         p.add_argument("--salida")

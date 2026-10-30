@@ -82,6 +82,10 @@
   .separador { border-top: 1px solid var(--borde); margin: 2px 0; }
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 20; }
   .modal.abierto { display: flex; }
+  .volumenes { display: inline-flex; gap: 14px; align-items: center; font-size: 12.5px; color: var(--suave); }
+  .volumenes label { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .volumenes input[type=range] { width: 110px; accent-color: var(--acento); }
+  .volumenes b { color: var(--texto); min-width: 38px; font-variant-numeric: tabular-nums; }
   .modal .caja { width: min(1100px, 96vw); height: min(860px, 92vh); background: var(--panel); border-radius: 12px; border: 1px solid var(--borde);
     display: flex; flex-direction: column; overflow: hidden; }
   .modal .cab { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--borde); }
@@ -123,6 +127,13 @@
     <button class="btn" id="b_p1" title="1 segundo adelante (Shift + →)">+1 s</button>
     <span class="tiempo" id="tiempo">00:00:00</span>
     <span id="fluida" style="color:var(--suave);font-size:12px"></span>
+    <span class="sp" style="flex:1"></span>
+    <span class="volumenes" id="volumenes">
+      <label id="vol_fondo_caja" title="Volumen de la música de fondo (fijo: ya no baja sola cuando hablan). 100% = como viene en la plantilla. Se usa en la vista previa y en el video final.">🎵 Fondo
+        <input type="range" id="vol_fondo" min="0" max="200" step="5" value="100"> <b id="vol_fondo_txt">100%</b></label>
+      <label title="Volumen del audio del video (la voz). 100% = como viene. Se usa en la vista previa y en el video final.">🔊 Video
+        <input type="range" id="vol_voz" min="0" max="200" step="5" value="100"> <b id="vol_voz_txt">100%</b></label>
+    </span>
   </div>
   <div class="linea"><canvas id="linea"></canvas></div>
   <div class="leyenda">
@@ -1426,6 +1437,62 @@ function medir() {
   const l = linea.getBoundingClientRect(); linea.width = Math.round(l.width * d); linea.height = Math.round(l.height * d);
 }
 
+// ---------- música de fondo y volúmenes (vista previa en vivo; el render usa los mismos valores) ----------
+let musica = null, actx = null, gVoz = null, gMus = null, guardarVolT = null;
+function prepararAudio() {   // la primera vez que se reproduce (el navegador lo pide tras un clic)
+  if (actx) { if (actx.state === "suspended") actx.resume(); return; }
+  try {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    gVoz = actx.createGain(); actx.createMediaElementSource(video).connect(gVoz); gVoz.connect(actx.destination);
+    if (musica) { gMus = actx.createGain(); actx.createMediaElementSource(musica).connect(gMus); gMus.connect(actx.destination); }
+    aplicarVolumen();
+  } catch (err) { actx = null; }
+}
+function aplicarVolumen() {
+  const a = X.audio || {}, vf = +$("vol_fondo").value / 100, vv = +$("vol_voz").value / 100;
+  $("vol_fondo_txt").textContent = $("vol_fondo").value + "%"; $("vol_voz_txt").textContent = $("vol_voz").value + "%";
+  if (gVoz) gVoz.gain.value = vv; else video.volume = Math.min(1, vv);
+  const vm = (a.base || 0.9) * vf;
+  if (gMus) gMus.gain.value = vm; else if (musica) musica.volume = Math.min(1, vm);
+}
+function sincronizarMusica(forzar) {
+  if (!musica || !musica.duration) return;
+  const objetivo = ahoraE() % musica.duration;
+  if (forzar || Math.abs(musica.currentTime - objetivo) > 0.25) musica.currentTime = objetivo;
+  if (video.paused) { if (!musica.paused) musica.pause(); }
+  else if (musica.paused) musica.play().catch(() => {});
+}
+function iniciarAudio() {
+  const a = X.audio || {};
+  $("vol_fondo_caja").style.display = a.musica ? "" : "none";
+  $("vol_fondo").value = Math.round((a.mezcla?.musica ?? 1) * 100);
+  $("vol_voz").value = Math.round((a.mezcla?.voz ?? 1) * 100);
+  if (a.musica) {
+    musica = new Audio(`/edi/musica?t=${encodeURIComponent(T)}`); musica.loop = true; musica.preload = "auto";
+  }
+  aplicarVolumen();
+  video.addEventListener("play", () => { prepararAudio(); sincronizarMusica(true); });
+  video.addEventListener("pause", () => musica && musica.pause());
+  video.addEventListener("seeked", () => sincronizarMusica(true));
+  video.addEventListener("timeupdate", () => sincronizarMusica(false));
+  for (const id of ["vol_fondo", "vol_voz"]) {
+    $(id).addEventListener("input", () => {
+      aplicarVolumen();
+      clearTimeout(guardarVolT);
+      guardarVolT = setTimeout(async () => {
+        try {
+          const r = await fetch("/edi/audio", { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ t: T, musica: +$("vol_fondo").value / 100, voz: +$("vol_voz").value / 100 }) });
+          if (!r.ok) throw new Error(await r.text());
+          X.audio = { ...(X.audio || {}), mezcla: (await r.json()).mezcla };
+          estado("Volumen guardado ✓ (para oírlo en Subtítulos: «Renderizar de nuevo»; el video final ya lo usa)", "ok");
+          X.previa_vieja = true; pintarBotonRender();
+        } catch (err) { estado("No se guardó el volumen: " + err.message, "err"); }
+      }, 500);
+    });
+  }
+}
+
 // ---------- inicio ----------
 async function iniciar() {
   if (!T) { $("contenido").innerHTML = `<div class="vacio">Carga o procesa un video para editarlo.</div>`; return; }
@@ -1448,6 +1515,7 @@ async function iniciar() {
   $("version").textContent = X.version ? "v " + X.version : "";
   ponerFuente();
   if (E.preparando) setTimeout(vigilarProxy, 5000);
+  iniciarAudio();
   video.addEventListener("loadedmetadata", medir);
   video.addEventListener("error", () => estado("El navegador no pudo abrir el video original.", "err"));
   new ResizeObserver(medir).observe($("escenario"));

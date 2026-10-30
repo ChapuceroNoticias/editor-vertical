@@ -66,6 +66,7 @@ const GRUPOS = [
   { tipo: "subtitulos", nombre: "Subtítulos", sub: "Palabras que Whisper escribe mal y tú corriges. Aprobadas, se corrigen solas al transcribir y los nombres se le dan a Whisper como pista." },
   { tipo: "imagenes", nombre: "Imágenes", sub: "Sitios que evitas o prefieres, tus búsquedas como ejemplo para el modelo, y la duración y el estilo que les das." },
   { tipo: "acomodos", nombre: "Acomodos", sub: "Cómo corriges el encuadre de Nacho y qué pantalla eliges según lo que proyecta." },
+  { tipo: "video_largo", nombre: "Video largo", sub: "Qué temas e información eliges para tus clips, cuáles descartas, de qué largo los haces y qué partes les quitas. Aprobadas, la IA las usa al sugerir fragmentos." },
 ];
 let datos = null, filtro = "propuesta";
 function estado(t, c) { $("estado").textContent = t || ""; $("estado").style.color = c === "err" ? "var(--rojo)" : (c === "ok" ? "var(--ok)" : "var(--suave)"); }

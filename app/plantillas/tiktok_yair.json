@@ -149,10 +149,7 @@
   "musica": "assets/musica_fondo.mp3",
   "volumen_musica": 0.9,
   "nivelar_voz": true,
-  "duck_umbral": 0.02,
-  "duck_ratio": 6,
-  "duck_ataque_ms": 20,
-  "duck_liberacion_ms": 400
+  "_nota": "Música de fondo a volumen fijo (no baja sola cuando habla Nacho). En la pestaña Edición se sube o baja (Fondo / Video)."
  },
  "toma_fija": {
   "_nota": "Tomas fijas: el recuadro NO sigue a la persona. Se queda quieto mientras la cara se mueva dentro del margen; si se sale, salta de golpe (corte) a otra posición fija, de preferencia en una pausa recortada cercana. margen_x: cuánto puede moverse de lado (fracción del ancho del recuadro). margen_y: cuánto arriba/abajo (en altos de cara). margen_tam: cuánto puede acercarse/alejarse (1.35 = 35%). min_seg: duración mínima de cada toma. adelantar_corte: hasta cuántos segundos antes se puede adelantar el salto para que caiga en una pausa recortada. activar=false regresa al seguimiento suave anterior.",

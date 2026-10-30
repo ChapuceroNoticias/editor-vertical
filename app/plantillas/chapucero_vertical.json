@@ -1,210 +1,207 @@
 {
-  "nombre": "chapucero_vertical",
-  "descripcion": "Video 16:9 (toma completa / pantalla dividida) a vertical 9:16: persona a pantalla completa, con momentos de pantalla dividida + imagen del tema, título en barra roja, subtítulos palabra por palabra y música de fondo con ducking",
-  "salida": {
-    "ancho": 1080,
-    "alto": 1920,
-    "crf": 20,
-    "audio_kbps": 125
-  },
-  "fuente_16x9": {
-    "_nota": "Coordenadas en el video original 1920x1080: [x, y, ancho, alto]. Usa 'calibrar' para verificarlas.",
-    "persona_dividida": [
-      12,
-      130,
-      506,
-      734
+ "nombre": "chapucero_vertical",
+ "descripcion": "Video 16:9 (toma completa / pantalla dividida) a vertical 9:16: persona a pantalla completa, con momentos de pantalla dividida + imagen del tema, título en barra roja, subtítulos palabra por palabra y música de fondo con ducking",
+ "salida": {
+  "ancho": 1080,
+  "alto": 1920,
+  "crf": 20,
+  "audio_kbps": 125
+ },
+ "fuente_16x9": {
+  "_nota": "Coordenadas en el video original 1920x1080: [x, y, ancho, alto]. Usa 'calibrar' para verificarlas.",
+  "persona_dividida": [
+   12,
+   130,
+   506,
+   734
+  ],
+  "proyeccion": [
+   547,
+   116,
+   1320,
+   748
+  ]
+ },
+ "deteccion": {
+  "muestreo_fps": 4,
+  "duracion_minima_seg": 1.0,
+  "_nota": "Pantalla dividida = franja superior negra + columna oscura entre los dos recuadros",
+  "franja_superior": [
+   0,
+   15,
+   1920,
+   80
+  ],
+  "columna_separacion": [
+   524,
+   200,
+   16,
+   600
+  ],
+  "umbral_oscuro": 35,
+  "umbral_movimiento_proyeccion": 2.0
+ },
+ "proyeccion": {
+  "_nota": "auto: si Nacho reproduce un video en la proyección va a pantalla completa; si aparece una imagen fija nueva (mapa, nota) se muestra unos segundos en pantalla dividida con paneo; ocultar = nunca; mostrar = imágenes fijas toda la toma",
+  "modo": "auto",
+  "video_min_seg": 1.5,
+  "video_hueco_seg": 2.0,
+  "imagen_min_seg": 6,
+  "imagen_mostrar_seg": 8,
+  "imagen_ancho_min": 0.6,
+  "zoom_imagen": 1.5,
+  "mostrar_al_que_habla": true,
+  "otro_min_seg": 2.0,
+  "nacho_min_seg": 1.5
+ },
+ "titulo": {
+  "barra": "assets/barra_titulo.png",
+  "fuente": "assets/Balinese_Culture.ttf",
+  "caja_texto": [
+   135,
+   72,
+   820,
+   88
+  ],
+  "escala": 1.17,
+  "color": "#FFFFFF",
+  "contorno": 4,
+  "color_contorno": "#000000",
+  "tam_max": 80,
+  "mayusculas": true
+ },
+ "subtitulos": {
+  "fuente": "assets/AkuKamu.otf",
+  "tam": 72,
+  "tam_min": 56,
+  "max_lineas": 2,
+  "color": "#FFFFFF",
+  "contorno": 8,
+  "color_contorno": "#000000",
+  "color_resalte": "#A8002F",
+  "max_palabras": 4,
+  "espacio": 0.09,
+  "pausa_corte_seg": 0.45,
+  "mayusculas": true
+ },
+ "layouts": {
+  "persona": {
+   "persona": {
+    "area": [
+     0,
+     0,
+     1080,
+     1920
     ],
-    "proyeccion": [
-      547,
-      116,
-      1320,
-      748
+    "zoom": 1.0,
+    "cara_y": 0.35,
+    "margen_sup": 200,
+    "nitidez": 0.5
+   },
+   "subtitulos": {
+    "area": [
+     40,
+     1490,
+     860,
+     200
     ]
+   }
   },
-  "deteccion": {
-    "muestreo_fps": 4,
-    "duracion_minima_seg": 1.0,
-    "_nota": "Pantalla dividida = franja superior negra + columna oscura entre los dos recuadros",
-    "franja_superior": [
-      0,
-      15,
-      1920,
-      80
+  "dividida": {
+   "persona": {
+    "area": [
+     0,
+     0,
+     1080,
+     1210
     ],
-    "columna_separacion": [
-      524,
-      200,
-      16,
-      600
+    "zoom": 1.0,
+    "cara_y": 0.4,
+    "margen_sup": 200,
+    "nitidez": 0.6
+   },
+   "franja": {
+    "area": [
+     0,
+     1210,
+     1080,
+     240
     ],
-    "umbral_oscuro": 35,
-    "umbral_movimiento_proyeccion": 2.0
-  },
-  "proyeccion": {
-    "_nota": "auto: si Nacho reproduce un video en la proyección va a pantalla completa; si aparece una imagen fija nueva (mapa, nota) se muestra unos segundos en pantalla dividida con paneo; ocultar = nunca; mostrar = imágenes fijas toda la toma",
-    "modo": "auto",
-    "video_min_seg": 1.5,
-    "video_hueco_seg": 2.0,
-    "imagen_min_seg": 6,
-    "imagen_mostrar_seg": 8,
-    "imagen_ancho_min": 0.6,
-    "zoom_imagen": 1.5,
-    "mostrar_al_que_habla": true,
-    "otro_min_seg": 2.0,
-    "nacho_min_seg": 1.5
-  },
-  "titulo": {
-    "barra": "assets/barra_titulo.png",
-    "fuente": "assets/Balinese_Culture.ttf",
-    "caja_texto": [
-      135,
-      72,
-      820,
-      88
+    "fondo": "assets/franja_subtitulos.jpg"
+   },
+   "subtitulos": {
+    "area": [
+     30,
+     1210,
+     880,
+     240
+    ]
+   },
+   "inferior": {
+    "area": [
+     0,
+     1450,
+     1080,
+     470
     ],
-    "escala": 1.17,
-    "color": "#FFFFFF",
-    "contorno": 4,
-    "color_contorno": "#000000",
-    "tam_max": 80,
-    "mayusculas": true
-  },
-  "subtitulos": {
-    "fuente": "assets/AkuKamu.otf",
-    "tam": 72,
-    "tam_min": 56,
-    "max_lineas": 2,
-    "color": "#FFFFFF",
-    "contorno": 8,
-    "color_contorno": "#000000",
-    "color_resalte": "#A8002F",
-    "max_palabras": 4,
-    "espacio": 0.09,
-    "pausa_corte_seg": 0.45,
-    "mayusculas": true
-  },
-  "layouts": {
-    "persona": {
-      "persona": {
-        "area": [
-          0,
-          0,
-          1080,
-          1920
-        ],
-        "zoom": 1.0,
-        "cara_y": 0.35,
-        "margen_sup": 200,
-        "nitidez": 0.5
-      },
-      "subtitulos": {
-        "area": [
-          40,
-          1490,
-          860,
-          200
-        ]
-      }
-    },
-    "dividida": {
-      "persona": {
-        "area": [
-          0,
-          0,
-          1080,
-          1210
-        ],
-        "zoom": 1.0,
-        "cara_y": 0.4,
-        "margen_sup": 200,
-        "nitidez": 0.6
-      },
-      "franja": {
-        "area": [
-          0,
-          1210,
-          1080,
-          240
-        ],
-        "fondo": "assets/franja_subtitulos.jpg"
-      },
-      "subtitulos": {
-        "area": [
-          30,
-          1210,
-          880,
-          240
-        ]
-      },
-      "inferior": {
-        "area": [
-          0,
-          1450,
-          1080,
-          470
-        ],
-        "ajuste": "cubrir",
-        "foco_y": 0.5
-      }
-    }
-  },
-  "momentos": {
-    "_nota": "Imágenes de apoyo buscadas en internet. Estilo alterna entre pantalla dividida y pantalla completa. Los elige el modelo local según lo que se dice; sin modelo, se reparten cada 'cada_seg'. efecto: auto (alterna acercar, paneo derecha, alejar, paneo izquierda) o zoom_in, zoom_out, paneo_der, paneo_izq, paneo_arriba, paneo_abajo, ninguno. intensidad: cuánto se mueve (0.1 lento, 0.3 medio, 0.5 rápido).",
-    "cada_seg": 15,
-    "duracion_min": 4,
-    "duracion_max": 7,
-    "separacion_min": 8,
-    "inicio_min": 5,
-    "imagenes_por_momento": 2,
-    "estilos": [
-      "dividida",
-      "completa"
-    ],
-    "margen_proyeccion": 2,
-    "efecto": "auto",
-    "intensidad": 0.3,
-    "max_candidatos": 8,
-    "puntaje_min": 7,
-    "_nota_busqueda": "puntaje_min: calificación mínima (0-10) que el modelo de visión le da a una foto para usarla. Más alto = más estricto (menos fotos, pero más acertadas). max_candidatos: cuántas fotos revisa por búsqueda."
-  },
-  "audio": {
-    "musica": "assets/musica_fondo.mp3",
-    "volumen_musica": 0.9,
-    "nivelar_voz": true,
-    "duck_umbral": 0.02,
-    "duck_ratio": 6,
-    "duck_ataque_ms": 20,
-    "duck_liberacion_ms": 400
-  },
-  "cortes": {
-    "_nota": "Acorta pausas: silencios más de 'umbral_rel_db' por debajo del nivel normal de la voz y más largos que 'pausa_min_seg'. No toca los videos de la proyección.",
-    "activar": true,
-    "umbral_rel_db": 16,
-    "pausa_min_seg": 0.2,
-    "dejar_seg": 0.12
-  },
-  "lectura": {
-    "_nota": "Cuando Nacho lee un texto de la proyección (tweet, nota), se muestra en pantalla dividida con zoom y la cámara sigue la palabra que va leyendo. lineas_visibles: cuántos renglones caben; posicion_x/y: dónde queda la palabra leída dentro del cuadro (0-1).",
-    "activar": true,
-    "lineas_visibles": 5.0,
-    "posicion_x": 0.45,
-    "posicion_y": 0.42,
-    "suavizado_seg": 0.25,
-    "min_palabras": 4,
-    "hueco_max_seg": 4.0,
-    "margen_inicio_seg": 0.5,
-    "margen_fin_seg": 1.2,
-    "vista_min_seg": 1.0,
-    "ocr_escala": 1.5
-  },
-  "toma_fija": {
-    "_nota": "Tomas fijas: el recuadro NO sigue a la persona. Se queda quieto mientras la cara se mueva dentro del margen; si se sale, salta de golpe (corte) a otra posición fija, de preferencia en una pausa recortada cercana. margen_x: cuánto puede moverse de lado (fracción del ancho del recuadro). margen_y: cuánto arriba/abajo (en altos de cara). margen_tam: cuánto puede acercarse/alejarse (1.35 = 35%). min_seg: duración mínima de cada toma. adelantar_corte: hasta cuántos segundos antes se puede adelantar el salto para que caiga en una pausa recortada. activar=false regresa al seguimiento suave anterior.",
-    "activar": true,
-    "margen_x": 0.35,
-    "margen_y": 0.8,
-    "margen_tam": 1.35,
-    "min_seg": 1.5,
-    "adelantar_corte": 1.5
+    "ajuste": "cubrir",
+    "foco_y": 0.5
+   }
   }
+ },
+ "momentos": {
+  "_nota": "Imágenes de apoyo buscadas en internet. Estilo alterna entre pantalla dividida y pantalla completa. Los elige el modelo local según lo que se dice; sin modelo, se reparten cada 'cada_seg'. efecto: auto (alterna acercar, paneo derecha, alejar, paneo izquierda) o zoom_in, zoom_out, paneo_der, paneo_izq, paneo_arriba, paneo_abajo, ninguno. intensidad: cuánto se mueve (0.1 lento, 0.3 medio, 0.5 rápido).",
+  "cada_seg": 15,
+  "duracion_min": 4,
+  "duracion_max": 7,
+  "separacion_min": 8,
+  "inicio_min": 5,
+  "imagenes_por_momento": 2,
+  "estilos": [
+   "dividida",
+   "completa"
+  ],
+  "margen_proyeccion": 2,
+  "efecto": "auto",
+  "intensidad": 0.3,
+  "max_candidatos": 8,
+  "puntaje_min": 7,
+  "_nota_busqueda": "puntaje_min: calificación mínima (0-10) que el modelo de visión le da a una foto para usarla. Más alto = más estricto (menos fotos, pero más acertadas). max_candidatos: cuántas fotos revisa por búsqueda."
+ },
+ "audio": {
+  "musica": "assets/musica_fondo.mp3",
+  "volumen_musica": 0.9,
+  "nivelar_voz": true,
+  "_nota": "Música de fondo a volumen fijo (no baja sola cuando habla Nacho). En la pestaña Edición se sube o baja (Fondo / Video)."
+ },
+ "cortes": {
+  "_nota": "Acorta pausas: silencios más de 'umbral_rel_db' por debajo del nivel normal de la voz y más largos que 'pausa_min_seg'. No toca los videos de la proyección.",
+  "activar": true,
+  "umbral_rel_db": 16,
+  "pausa_min_seg": 0.2,
+  "dejar_seg": 0.12
+ },
+ "lectura": {
+  "_nota": "Cuando Nacho lee un texto de la proyección (tweet, nota), se muestra en pantalla dividida con zoom y la cámara sigue la palabra que va leyendo. lineas_visibles: cuántos renglones caben; posicion_x/y: dónde queda la palabra leída dentro del cuadro (0-1).",
+  "activar": true,
+  "lineas_visibles": 5.0,
+  "posicion_x": 0.45,
+  "posicion_y": 0.42,
+  "suavizado_seg": 0.25,
+  "min_palabras": 4,
+  "hueco_max_seg": 4.0,
+  "margen_inicio_seg": 0.5,
+  "margen_fin_seg": 1.2,
+  "vista_min_seg": 1.0,
+  "ocr_escala": 1.5
+ },
+ "toma_fija": {
+  "_nota": "Tomas fijas: el recuadro NO sigue a la persona. Se queda quieto mientras la cara se mueva dentro del margen; si se sale, salta de golpe (corte) a otra posición fija, de preferencia en una pausa recortada cercana. margen_x: cuánto puede moverse de lado (fracción del ancho del recuadro). margen_y: cuánto arriba/abajo (en altos de cara). margen_tam: cuánto puede acercarse/alejarse (1.35 = 35%). min_seg: duración mínima de cada toma. adelantar_corte: hasta cuántos segundos antes se puede adelantar el salto para que caiga en una pausa recortada. activar=false regresa al seguimiento suave anterior.",
+  "activar": true,
+  "margen_x": 0.35,
+  "margen_y": 0.8,
+  "margen_tam": 1.35,
+  "min_seg": 1.5,
+  "adelantar_corte": 1.5
+ }
 }

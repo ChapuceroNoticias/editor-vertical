@@ -3,14 +3,16 @@
 ## Instalación
 Con el instalador (`Instalar.bat`, ver `LEEME.txt` junto a la carpeta `app`): instala Python, ffmpeg, Whisper,
 Ollama y crea el acceso directo **Editor Vertical** y las carpetas **VideosEdit** y **Renders** en el escritorio.
-En esta versión no aparecen las pestañas «Video largo» ni «Lo aprendido» (llegan en una actualización posterior).
 
 ## Interfaz
-Doble clic en **Editor Vertical** (escritorio). Se abre en el navegador (http://127.0.0.1:7860), en negro y rojo. Arriba hay dos pestañas: **Editor** y
-**Registro de la plataforma** (lo que va haciendo, paso a paso; solo se ve si entras a ella).
+Doble clic en **Editor Vertical** (escritorio). Se abre en el navegador (http://127.0.0.1:7860), en negro y rojo. Arriba están las pestañas **Editor**,
+**Video largo**, **Lo aprendido** y **Registro de la plataforma** (lo que va haciendo, paso a paso), y el botón
+**⏻ Cerrar**: detiene todo lo que esté trabajando (análisis, exportación, vistas previas, video largo) y apaga la
+plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
 
 - **Videos:** pon los videos en la carpeta **VideosEdit** del escritorio. Al exportar, el video final queda en la
-  carpeta **Renders** del escritorio. El desplegable «Nombre del video» lee esa carpeta;
+  carpeta **Renders** del escritorio con el **título** del cuadro «Título» como nombre (si ya hay otro igual, se le
+  agrega (2), (3)...; sin título, con el nombre del video). El desplegable «Nombre del video» lee esa carpeta;
   los que ya tienen su carpeta `_trabajo` dicen **✔ Editado** (al elegirlo se propone abrir ese trabajo y su título).
   «Carpeta _trabajo» lista los trabajos que ya existen, los más recientes primero. ↻ vuelve a leer la carpeta.
   Si el video es .mov, .mkv, .avi, .webm, .m4v, .mts, .flv o .wmv, primero se convierte a MP4.
@@ -68,6 +70,11 @@ Doble clic en **Editor Vertical** (escritorio). Se abre en el navegador (http://
     pantalla dividida). El video final se arma en **Exportar**. Se pone rojo («hay cambios») cuando la edición ya no
     corresponde a la vista previa; muestra el avance y se detiene con «⛔ Cancelar todo». La pestaña Subtítulos se
     actualiza sola al volver a ella (si tenía cambios sin guardar, avisa en lugar de recargar).
+  - **Música de fondo y volumen** (abajo del video, junto al tiempo): Clips Chapuceros, Clips Fuera y Tiktoks Yair
+    llevan la música de fondo de siempre, a **volumen fijo** (ya no baja ni sube sola cuando hablan) y solo dura lo
+    que dura el video. **🎵 Fondo** sube o baja solo la música; **🔊 Video** sube o baja el audio del video (la voz).
+    100% = como viene; de 0 a 200%. Se escucha al reproducir aquí, se guarda solo y se usa en «Renderizar de nuevo»
+    y en el video final.
   - **Subtítulos que trae el video de Nacho (difuminar):** al analizar (Clips Chapuceros y Clips Fuera), el lector de
     texto busca en los videos que pone Nacho letras abajo que cambian con lo que se dice (subtítulos quemados) y
     pone encima una **franja difuminada** para que no se vean dos subtítulos a la vez. Los textos fijos (logos,
@@ -127,7 +134,7 @@ Doble clic en **Editor Vertical** (escritorio). Se abre en el navegador (http://
     Plantilla: `plantillas\tiktok_yair.json`.
   - *Clips Fuera*: cuando Nacho graba de viaje con el celular (toma de él, o pantalla partida con él a la izquierda
     y un video, tweet o documento a la derecha sobre negro). Mismo diseño que Clips Chapuceros, sin recortar pausas,
-    sin música ni imágenes de internet. Los videos del celular van a pantalla completa, los tweets a pantalla
+    con la música de fondo y sin imágenes de internet. Los videos del celular van a pantalla completa, los tweets a pantalla
     completa, los documentos en pantalla dividida con seguimiento de lectura, y una cortinilla "El Chapucero" al entrar
     y salir de la pantalla dividida. Mientras Nacho habla, el video que puso va en pantalla dividida (él arriba);
     cuando se calla para verlo, va a pantalla completa centrado en quien habla o en lo que se mueve. La voz de Nacho
@@ -174,16 +181,24 @@ a abrirlo (para no mezclar dos versiones). Si partes un bloque en OpenCut, se us
 
 Para sacar varios clips de un video de 1–2 horas:
 
-1. Elige el video (debe estar en VideosEdit; MP4 o WebM para verlo en el navegador).
-2. Marca fragmentos mientras lo ves: **I** = entrada, **O** = salida (se crea el fragmento y escribes su título).
-   **N** = fragmento de 1 min desde donde estás. En la línea de tiempo arrastras los bloques o sus orillas;
-   con el imán se pegan a las pausas de la voz para no cortar a media palabra.
-3. O pide **«Sugerir fragmentos con IA»**: transcribe el video completo (una vez; en 2 h tarda varios minutos) y
-   Ollama propone clips con título y tema (en azul ✨). Sin Ollama, propone cortes por frases cada ~1 minuto.
-4. Deja palomeados los que quieras, elige estilo de cada uno y presiona **«Mandar a editar los marcados»**.
-   Se cortan uno por uno como `VIDEO_parteNN_titulo.mp4` en VideosEdit y se analizan solos (reusando la
-   transcripción, no se vuelve a transcribir). Al terminar aparece «listo ✓» y el enlace «Abrir en el editor»;
-   también salen en el desplegable de trabajos de la pestaña Editor.
+1. Elige el video (debe estar en VideosEdit; MP4 o WebM para verlo en el navegador). Se ve en grande arriba.
+2. Marca fragmentos mientras lo ves: **A** = entrada, **S** = salida (se crea el fragmento y escribes su título).
+   **Espacio** reproduce o pausa, **←/→** 5 s (**Shift** 30 s), **Supr** borra los seleccionados, **Esc** cancela.
+3. **Línea de tiempo:** regla con minutos y segundos, el cursor rojo con su tiempo, la marca **A** con el tramo que
+   vas a cortar, y una línea guía con el tiempo bajo el ratón. **Doble clic** lleva el cursor a ese punto.
+   **Ctrl + rueda** (o − / + y la barra) acerca o aleja para cortar justo donde quieres; **Ver todo** regresa.
+   Arrastra los bloques o sus orillas (el video se mueve al punto del corte); con el **imán** se pegan a las pausas
+   de la voz (rayitas grises abajo) para no cortar a media palabra.
+4. **Grupos:** selecciona varios fragmentos con **Ctrl + clic** (o Shift + clic) y presiona **Ctrl + G**: se exportan
+   juntos como **un solo video**, en orden, con el título del primero. **Ctrl + D** los desagrupa. Cada grupo tiene
+   su color y su etiqueta (G1, G2...).
+5. Opcional: **«Sugerir fragmentos con IA»**: transcribe el video completo (una vez) y Ollama propone clips con
+   título y tema (en azul ✨). Sin Ollama, propone cortes por frases cada ~1 minuto. Usa lo aprobado en «Lo aprendido».
+6. Deja palomeados los que quieras y presiona **«✂ Exportar los marcados»**. Cada clip (o grupo) se corta, se
+   guarda en VideosEdit con su **título como nombre** (`Título.mp4`) y se analiza **sin pre-acomodo**: solo limpia
+   las pausas y hace los subtítulos (reusando la transcripción); Nacho queda a pantalla completa centrado y la
+   pantalla dividida, las imágenes y los encuadres se ponen a mano en Edición. Al terminar aparece «listo ✓» y el
+   enlace «Abrir en el editor»; también salen en el desplegable de trabajos de la pestaña Editor.
 
 Todo queda guardado en `VIDEO_fragmentos\fragmentos.json`, puedes cerrar y seguir después.
 
@@ -195,6 +210,10 @@ Cada vez que **exportas**, la plataforma compara lo que armó sola (`plan_auto.j
 - **Imágenes:** sitios de donde borras imágenes (se evitan) o de donde sí las dejas (se prefieren), tus búsquedas
   (se le dan al modelo como ejemplo), y la duración y el estilo que les das.
 - **Acomodos:** si siempre subes/acercas el encuadre de Nacho, y qué pantalla eliges según lo que proyecta.
+- **Video largo:** qué temas e información eliges para tus clips (los que exportas) y cuáles descartas (las
+  sugerencias que borras o desmarcas), de qué largo los haces y qué partes les quitas con «Quitar tramo». Aprobadas,
+  la IA las usa al sugerir fragmentos (busca temas como los que eliges, evita los que descartas y deja fuera lo que
+  sueles quitar).
 
 En la pestaña **«Lo aprendido»** ves las reglas propuestas: **Aprobar** o **Descartar**. Solo las aprobadas se
 usan, y solo en los análisis nuevos (no cambian videos ya hechos). «Aprender de todos los trabajos» revisa todas

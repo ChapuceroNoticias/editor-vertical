@@ -26,6 +26,7 @@ BASE = Path(__file__).resolve().parent
 CARPETA = BASE / "aprendizaje"
 ESTADOS = CARPETA / "reglas.json"           # {id_regla: "aprobada" | "descartada"}
 VIDEOS = CARPETA / "videos"                 # lo observado en cada trabajo (uno por archivo)
+LARGOS = CARPETA / "video_largo"            # lo elegido y descartado en cada video largo (uno por archivo)
 
 MIN_PANTALLA = 2        # veces que debe repetirse una elección de pantalla
 MIN_ENCUADRE = 3        # correcciones de encuadre para proponer un ajuste
@@ -33,6 +34,8 @@ MIN_MOMENTOS = 5        # momentos con imagen para proponer duración / estilo
 MIN_SITIO_EVITAR = 2
 MIN_SITIO_PREFERIR = 3
 MIN_EJEMPLOS = 3
+MIN_CLIPS = 3           # clips elegidos (Video largo) para proponer temas / duración
+MIN_BORRADO = 3         # tramos quitados de los clips para proponer «lo que quitas»
 
 
 # ----------------------------------------------------------------------------
@@ -212,6 +215,71 @@ def observar_encuadre(final, ed, pl):
     return out
 
 
+def _texto_entre(palabras, a, b):
+    return " ".join(str(p.get("p", "")) for p in palabras
+                    if a - 0.05 <= float(p.get("i", 0)) and float(p.get("f", 0)) <= b + 0.05).strip()
+
+
+def observar_borrado(final, palabras):
+    """Lo que el editor quitó del clip con «Quitar tramo» (texto dicho en esos tramos)."""
+    out = []
+    for c in (final or {}).get("cortes", []):
+        if c.get("manual"):
+            txt = _texto_entre(palabras, c["inicio"], c["fin"])
+            if txt:
+                out.append({"texto": txt[:200], "dur": round(c["fin"] - c["inicio"], 2),
+                            "donde": "inicio" if c["inicio"] < 1.0 else "final"
+                            if c["fin"] >= (final.get("info") or {}).get("duracion", 1e9) - 1.0 else "medio"})
+    return out
+
+
+def _se_encima(a, b):
+    ini, fin = max(a[0], b[0]), min(a[1], b[1])
+    return fin - ini >= 0.5 * min(a[1] - a[0], b[1] - b[0])
+
+
+def observar_video_largo(carpeta, video, ed=None):
+    """Video largo: qué clips eligió el editor (los que exporta) y qué sugerencias descartó (las que borró o dejó
+    sin marcar). Se guarda uno por video largo y se va reemplazando con lo más reciente."""
+    d = Path(carpeta)
+    datos = _leer(d / "fragmentos.json", {})
+    frs = datos.get("fragmentos", [])
+    palabras = _leer(d / "transcripcion.json", [])
+    elegidos, descartados = [], []
+    exportado = ("en cola", "cortando", "analizando", "listo")
+    vistos_grupo = set()
+    for f in sorted(frs, key=lambda x: x["inicio"]):
+        if f.get("estado") in exportado:
+            if f.get("grupo"):
+                if f["grupo"] in vistos_grupo:
+                    continue
+                vistos_grupo.add(f["grupo"])
+                miembros = [x for x in frs if x.get("grupo") == f["grupo"]]
+                texto = " … ".join(_texto_entre(palabras, x["inicio"], x["fin"])[:120] for x in miembros)
+                dur = sum(x["fin"] - x["inicio"] for x in miembros)
+            else:
+                texto, dur = _texto_entre(palabras, f["inicio"], f["fin"]), f["fin"] - f["inicio"]
+            elegidos.append({"titulo": f.get("titulo", ""), "tema": f.get("tema", ""), "texto": texto[:300],
+                             "dur": round(dur, 1), "sugerido": bool(f.get("sugerido")), "grupo": bool(f.get("grupo"))})
+        elif f.get("sugerido") and f.get("marcado") is False:
+            descartados.append({"titulo": f.get("titulo", ""), "tema": f.get("tema", ""),
+                                "texto": _texto_entre(palabras, f["inicio"], f["fin"])[:300]})
+    # sugerencias que el editor borró
+    for s_ in datos.get("sugeridas_historial", []):
+        if not any(_se_encima((s_["inicio"], s_["fin"]), (f["inicio"], f["fin"])) for f in frs):
+            descartados.append({"titulo": s_.get("titulo", ""), "tema": s_.get("tema", ""),
+                                "texto": _texto_entre(palabras, s_["inicio"], s_["fin"])[:300]})
+    obs = {"video": video, "carpeta": str(d), "fecha": time.strftime("%Y-%m-%d %H:%M"),
+           "elegidos": elegidos, "descartados": descartados}
+    LARGOS.mkdir(parents=True, exist_ok=True)
+    _escribir(LARGOS / (hashlib.md5(str(d).encode()).hexdigest()[:16] + ".json"), obs)
+    return {"elegidos": len(elegidos), "descartados": len(descartados)}
+
+
+def observaciones_largos():
+    return [_leer(p, {}) for p in sorted(LARGOS.glob("*.json"))] if LARGOS.exists() else []
+
+
 def aprender_de(trabajo, ed):
     """Guarda lo observado en este trabajo (se reemplaza si ya se había aprendido de él). Devuelve un resumen."""
     t = Path(trabajo)
@@ -228,11 +296,14 @@ def aprender_de(trabajo, ed):
         "imagenes": observar_imagenes(t, base, final, palabras) if base else {},
         "pantalla": observar_pantalla(base, final, ed, pl),
         "encuadre": observar_encuadre(final, ed, ed.plantilla_plan(final)),
+        "borrado": observar_borrado(final, palabras),
+        "video_largo": bool(final.get("origen_video_largo")),
     }
     VIDEOS.mkdir(parents=True, exist_ok=True)
     _escribir(VIDEOS / (hashlib.md5(str(t).encode()).hexdigest()[:16] + ".json"), obs)
     return {"subtitulos": len(obs["subtitulos"]), "pantalla": len(obs["pantalla"]),
-            "encuadre": len(obs["encuadre"]), "imagenes": len((obs["imagenes"] or {}).get("ejemplos", []))}
+            "encuadre": len(obs["encuadre"]), "imagenes": len((obs["imagenes"] or {}).get("ejemplos", [])),
+            "borrado": len(obs["borrado"])}
 
 
 # ----------------------------------------------------------------------------
@@ -361,7 +432,45 @@ def reglas():
                     "Así corriges el encuadre automático casi siempre.",
                     {"plantilla": pln, "lay": lay, "dy": round(dy, 4), "zoom": round(zoom, 4)},
                     f"{len(es)} correcciones", len({e['video'] for e in es}))
+
+    reglas_video_largo(obs, agregar)
     return out
+
+
+def reglas_video_largo(obs, agregar):
+    """Reglas de «Video largo»: temas que eliges / descartas, duración de tus clips y lo que quitas de ellos."""
+    largos = observaciones_largos()
+    elegidos = [e | {"video": o.get("video", "")} for o in largos for e in o.get("elegidos", [])]
+    descartados = [e | {"video": o.get("video", "")} for o in largos for e in o.get("descartados", [])]
+    if len(elegidos) >= MIN_CLIPS:
+        def corto(e):
+            return {"titulo": e.get("titulo", ""), "tema": e.get("tema", ""), "texto": e.get("texto", "")[:160]}
+        ev = "; ".join(f"«{e['titulo']}»" for e in elegidos[-4:] if e.get("titulo"))
+        agregar("vl_temas", "video_largo", f"Temas que eliges para tus clips ({len(elegidos)} elegidos, "
+                f"{len(descartados)} descartados)",
+                "Al sugerir fragmentos con IA, se buscarán temas e información como la que eliges y se evitarán los "
+                "que descartas.", {"elegidos": [corto(e) for e in elegidos[-12:]],
+                                   "descartados": [corto(e) for e in descartados[-12:]]},
+                (f"eliges: {ev}" if ev else f"{len(elegidos)} clips") +
+                (f" · descartas: " + "; ".join(f"«{e['titulo']}»" for e in descartados[-3:] if e.get("titulo"))
+                 if descartados else ""),
+                len({e["video"] for e in elegidos}))
+        durs = [e["dur"] for e in elegidos if e.get("dur", 0) > 3]
+        if len(durs) >= MIN_CLIPS:
+            med = statistics.median(durs)
+            agregar("vl_duracion", "video_largo", f"Clips de unos {med:.0f} s",
+                    "Así de largos son los clips que exportas; la IA los propondrá de ese largo.",
+                    {"seg": round(med, 1), "min": round(max(10.0, med * 0.6)), "max": round(med * 1.4)},
+                    f"{len(durs)} clips, mediana {med:.0f} s", len({e["video"] for e in elegidos}))
+    borrados = [b | {"video": o.get("video", "")} for o in obs for b in o.get("borrado", [])]
+    if len(borrados) >= MIN_BORRADO:
+        donde = {}
+        for b in borrados:
+            donde[b.get("donde", "medio")] = donde.get(b.get("donde", "medio"), 0) + 1
+        agregar("vl_borra", "video_largo", f"Lo que quitas de los clips ({len(borrados)} tramos)",
+                "Al sugerir fragmentos, la IA no empezará ni terminará un clip con partes como estas y las dejará fuera.",
+                {"ejemplos": [b["texto"][:140] for b in borrados[-15:]], "donde": donde},
+                "; ".join(f"«{b['texto'][:40]}»" for b in borrados[-3:]), len({b["video"] for b in borrados}))
 
 
 def cambiar_estado(rid, estado):
@@ -374,7 +483,7 @@ def cambiar_estado(rid, estado):
 
 
 def resumen():
-    obs = observaciones()
+    obs = observaciones() + observaciones_largos()
     rs = reglas()
     return {"videos": len(obs), "reglas": rs,
             "aprobadas": sum(1 for r in rs if r["estado"] == "aprobada"),
@@ -386,7 +495,8 @@ def resumen():
 # ----------------------------------------------------------------------------
 def aprobado():
     """Reglas aprobadas listas para usar: diccionario, nombres para Whisper, sitios, ejemplos y parches de plantilla."""
-    out = {"diccionario": [], "nombres": [], "sitios_evitar": [], "sitios_preferir": [], "ejemplos": [], "parches": {}}
+    out = {"diccionario": [], "nombres": [], "sitios_evitar": [], "sitios_preferir": [], "ejemplos": [], "parches": {},
+           "video_largo": {}}
     for r in reglas():
         if r["estado"] != "aprobada":
             continue
@@ -401,6 +511,8 @@ def aprobado():
             out["sitios_preferir"].append(v["dominio"])
         elif r["id"] == "ejemplos_busqueda":
             out["ejemplos"] = v["ejemplos"]
+        elif r["id"] in ("vl_temas", "vl_duracion", "vl_borra"):
+            out["video_largo"][r["id"][3:]] = v
         elif r["id"].startswith("momentos_dur:"):
             out["parches"].setdefault(v["plantilla"], []).extend([[["momentos", "duracion_min"], v["min"]],
                                                                  [["momentos", "duracion_max"], v["max"]]])

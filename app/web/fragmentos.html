@@ -13,48 +13,77 @@
   .btn, select, input[type=number], input[type=text] { border: 1px solid var(--borde); background: var(--panel2); color: var(--texto);
     padding: 6px 10px; border-radius: 8px; font: inherit; font-size: 13px; }
   .btn { cursor: pointer; font-weight: 600; }
+  .btn:hover { border-color: #4a4a55; }
   .btn.prim { background: var(--acento); border-color: var(--acento); color: #fff; }
+  .btn.chico { padding: 3px 9px; font-size: 13px; }
   .btn:disabled { opacity: .4; cursor: default; }
   input[type=number] { width: 64px; }
   .sp { flex: 1; }
   #estado { font-size: 13px; color: var(--suave); }
-  .zona { display: grid; grid-template-columns: minmax(300px, 560px) 1fr; gap: 12px; padding: 12px; }
-  @media (max-width: 900px) { .zona { grid-template-columns: 1fr; } }
-  video { width: 100%; background: #000; border-radius: 10px; max-height: 340px; }
-  .caja { background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; padding: 10px 12px; }
+  /* video grande + panel */
+  .zona { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 12px; padding: 12px; }
+  @media (max-width: 1000px) { .zona { grid-template-columns: 1fr; } }
+  .marco-video { background: #000; border-radius: 10px; display: flex; justify-content: center; align-items: center; min-height: 240px; }
+  video { width: 100%; height: min(62vh, 680px); background: #000; border-radius: 10px; display: block; }
+  .caja { background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
   .ayuda { color: var(--suave); font-size: 12.5px; }
-  .ayuda kbd { background: var(--panel2); border: 1px solid var(--borde); border-radius: 4px; padding: 0 5px; font-size: 11.5px; color: var(--texto); }
-  .tiempo { font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 700; }
-  .marca { color: var(--pend); font-size: 13px; }
-  .prog { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; margin-top: 6px; display: none; }
+  kbd { background: var(--panel2); border: 1px solid var(--borde); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 11.5px; color: var(--texto); font-family: inherit; }
+  .teclas { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12.5px; color: var(--suave); }
+  .teclas span:nth-child(odd) { text-align: right; white-space: nowrap; }
+  .tiempo { font-variant-numeric: tabular-nums; font-size: 26px; font-weight: 800; letter-spacing: .02em; }
+  .marca { color: var(--pend); font-size: 13px; min-height: 18px; }
+  .prog { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; display: none; }
   .prog i { display: block; height: 100%; width: 0; background: var(--acento); transition: width .4s; }
+  .seccion { border-top: 1px solid var(--borde); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .seccion h4 { margin: 0; font-size: 13px; color: var(--texto); }
   /* línea de tiempo */
-  .tl-cab { display: flex; gap: 8px; align-items: center; padding: 0 12px 6px; font-size: 13px; color: var(--suave); }
-  #tl { margin: 0 12px; height: 92px; overflow-x: auto; overflow-y: hidden; background: var(--panel); border: 1px solid var(--borde);
+  .tl-cab { display: flex; gap: 10px; align-items: center; padding: 0 12px 6px; font-size: 13px; color: var(--suave); flex-wrap: wrap; }
+  .tl-cab input[type=range] { width: 160px; accent-color: var(--acento); }
+  #tl { margin: 0 12px; height: 168px; overflow-x: auto; overflow-y: hidden; background: #101015; border: 1px solid var(--borde);
     border-radius: 10px; position: relative; user-select: none; }
-  #pista { position: relative; height: 100%; min-width: 100%; cursor: text; }
-  .regla { position: absolute; top: 0; height: 18px; border-left: 1px solid #33333d; font-size: 10.5px; color: var(--suave); padding-left: 3px; white-space: nowrap; }
-  .bloque { position: absolute; top: 26px; height: 52px; border-radius: 6px; background: rgba(217,30,43,.35); border: 1px solid var(--acento);
-    overflow: hidden; cursor: grab; font-size: 11.5px; padding: 3px 8px; white-space: nowrap; }
-  .bloque.sugerido { background: rgba(59,130,246,.28); border-color: var(--azul); }
-  .bloque.listo { background: rgba(34,197,94,.25); border-color: var(--ok); }
-  .bloque.sel { box-shadow: 0 0 0 2px #fff inset; }
-  .bloque.apagado { opacity: .45; }
-  .bloque .asa { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+  #tl::-webkit-scrollbar { height: 12px; } #tl::-webkit-scrollbar-thumb { background: #33333d; border-radius: 6px; }
+  #pista { position: relative; height: 100%; min-width: 100%; cursor: crosshair; }
+  #regla { position: absolute; left: 0; top: 0; height: 26px; right: 0; background: #17171d; border-bottom: 1px solid var(--borde); }
+  .tick { position: absolute; bottom: 0; width: 1px; background: #3a3a46; }
+  .tick.mayor { height: 12px; background: #6b6b78; }
+  .tick.menor { height: 6px; }
+  .tick span { position: absolute; bottom: 12px; left: 3px; font-size: 10.5px; color: #b5b5c0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .banda { position: absolute; top: 26px; bottom: 0; background: rgba(255,255,255,.018); }
+  .pausa { position: absolute; bottom: 2px; width: 2px; height: 8px; background: #4b5563; border-radius: 1px; }
+  .bloque { position: absolute; border-radius: 7px; background: rgba(217,30,43,.42); border: 2px solid #e5484d;
+    overflow: hidden; cursor: grab; font-size: 12px; padding: 4px 10px; white-space: nowrap; box-shadow: 0 1px 0 rgba(0,0,0,.4); }
+  .bloque.sugerido { background: rgba(59,130,246,.35); border-color: #60a5fa; }
+  .bloque.listo { background: rgba(34,197,94,.30); border-color: var(--ok); }
+  .bloque.trabajando { background-image: repeating-linear-gradient(45deg, rgba(245,158,11,.25) 0 8px, transparent 8px 16px); }
+  .bloque.sel { border-color: #fff; box-shadow: 0 0 0 2px #fff, 0 0 14px rgba(255,255,255,.35); z-index: 3; }
+  .bloque.apagado { opacity: .40; }
+  .bloque .tag { display: inline-block; font-size: 10.5px; font-weight: 800; padding: 0 6px; border-radius: 999px; margin-right: 6px; color: #000; }
+  .bloque .asa { position: absolute; top: 0; bottom: 0; width: 10px; cursor: ew-resize; }
   .bloque .asa.i { left: 0; } .bloque .asa.f { right: 0; }
-  .bloque:hover .asa { background: rgba(255,255,255,.18); }
-  #cabezal { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; pointer-events: none; }
-  #entrada { position: absolute; top: 18px; bottom: 0; width: 2px; background: var(--pend); pointer-events: none; display: none; }
+  .bloque:hover .asa { background: rgba(255,255,255,.25); }
+  .bloque .dur { color: rgba(255,255,255,.75); font-size: 11px; }
+  .union { position: absolute; height: 3px; border-radius: 2px; pointer-events: none; opacity: .9; }
+  #cabezal { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff3b47; pointer-events: none; z-index: 5; box-shadow: 0 0 6px rgba(255,59,71,.7); }
+  #cabezal::before { content: ""; position: absolute; top: 0; left: -6px; border: 7px solid transparent; border-top: 9px solid #ff3b47; }
+  #cabezal b { position: absolute; top: 28px; left: 8px; font-size: 10.5px; background: #ff3b47; color: #fff; padding: 0 5px; border-radius: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #entrada { position: absolute; top: 26px; bottom: 0; width: 2px; background: var(--pend); pointer-events: none; display: none; z-index: 4; }
+  #entrada b { position: absolute; top: 0; left: 4px; font-size: 10.5px; background: var(--pend); color: #000; padding: 0 5px; border-radius: 4px; white-space: nowrap; }
+  #tramo_a { position: absolute; top: 26px; bottom: 0; background: rgba(245,158,11,.12); pointer-events: none; display: none; z-index: 1; }
+  #raton { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.35); pointer-events: none; display: none; z-index: 4; }
+  #raton b { position: absolute; bottom: 4px; left: 4px; font-size: 10.5px; background: rgba(0,0,0,.75); color: #fff; padding: 0 5px; border-radius: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   /* lista */
   table { width: calc(100% - 24px); margin: 12px; border-collapse: collapse; background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; overflow: hidden; }
   th, td { padding: 6px 8px; border-top: 1px solid var(--borde); text-align: left; font-size: 13px; vertical-align: middle; }
   th { color: var(--suave); font-weight: 600; border-top: 0; }
-  tr.sel td { background: #1f1f27; }
+  tr.sel td { background: #24242e; }
+  tr td:first-child { width: 30px; }
   td input[type=text] { width: 100%; min-width: 180px; }
+  td input[type=text]:disabled { opacity: .55; }
   .chip { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--borde); color: var(--suave); white-space: nowrap; }
   .chip.listo { color: var(--ok); border-color: var(--ok); }
   .chip.error { color: var(--rojo); border-color: var(--rojo); }
   .chip.trabajando { color: var(--pend); border-color: var(--pend); }
+  .gchip { font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; color: #000; white-space: nowrap; }
   .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
   .vacio { padding: 18px; color: var(--suave); text-align: center; }
   a { color: #ff6b75; }
@@ -71,42 +100,53 @@
 </div>
 
 <div class="zona">
-  <div>
-    <video id="vid" controls preload="metadata"></video>
-  </div>
+  <div class="marco-video"><video id="vid" controls preload="metadata"></video></div>
   <div class="caja">
-    <div class="tiempo" id="t_act">0:00:00</div>
+    <div class="tiempo" id="t_act">0:00:00.0</div>
     <div class="marca" id="t_marca"></div>
-    <p class="ayuda" style="margin:8px 0">
-      <kbd>I</kbd> marca la entrada y <kbd>O</kbd> la salida → se crea el fragmento ·
-      <kbd>N</kbd> fragmento de 1 min desde aquí · <kbd>Espacio</kbd> reproducir ·
-      <kbd>←</kbd>/<kbd>→</kbd> 5 s (<kbd>Shift</kbd> 30 s) · <kbd>Supr</kbd> borra el seleccionado.<br>
-      En la línea de tiempo arrastra los bloques o sus orillas; con el imán se pegan a las pausas de la voz.
-    </p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <button class="btn" id="b_sug">✨ Sugerir fragmentos con IA</button>
-      <span class="ayuda">de <input type="number" id="min_seg" value="30" min="10"> a <input type="number" id="max_seg" value="120" min="20"> s</span>
+    <div class="teclas">
+      <span><kbd>A</kbd></span><span>marca la entrada</span>
+      <span><kbd>S</kbd></span><span>marca la salida → se crea el fragmento</span>
+      <span><kbd>Espacio</kbd></span><span>reproducir / pausa</span>
+      <span><kbd>←</kbd><kbd>→</kbd></span><span>5 s (con <kbd>Shift</kbd> 30 s)</span>
+      <span><kbd>Supr</kbd></span><span>borra los seleccionados</span>
+      <span><kbd>Ctrl</kbd>+<kbd>G</kbd></span><span>agrupa los seleccionados (se exportan como un solo video)</span>
+      <span><kbd>Ctrl</kbd>+<kbd>D</kbd></span><span>desagrupa</span>
+      <span>Clic</span><span>selecciona · <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+clic agrega a la selección</span>
+      <span>Doble clic</span><span>en la línea de tiempo: lleva ahí el cursor</span>
+      <span><kbd>Ctrl</kbd>+rueda</span><span>zoom de la línea de tiempo</span>
     </div>
-    <div class="prog" id="prog"><i></i></div>
-    <div class="ayuda" id="sug_txt" style="margin-top:4px"></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">
-      <button class="btn prim" id="b_mandar">Mandar a editar los marcados</button>
+    <div class="seccion">
+      <h4>Asistente (opcional)</h4>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="b_sug">✨ Sugerir fragmentos con IA</button>
+        <span class="ayuda">de <input type="number" id="min_seg" value="30" min="10"> a <input type="number" id="max_seg" value="120" min="20"> s</span>
+      </div>
+      <div class="prog" id="prog"><i></i></div>
+      <div class="ayuda" id="sug_txt"></div>
+    </div>
+    <div class="seccion">
+      <h4>Exportar</h4>
+      <button class="btn prim" id="b_mandar" title="Corta cada fragmento marcado (un grupo se une en un solo video), lo guarda en VideosEdit con su título como nombre y lo analiza: solo limpieza de pausas y subtítulos (Nacho y la pantalla se acomodan en Edición).">✂ Exportar los marcados</button>
       <span class="ayuda" id="mandar_txt"></span>
     </div>
   </div>
 </div>
 
 <div class="tl-cab">
-  <span>Línea de tiempo</span>
-  <label>Zoom <input type="range" id="zoom" min="0" max="100" value="0"></label>
+  <b style="color:var(--texto)">Línea de tiempo</b>
+  <button class="btn chico" id="z_menos" title="Alejar">−</button>
+  <input type="range" id="zoom" min="0" max="100" value="0" title="Zoom (también Ctrl + rueda sobre la línea)">
+  <button class="btn chico" id="z_mas" title="Acercar">+</button>
+  <button class="btn chico" id="z_todo" title="Ver todo el video">Ver todo</button>
   <label><input type="checkbox" id="iman" checked> Imán a pausas</label>
   <span class="sp"></span>
   <span id="resumen"></span>
 </div>
-<div id="tl"><div id="pista"><div id="entrada"></div><div id="cabezal"></div></div></div>
+<div id="tl"><div id="pista"><div id="regla"></div><div id="tramo_a"></div><div id="entrada"><b>A</b></div><div id="raton"><b></b></div><div id="cabezal"><b></b></div></div></div>
 
 <table>
-  <thead><tr><th><input type="checkbox" id="todos" title="Marcar todos"></th><th>#</th><th>Tramo</th><th>Título</th><th>Estilo</th><th>Estado</th><th></th></tr></thead>
+  <thead><tr><th><input type="checkbox" id="todos" title="Marcar todos para exportar"></th><th>#</th><th>Tramo</th><th>Título</th><th>Estilo</th><th>Estado</th><th></th></tr></thead>
   <tbody id="lista"></tbody>
 </table>
 
@@ -115,14 +155,17 @@ const $ = (id) => document.getElementById(id);
 let V = null;            // nombre del video abierto
 let D = null;            // datos del servidor
 let F = [];              // fragmentos (copia local)
-let sel = null;          // id seleccionado
-let entrada = null;      // marca I
+let sel = new Set();     // ids seleccionados
+let entrada = null;      // marca A
 let pendiente = null;    // temporizador de guardado
 let arrastre = null;
 let nuevoId = -1;
+const COLORES = ["#fbbf24", "#a78bfa", "#34d399", "#f472b6", "#38bdf8", "#fb923c", "#a3e635", "#e879f9"];
+const colorGrupo = (g) => COLORES[(g - 1) % COLORES.length];
 
 const fmt = (s) => { s = Math.max(0, s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = Math.floor(s % 60);
   return `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}`; };
+const fmtD = (s) => fmt(s) + "." + Math.floor((Math.max(0, s || 0) % 1) * 10);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function estado(t, c) { $("estado").textContent = t || ""; $("estado").style.color = c === "err" ? "var(--rojo)" : c === "ok" ? "var(--ok)" : "var(--suave)"; }
 async function post(url, body) {
@@ -130,6 +173,9 @@ async function post(url, body) {
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
   return r.json();
 }
+const ocupado = (f) => ["en cola", "cortando", "analizando"].includes(f.estado);
+const miembros = (g) => F.filter(f => f.grupo === g).sort((a, b) => a.inicio - b.inicio);
+const tituloGrupo = (g) => { const m = miembros(g); return (m.find(f => (f.titulo || "").trim()) || m[0] || {}).titulo || ""; };
 
 // ---------------- carga ----------------
 async function cargarVideos() {
@@ -147,54 +193,94 @@ async function abrir() {
   D = await (await fetch("/frag/datos?v=" + encodeURIComponent(V))).json();
   if (D.detail) { estado(D.detail, "err"); return; }
   F = D.fragmentos.map(f => ({ ...f }));
+  if (D.gpu === false) $("gpu").checked = false;   // PC sin tarjeta NVIDIA
   $("estilo").innerHTML = D.estilos.map(e => `<option>${esc(e)}</option>`).join("");
   $("estilo").value = D.estilo;
   $("vid").src = "/frag/video?v=" + encodeURIComponent(V);
   estado(D.mp4 ? `${D.video} · ${fmt(D.duracion)}` : `${D.video}: este formato quizá no se reproduzca en el navegador; conviértelo a MP4 si no se ve.`, D.mp4 ? "" : "err");
-  sel = null; entrada = null;
+  sel = new Set(); entrada = null; $("zoom").value = 0;
   pintarTodo();
   pintarSugerir(D.sugerir);
 }
 
 // ---------------- guardado ----------------
+const paraServidor = () => F.map(f => ({ id: f.id > 0 ? f.id : null, inicio: f.inicio, fin: f.fin, titulo: f.titulo, estilo: f.estilo,
+                                         marcado: f.marcado, sugerido: f.sugerido, grupo: f.grupo || null }));
+function adoptar(lista) {   // respuesta del servidor: recupera los ids nuevos sin perder la selección
+  const antes = F.filter(f => sel.has(f.id)).map(f => [f.inicio, f.fin]);
+  F = lista.map(f => ({ ...f }));
+  sel = new Set(F.filter(f => antes.some(([a, b]) => Math.abs(f.inicio - a) < 0.01 && Math.abs(f.fin - b) < 0.01)).map(f => f.id));
+}
+let cambios = 0, enVuelo = 0;   // cambios locales y guardados que aún no regresan
+function asignarIds(lista) {     // el servidor ya guardó, pero aquí hubo más cambios: solo se toman los ids nuevos
+  const usados = new Set(F.filter(f => f.id > 0).map(f => f.id));
+  for (const f of F) {
+    if (f.id > 0) continue;
+    const m = lista.find(x => !usados.has(x.id) && Math.abs(x.inicio - f.inicio) < 0.01 && Math.abs(x.fin - f.fin) < 0.01);
+    if (m) { if (sel.has(f.id)) { sel.delete(f.id); sel.add(m.id); } f.id = m.id; usados.add(m.id); }
+  }
+}
 function guardar() {
+  cambios++;
   clearTimeout(pendiente);
   pendiente = setTimeout(async () => {
     pendiente = null;
+    const v = cambios;
+    enVuelo++;
     try {
-      const lista = F.map(f => ({ id: f.id > 0 ? f.id : null, inicio: f.inicio, fin: f.fin, titulo: f.titulo, estilo: f.estilo, marcado: f.marcado, sugerido: f.sugerido }));
-      const r = await post("/frag/guardar", { v: V, fragmentos: lista, estilo: $("estilo").value });
-      // recupera los ids nuevos que puso el servidor
-      const selF = F.find(f => f.id === sel);
-      F = r.fragmentos.map(f => ({ ...f }));
-      if (selF && selF.id <= 0) { const m = F.find(f => Math.abs(f.inicio - selF.inicio) < 0.01); sel = m ? m.id : null; }
+      const r = await post("/frag/guardar", { v: V, fragmentos: paraServidor(), estilo: $("estilo").value });
+      if (v === cambios) adoptar(r.fragmentos); else asignarIds(r.fragmentos);
       pintarTodo();
       estado("Guardado ✓", "ok");
     } catch (e) { estado("No se guardó: " + e.message, "err"); }
+    finally { enVuelo--; }
   }, 500);
 }
 
 // ---------------- línea de tiempo ----------------
+const ZMAX = 200;   // px por segundo con el zoom al máximo
 function pxs() {  // pixeles por segundo
   const ancho = $("tl").clientWidth - 2, dur = Math.max(1, D ? D.duracion : 1);
   const base = ancho / dur, z = +$("zoom").value / 100;
-  return base * Math.pow(Math.max(1, 40 / base), z);   // hasta ~40 px/s
+  return base * Math.pow(Math.max(1, ZMAX / base), z);
+}
+function zoomA(valor, tAncla, xAncla) {   // cambia el zoom dejando tAncla en la misma posición de pantalla
+  const tl = $("tl");
+  if (tAncla === undefined) { tAncla = $("vid").currentTime || 0; xAncla = tl.clientWidth / 2; }
+  $("zoom").value = Math.max(0, Math.min(100, valor));
+  pintarRegla(); pintarBloques(); cabezal();
+  tl.scrollLeft = tAncla * pxs() - xAncla;
 }
 function pintarRegla() {
   const p = $("pista"), k = pxs(), dur = D.duracion;
   p.style.width = Math.max($("tl").clientWidth - 2, dur * k) + "px";
-  p.querySelectorAll(".regla").forEach(x => x.remove());
-  const pasos = [5, 10, 30, 60, 120, 300, 600, 900, 1800];
-  const paso = pasos.find(s => s * k >= 70) || 3600;
-  for (let t = 0; t <= dur; t += paso) {
-    const r = document.createElement("div");
-    r.className = "regla"; r.style.left = (t * k) + "px"; r.textContent = fmt(t);
-    p.appendChild(r);
+  const r = $("regla"); r.innerHTML = "";
+  p.querySelectorAll(".banda,.pausa").forEach(x => x.remove());
+  const pasos = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
+  const paso = pasos.find(s => s * k >= 90) || 3600;
+  const menor = pasos.slice().reverse().find(s => s < paso && s * k >= 12) || 0;
+  const fr = document.createDocumentFragment();
+  if (menor) for (let t = 0; t <= dur; t += menor) {
+    if (Math.abs(t / paso - Math.round(t / paso)) < 1e-6) continue;
+    const m = document.createElement("div"); m.className = "tick menor"; m.style.left = (t * k) + "px"; fr.appendChild(m);
+  }
+  for (let t = 0, i = 0; t <= dur; t += paso, i++) {
+    const m = document.createElement("div"); m.className = "tick mayor"; m.style.left = (t * k) + "px";
+    m.innerHTML = `<span>${paso < 1 ? fmtD(t) : fmt(t)}</span>`; fr.appendChild(m);
+    if (i % 2 === 0) {   // bandas alternas para ubicarse a simple vista
+      const b = document.createElement("div"); b.className = "banda"; b.style.left = (t * k) + "px"; b.style.width = (paso * k) + "px"; p.appendChild(b);
+    }
+  }
+  r.appendChild(fr);
+  if (k >= 4 && D.pausas.length) {   // pausas de la voz (donde un corte se ve natural)
+    const fp = document.createDocumentFragment();
+    for (const q of D.pausas) { const m = document.createElement("div"); m.className = "pausa"; m.style.left = (q * k - 1) + "px"; fp.appendChild(m); }
+    p.appendChild(fp);
   }
 }
 function pintarBloques() {
   const p = $("pista"), k = pxs();
-  p.querySelectorAll(".bloque").forEach(x => x.remove());
+  p.querySelectorAll(".bloque,.union").forEach(x => x.remove());
   // carriles: si dos fragmentos se enciman, van uno arriba del otro
   const fines = [], carril = {};
   for (const f of F.slice().sort((x, y) => x.inicio - y.inicio)) {
@@ -202,33 +288,50 @@ function pintarBloques() {
     if (c < 0) { c = fines.length; fines.push(0); }
     fines[c] = f.fin; carril[f.id] = c;
   }
-  const nC = Math.max(1, fines.length), alto = 52 / nC;
+  const top = 36, altoTotal = 110, nC = Math.max(1, fines.length), alto = altoTotal / nC;
+  const nums = {}; F.slice().sort((a, b) => a.inicio - b.inicio).forEach((f, i) => nums[f.id] = i + 1);
   for (const f of F) {
     const b = document.createElement("div");
-    b.style.top = (26 + carril[f.id] * alto) + "px"; b.style.height = (alto - (nC > 1 ? 2 : 0)) + "px";
-    b.className = "bloque" + (f.sugerido ? " sugerido" : "") + (f.estado === "listo" ? " listo" : "") + (f.id === sel ? " sel" : "") + (f.marcado === false ? " apagado" : "");
+    b.style.top = (top + carril[f.id] * alto) + "px"; b.style.height = (alto - (nC > 1 ? 3 : 0)) + "px";
+    b.className = "bloque" + (f.sugerido ? " sugerido" : "") + (f.estado === "listo" ? " listo" : "") + (ocupado(f) ? " trabajando" : "")
+      + (sel.has(f.id) ? " sel" : "") + (f.marcado === false ? " apagado" : "");
+    if (f.grupo) { b.style.borderColor = sel.has(f.id) ? "#fff" : colorGrupo(f.grupo); b.style.borderStyle = "solid"; }
     b.style.left = (f.inicio * k) + "px";
-    b.style.width = Math.max(4, (f.fin - f.inicio) * k) + "px";
-    b.title = `${f.titulo || "(sin título)"}  ${fmt(f.inicio)} – ${fmt(f.fin)}`;
-    b.innerHTML = `<div class="asa i"></div><b>${esc(f.titulo || "Fragmento")}</b><br><span style="color:var(--suave)">${Math.round(f.fin - f.inicio)} s</span><div class="asa f"></div>`;
+    b.style.width = Math.max(6, (f.fin - f.inicio) * k) + "px";
+    const tit = f.grupo ? tituloGrupo(f.grupo) : f.titulo;
+    b.title = `#${nums[f.id]} ${tit || "(sin título)"}  ${fmtD(f.inicio)} – ${fmtD(f.fin)}` + (f.grupo ? `  · grupo ${f.grupo}` : "");
+    const tag = f.grupo ? `<span class="tag" style="background:${colorGrupo(f.grupo)}">G${f.grupo}</span>` : `<span class="tag" style="background:#ececf1">${nums[f.id]}</span>`;
+    b.innerHTML = `<div class="asa i"></div>${tag}<b>${esc(tit || "Fragmento")}</b>${alto > 34 ? `<br><span class="dur">${fmtD(f.inicio)} · ${(f.fin - f.inicio).toFixed(1)} s</span>` : ""}<div class="asa f"></div>`;
     b.dataset.id = f.id;
     b.onpointerdown = (ev) => {
       ev.stopPropagation();
-      sel = f.id; pintarLista();
-      p.querySelectorAll(".bloque").forEach(x => x.classList.toggle("sel", x === b));
+      if (ev.button !== 0) return;
+      const multi = ev.ctrlKey || ev.metaKey || ev.shiftKey;
+      if (multi) { sel.has(f.id) ? sel.delete(f.id) : sel.add(f.id); pintarBloques(); pintarLista(); return; }
+      if (!sel.has(f.id) || sel.size > 1) { sel = new Set([f.id]); pintarBloques(); pintarLista(); }
       const modo = ev.target.classList.contains("i") ? "i" : ev.target.classList.contains("f") ? "f" : "m";
       arrastre = { f, modo, x0: ev.clientX, a0: f.inicio, b0: f.fin, movido: false, el: b };
-      b.setPointerCapture(ev.pointerId);
+      try { b.setPointerCapture(ev.pointerId); } catch (e) {}
     };
     p.appendChild(b);
   }
-  $("resumen").textContent = `${F.length} fragmento(s) · ${F.filter(f => f.marcado !== false).length} marcados`;
+  // línea de color que une los fragmentos de un mismo grupo
+  const grupos = [...new Set(F.filter(f => f.grupo).map(f => f.grupo))];
+  for (const g of grupos) {
+    const m = miembros(g);
+    const u = document.createElement("div"); u.className = "union";
+    u.style.left = (m[0].inicio * k) + "px"; u.style.width = Math.max(2, (m[m.length - 1].fin - m[0].inicio) * k) + "px";
+    u.style.top = (top - 6) + "px"; u.style.background = colorGrupo(g);
+    p.appendChild(u);
+  }
+  const marcados = F.filter(f => f.marcado !== false).length;
+  $("resumen").textContent = `${F.length} fragmento(s) · ${marcados} marcados` + (grupos.length ? ` · ${grupos.length} grupo(s)` : "") +
+    (sel.size ? ` · ${sel.size} seleccionado(s)` : "");
 }
 function iman(t) {
   if (!$("iman").checked || !D.pausas.length) return t;
-  const lim = 12 / pxs() + 0.3;  // ~12 px o 0.3 s
+  const lim = Math.min(0.6, 12 / pxs() + 0.05);  // ~12 px
   let mejor = t, dist = lim;
-  // búsqueda binaria en las pausas
   let lo = 0, hi = D.pausas.length - 1;
   while (lo < hi) { const m = (lo + hi) >> 1; if (D.pausas[m] < t) lo = m + 1; else hi = m; }
   for (const i of [lo - 1, lo]) {
@@ -237,6 +340,7 @@ function iman(t) {
   }
   return mejor;
 }
+const tEn = (clientX) => { const r = $("pista").getBoundingClientRect(); return Math.min(D.duracion, Math.max(0, (clientX - r.left) / pxs())); };
 document.addEventListener("pointermove", (ev) => {
   if (!arrastre) return;
   const k = pxs(), dt = (ev.clientX - arrastre.x0) / k, a = arrastre, f = a.f, dur = D.duracion;
@@ -246,91 +350,132 @@ document.addEventListener("pointermove", (ev) => {
   else if (a.modo === "f") f.fin = Math.max(iman(Math.min(dur, a.b0 + dt)), f.inicio + 1);
   else {
     const largo = a.b0 - a.a0;
-    let ni = Math.min(Math.max(0, a.a0 + dt), dur - largo);
-    const pi = iman(ni);
-    ni = pi;
+    const ni = iman(Math.min(Math.max(0, a.a0 + dt), dur - largo));
     f.inicio = ni; f.fin = Math.min(dur, ni + largo);
   }
   a.el.style.left = (f.inicio * k) + "px";
-  a.el.style.width = Math.max(4, (f.fin - f.inicio) * k) + "px";
+  a.el.style.width = Math.max(6, (f.fin - f.inicio) * k) + "px";
+  if (a.modo !== "f") $("vid").currentTime = f.inicio; else $("vid").currentTime = f.fin;   // se ve dónde queda el corte
 });
 document.addEventListener("pointerup", () => {
   if (!arrastre) return;
   const a = arrastre; arrastre = null;
   if (a.movido) {
     if (a.f.estado === "listo") a.f.estado = "pendiente";
+    F.sort((x, y) => x.inicio - y.inicio);
     pintarTodo(); guardar();
   }
 });
-$("pista").addEventListener("pointerdown", (ev) => {
-  if (ev.target.closest(".bloque")) return;
-  // el tiempo solo se mueve arrastrando (clic sostenido), no con un clic suelto
-  buscando = { x0: ev.clientX, movido: false };
-  sel = null; pintarBloques(); pintarLista();
-});
 let buscando = null;
+$("pista").addEventListener("pointerdown", (ev) => {
+  if (ev.target.closest(".bloque") || ev.button !== 0) return;
+  // arrastrar sobre la línea mueve el tiempo; un clic suelto solo quita la selección
+  buscando = { x0: ev.clientX, movido: false };
+  if (!(ev.ctrlKey || ev.metaKey || ev.shiftKey)) { sel = new Set(); pintarBloques(); pintarLista(); }
+});
 document.addEventListener("pointermove", (ev) => {
+  if (D && ev.target.closest && ev.target.closest("#pista")) {   // línea guía con el tiempo bajo el ratón
+    const t = tEn(ev.clientX);
+    $("raton").style.display = "block"; $("raton").style.left = (t * pxs()) + "px"; $("raton").firstChild.textContent = fmtD(t);
+  } else $("raton").style.display = "none";
   if (!buscando) return;
   if (!buscando.movido && Math.abs(ev.clientX - buscando.x0) > 3) buscando.movido = true;
   if (!buscando.movido) return;
-  const r = $("pista").getBoundingClientRect();
-  $("vid").currentTime = Math.min(D.duracion, Math.max(0, (ev.clientX - r.left) / pxs()));
+  $("vid").currentTime = tEn(ev.clientX);
 });
 document.addEventListener("pointerup", () => { buscando = null; });
+// doble clic: el cursor (la posición del video) va a donde diste doble clic
+$("pista").addEventListener("dblclick", (ev) => {
+  if (!D) return;
+  ev.preventDefault();
+  $("vid").currentTime = tEn(ev.clientX); cabezal();
+});
+// Ctrl + rueda: zoom alrededor del ratón; rueda sola: avanzar / regresar la vista
+$("tl").addEventListener("wheel", (ev) => {
+  if (!D) return;
+  if (ev.ctrlKey || ev.metaKey) {
+    ev.preventDefault();
+    const r = $("tl").getBoundingClientRect(), x = ev.clientX - r.left, t = tEn(ev.clientX);
+    zoomA(+$("zoom").value + (ev.deltaY < 0 ? 6 : -6), t, x);
+  } else if (Math.abs(ev.deltaY) > Math.abs(ev.deltaX)) {
+    ev.preventDefault(); $("tl").scrollLeft += ev.deltaY;
+  }
+}, { passive: false });
 function cabezal() {
   if (!D) return;
   const t = $("vid").currentTime || 0, k = pxs();
-  $("cabezal").style.left = (t * k) + "px";
-  $("t_act").textContent = fmt(t);
-  if (entrada !== null) { $("entrada").style.display = "block"; $("entrada").style.left = (entrada * k) + "px"; }
-  else $("entrada").style.display = "none";
+  $("cabezal").style.left = (t * k - 1) + "px";
+  $("cabezal").firstChild.textContent = fmtD(t);
+  $("t_act").textContent = fmtD(t);
+  if (entrada !== null) {
+    $("entrada").style.display = "block"; $("entrada").style.left = (entrada * k - 1) + "px";
+    const a = Math.min(entrada, t), b = Math.max(entrada, t);
+    $("tramo_a").style.display = "block"; $("tramo_a").style.left = (a * k) + "px"; $("tramo_a").style.width = ((b - a) * k) + "px";
+  } else { $("entrada").style.display = "none"; $("tramo_a").style.display = "none"; }
   // que el cabezal no se salga de la vista mientras se reproduce
   const tl = $("tl"), x = t * k;
   if (!$("vid").paused && (x < tl.scrollLeft || x > tl.scrollLeft + tl.clientWidth - 30)) tl.scrollLeft = x - 40;
 }
+function bucleCabezal() { if (!$("vid").paused) cabezal(); requestAnimationFrame(bucleCabezal); }
+requestAnimationFrame(bucleCabezal);
 $("vid").addEventListener("timeupdate", cabezal);
 $("vid").addEventListener("seeked", cabezal);
-$("zoom").addEventListener("input", () => { if (!D) return; pintarRegla(); pintarBloques(); cabezal(); const x = ($("vid").currentTime || 0) * pxs(); $("tl").scrollLeft = x - $("tl").clientWidth / 2; });
+$("zoom").addEventListener("input", () => { if (D) zoomA(+$("zoom").value); });
+$("z_mas").onclick = () => D && zoomA(+$("zoom").value + 12);
+$("z_menos").onclick = () => D && zoomA(+$("zoom").value - 12);
+$("z_todo").onclick = () => D && zoomA(0, 0, 0);
 window.addEventListener("resize", () => { if (D) { pintarRegla(); pintarBloques(); cabezal(); } });
 
 // ---------------- lista ----------------
-const ESTADOS = { pendiente: "por mandar", "en cola": "en cola", cortando: "cortando…", analizando: "analizando…", listo: "listo ✓", error: "error", cancelado: "cancelado ⛔" };
+const ESTADOS = { pendiente: "por exportar", "en cola": "en cola", cortando: "cortando…", analizando: "analizando…", listo: "listo ✓", error: "error", cancelado: "cancelado ⛔" };
 function pintarLista() {
   const tb = $("lista");
-  if (!F.length) { tb.innerHTML = `<tr><td colspan="7" class="vacio">Aún no hay fragmentos. Márcalos con <b>I</b> y <b>O</b> mientras ves el video, o pide sugerencias a la IA.</td></tr>`; return; }
+  if (!F.length) { tb.innerHTML = `<tr><td colspan="7" class="vacio">Aún no hay fragmentos. Márcalos con <b>A</b> (entrada) y <b>S</b> (salida) mientras ves el video, o pide sugerencias a la IA.</td></tr>`; return; }
   tb.innerHTML = "";
   F.forEach((f, i) => {
     const tr = document.createElement("tr");
-    if (f.id === sel) tr.className = "sel";
-    const cls = f.estado === "listo" ? "listo" : (f.estado === "error" || f.estado === "cancelado") ? "error" : ["en cola", "cortando", "analizando"].includes(f.estado) ? "trabajando" : "";
+    if (sel.has(f.id)) tr.className = "sel";
+    const cls = f.estado === "listo" ? "listo" : (f.estado === "error" || f.estado === "cancelado") ? "error" : ocupado(f) ? "trabajando" : "";
     const abrir = f.estado === "listo" && f.trabajo ? `<a href="/edi/editor?t=${encodeURIComponent(f.trabajo)}" target="_blank">Abrir en el editor ↗</a>` : "";
-    tr.innerHTML = `<td><input type="checkbox" class="m" ${f.marcado !== false ? "checked" : ""}></td>
-      <td>${i + 1}${f.sugerido ? ' <span title="Sugerido por la IA">✨</span>' : ""}</td>
-      <td class="num">${fmt(f.inicio)} – ${fmt(f.fin)}<br><span class="ayuda">${Math.round(f.fin - f.inicio)} s</span></td>
-      <td><input type="text" class="ti" value="${esc(f.titulo)}" placeholder="Título del clip">${f.tema ? `<div class="ayuda">${esc(f.tema)}</div>` : ""}</td>
-      <td><select class="es">${D.estilos.map(e => `<option ${e === f.estilo ? "selected" : ""}>${esc(e)}</option>`).join("")}</select></td>
-      <td><span class="chip ${cls}" title="${esc(f.detalle || "")}">${ESTADOS[f.estado] || f.estado || "por mandar"}</span>${f.detalle ? `<div class="ayuda" style="color:var(--rojo)">${esc(f.detalle)}</div>` : ""}</td>
+    const primero = !f.grupo || miembros(f.grupo)[0].id === f.id;
+    const gchip = f.grupo ? `<span class="gchip" style="background:${colorGrupo(f.grupo)}" title="Grupo ${f.grupo}: se exporta junto con los demás del grupo, como un solo video">G${f.grupo}</span>` : "";
+    tr.innerHTML = `<td><input type="checkbox" class="m" title="Marcado para exportar" ${f.marcado !== false ? "checked" : ""}></td>
+      <td style="white-space:nowrap;cursor:pointer" class="n">${i + 1}${f.sugerido ? ' <span title="Sugerido por la IA">✨</span>' : ""} ${gchip}</td>
+      <td class="num">${fmtD(f.inicio)} – ${fmtD(f.fin)}<br><span class="ayuda">${(f.fin - f.inicio).toFixed(1)} s</span></td>
+      <td><input type="text" class="ti" value="${esc(primero ? f.titulo : tituloGrupo(f.grupo))}" ${primero ? "" : "disabled"}
+        placeholder="${f.grupo ? "Título del video del grupo" : "Título del clip"}" title="${primero ? "Este título es el nombre del archivo al exportar" : "En un grupo se usa el título del primero"}">${f.tema ? `<div class="ayuda">${esc(f.tema)}</div>` : ""}</td>
+      <td><select class="es" ${primero ? "" : "disabled"}>${D.estilos.map(e => `<option ${e === f.estilo ? "selected" : ""}>${esc(e)}</option>`).join("")}</select></td>
+      <td><span class="chip ${cls}" title="${esc(f.detalle || "")}">${ESTADOS[f.estado] || f.estado || "por exportar"}</span>${f.detalle ? `<div class="ayuda" style="color:var(--rojo)">${esc(f.detalle)}</div>` : ""}</td>
       <td style="white-space:nowrap"><button class="btn ir">▶ Ir</button> <button class="btn bo" title="Borrar">✕</button> ${abrir}</td>`;
-    tr.querySelector(".m").onchange = (e) => { f.marcado = e.target.checked; pintarBloques(); guardar(); };
-    tr.querySelector(".ti").oninput = (e) => { f.titulo = e.target.value; guardar(); };
-    tr.querySelector(".ti").onfocus = () => { sel = f.id; pintarBloques(); };
-    tr.querySelector(".es").onchange = (e) => { f.estilo = e.target.value; guardar(); };
+    tr.querySelector(".m").onchange = (e) => {
+      const v = e.target.checked;
+      (f.grupo ? miembros(f.grupo) : [f]).forEach(x => x.marcado = v);   // un grupo se marca completo
+      pintarBloques(); pintarLista(); guardar();
+    };
+    tr.querySelector(".ti").oninput = (e) => { f.titulo = e.target.value; pintarBloques(); guardar(); };
+    tr.querySelector(".ti").onfocus = () => { sel = new Set([f.id]); pintarBloques(); };
+    tr.querySelector(".es").onchange = (e) => { (f.grupo ? miembros(f.grupo) : [f]).forEach(x => x.estilo = e.target.value); guardar(); };
+    tr.querySelector(".n").onclick = (ev) => {
+      if (ev.ctrlKey || ev.metaKey || ev.shiftKey) { sel.has(f.id) ? sel.delete(f.id) : sel.add(f.id); }
+      else sel = new Set([f.id]);
+      pintarBloques(); pintarLista();
+    };
     tr.querySelector(".ir").onclick = () => irA(f);
-    tr.querySelector(".bo").onclick = () => borrar(f.id);
+    tr.querySelector(".bo").onclick = () => borrar([f.id]);
     tb.appendChild(tr);
   });
   $("todos").checked = F.every(f => f.marcado !== false);
 }
 $("todos").onchange = (e) => { F.forEach(f => f.marcado = e.target.checked); pintarTodo(); guardar(); };
 function irA(f) {
-  sel = f.id; $("vid").currentTime = f.inicio; $("vid").play().catch(() => {});
+  sel = new Set([f.id]); $("vid").currentTime = f.inicio; $("vid").play().catch(() => {});
   $("tl").scrollLeft = f.inicio * pxs() - 40; pintarBloques(); pintarLista();
 }
-function borrar(id) {
-  const f = F.find(x => x.id === id);
-  if (!f) return;
-  if (["en cola", "cortando", "analizando"].includes(f.estado)) { estado("Ese fragmento se está procesando; espera a que termine.", "err"); return; }
-  F = F.filter(x => x.id !== id); if (sel === id) sel = null;
+function borrar(ids) {
+  const quitar = F.filter(x => ids.includes(x.id));
+  if (!quitar.length) return;
+  if (quitar.some(ocupado)) { estado("Hay fragmentos que se están procesando; espera a que terminen.", "err"); return; }
+  F = F.filter(x => !ids.includes(x.id)); ids.forEach(i => sel.delete(i));
   pintarTodo(); guardar();
 }
 function pintarTodo() { if (!D) return; pintarRegla(); pintarBloques(); pintarLista(); cabezal(); }
@@ -339,26 +484,52 @@ function agregar(a, b) {
   a = iman(a); b = iman(b);
   if (b - a < 1) { estado("El fragmento es muy corto.", "err"); return; }
   const f = { id: nuevoId--, inicio: a, fin: Math.min(D.duracion, b), titulo: "", estilo: $("estilo").value, estado: "pendiente", marcado: true, sugerido: false };
-  F.push(f); F.sort((x, y) => x.inicio - y.inicio); sel = f.id;
+  F.push(f); F.sort((x, y) => x.inicio - y.inicio); sel = new Set([f.id]);
   pintarTodo(); guardar();
   setTimeout(() => { const i = F.indexOf(f); const inp = $("lista").querySelectorAll(".ti")[i]; if (inp) inp.focus(); }, 30);
+}
+
+// ---------------- grupos ----------------
+function agrupar() {
+  const elegidos = F.filter(f => sel.has(f.id));
+  // si se eligió uno de un grupo, se suman todos los de ese grupo
+  const gs = new Set(elegidos.filter(f => f.grupo).map(f => f.grupo));
+  const todos = F.filter(f => sel.has(f.id) || (f.grupo && gs.has(f.grupo)));
+  if (todos.length < 2) { estado("Selecciona dos o más fragmentos (Ctrl + clic) y luego Ctrl + G.", "err"); return; }
+  if (todos.some(ocupado)) { estado("Hay fragmentos que se están procesando; espera a que terminen.", "err"); return; }
+  const g = gs.size ? Math.min(...gs) : Math.max(0, ...F.map(f => f.grupo || 0)) + 1;
+  const orden = todos.slice().sort((a, b) => a.inicio - b.inicio);
+  const tit = (orden.find(f => (f.titulo || "").trim()) || orden[0]).titulo || "";
+  orden.forEach((f, i) => { f.grupo = g; f.estilo = orden[0].estilo; f.marcado = true; if (f.estado === "listo") f.estado = "pendiente"; });
+  orden[0].titulo = tit;
+  pintarTodo(); guardar();
+  estado(`Grupo ${g}: ${orden.length} fragmentos. Al exportar se unen en un solo video «${tit || "sin título"}».`, "ok");
+}
+function desagrupar() {
+  const gs = new Set(F.filter(f => sel.has(f.id) && f.grupo).map(f => f.grupo));
+  if (!gs.size) { estado("Selecciona un fragmento de un grupo y luego Ctrl + D.", "err"); return; }
+  F.forEach(f => { if (f.grupo && gs.has(f.grupo)) { delete f.grupo; if (f.estado === "listo") f.estado = "pendiente"; } });
+  pintarTodo(); guardar();
+  estado("Desagrupado: cada fragmento se exporta por separado.", "ok");
 }
 
 // ---------------- teclado ----------------
 document.addEventListener("keydown", (ev) => {
   if (!D || ev.target.matches("input[type=text], input[type=number], select")) return;
   const v = $("vid"), t = v.currentTime || 0, k = ev.key.toLowerCase();
-  if (k === "i") { entrada = t; $("t_marca").textContent = "Entrada en " + fmt(t) + " · presiona O en la salida"; cabezal(); }
-  else if (k === "o") {
-    if (entrada === null) { estado("Primero marca la entrada con I.", "err"); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "g") { ev.preventDefault(); agrupar(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "d") { ev.preventDefault(); desagrupar(); return; }
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if (k === "a") { entrada = t; $("t_marca").textContent = "Entrada en " + fmtD(t) + " · presiona S en la salida (Esc cancela)"; cabezal(); }
+  else if (k === "s") {
+    if (entrada === null) { estado("Primero marca la entrada con A.", "err"); return; }
     const a = Math.min(entrada, t), b = Math.max(entrada, t);
     entrada = null; $("t_marca").textContent = ""; agregar(a, b);
   }
-  else if (k === "n") agregar(t, t + 60);
   else if (k === " ") { ev.preventDefault(); v.paused ? v.play().catch(() => {}) : v.pause(); }
   else if (k === "arrowleft" || k === "arrowright") { ev.preventDefault(); v.currentTime = Math.max(0, t + (k === "arrowleft" ? -1 : 1) * (ev.shiftKey ? 30 : 5)); }
-  else if ((k === "delete" || k === "backspace") && sel !== null) { ev.preventDefault(); borrar(sel); }
-  else if (k === "escape") { entrada = null; $("t_marca").textContent = ""; cabezal(); }
+  else if ((k === "delete" || k === "backspace") && sel.size) { ev.preventDefault(); borrar([...sel]); }
+  else if (k === "escape") { entrada = null; $("t_marca").textContent = ""; sel = new Set(); pintarBloques(); pintarLista(); cabezal(); }
 });
 
 // ---------------- sugerencias ----------------
@@ -383,33 +554,35 @@ $("b_sug").onclick = async () => {
   } catch (e) { estado("No se pudo: " + e.message, "err"); }
 };
 
-// ---------------- mandar a editar ----------------
+// ---------------- exportar ----------------
 $("b_mandar").onclick = async () => {
   if (!V) return;
   if (pendiente) { clearTimeout(pendiente); pendiente = null; }
-  const lista = F.map(f => ({ id: f.id > 0 ? f.id : null, inicio: f.inicio, fin: f.fin, titulo: f.titulo, estilo: f.estilo, marcado: f.marcado, sugerido: f.sugerido }));
   try {
-    const g = await post("/frag/guardar", { v: V, fragmentos: lista, estilo: $("estilo").value });
-    F = g.fragmentos.map(f => ({ ...f }));
+    const g = await post("/frag/guardar", { v: V, fragmentos: paraServidor(), estilo: $("estilo").value });
+    adoptar(g.fragmentos);
     const ids = F.filter(f => f.marcado !== false && f.estado !== "listo").map(f => f.id);
-    if (!ids.length) { $("mandar_txt").textContent = "No hay fragmentos marcados por mandar."; return; }
-    const sinTitulo = F.filter(f => ids.includes(f.id) && !f.titulo.trim()).length;
+    if (!ids.length) { $("mandar_txt").textContent = "No hay fragmentos marcados por exportar."; pintarTodo(); return; }
+    const sinTitulo = F.filter(f => ids.includes(f.id) && (!f.grupo || miembros(f.grupo)[0].id === f.id) && !(f.grupo ? tituloGrupo(f.grupo) : f.titulo).trim()).length;
     const r = await post("/frag/mandar", { v: V, ids, gpu: $("gpu").checked });
-    $("mandar_txt").textContent = `${r.n} en cola. Se cortan y analizan uno por uno; el avance sale aquí y en el Registro.` + (sinTitulo ? ` (${sinTitulo} sin título)` : "");
+    $("mandar_txt").textContent = `${r.n} video(s) en cola. Se cortan (los grupos se unen) y se analizan uno por uno; el avance sale aquí y en el Registro.` +
+      (sinTitulo ? ` (${sinTitulo} sin título: se nombran con el video y su número)` : "");
     await refrescar(true);
   } catch (e) { estado("No se pudo: " + e.message, "err"); }
 };
 
 // ---------------- sondeo ----------------
 async function refrescar(forzar) {
-  if (!V || (!forzar && (arrastre || pendiente || document.activeElement?.matches("input[type=text]")))) return;
+  if (!V || (!forzar && (arrastre || pendiente || enVuelo || document.activeElement?.matches("input[type=text]")))) return;
   try {
     const d = await (await fetch("/frag/datos?v=" + encodeURIComponent(V))).json();
-    if (d.detail) return;
+    if (d.detail || (!forzar && (pendiente || enVuelo))) return;
+    const pausasNuevas = JSON.stringify(d.pausas) !== JSON.stringify(D.pausas);
     D.pausas = d.pausas; D.sugerir = d.sugerir;
     pintarSugerir(d.sugerir);
-    const firma = (xs) => JSON.stringify(xs.map(f => [f.id, f.inicio, f.fin, f.titulo, f.estilo, f.marcado, f.estado, f.detalle || "", f.trabajo || ""]));
-    if (firma(d.fragmentos) !== firma(F)) { F = d.fragmentos.map(f => ({ ...f })); pintarTodo(); }
+    const firma = (xs) => JSON.stringify(xs.map(f => [f.id, f.inicio, f.fin, f.titulo, f.estilo, f.marcado, f.estado, f.detalle || "", f.trabajo || "", f.grupo || 0]));
+    if (firma(d.fragmentos) !== firma(F)) { adoptar(d.fragmentos); pintarTodo(); }
+    else if (pausasNuevas) pintarRegla();
   } catch (e) {}
 }
 setInterval(refrescar, 3000);

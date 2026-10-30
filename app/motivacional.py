@@ -956,8 +956,14 @@ def analizar(args, video, pl, pl_path, trabajo):
     fps, n, w, h = ed.info_video(video)
     info = {"fps": fps, "cuadros": n, "ancho": w, "alto": h, "duracion": n / fps if fps else 0,
             "audio": ed.tiene_audio(video)}
-    ed.Progreso.paso(0.0, "Buscando la cara")
-    pista = pista_rostro(video, info)
+    if getattr(args, "ligero", False):   # Video largo: sin seguir la cara, solo su lugar promedio
+        ed.Progreso.paso(0.0, "Preparando (sin acomodo automático)")
+        c = ed.cara_promedio(video, info)
+        pista = [[0.0, c[0], c[1], c[2] * 0.8, c[2]]] if c else \
+            [[0.0, info["ancho"] / 2, info["alto"] * 0.35, info["alto"] * 0.25, info["alto"] * 0.33]]
+    else:
+        ed.Progreso.paso(0.0, "Buscando la cara")
+        pista = pista_rostro(video, info)
 
     if args.transcripcion:
         palabras = ed.limpiar_transcripcion(ed.cargar_json(args.transcripcion))
@@ -1184,7 +1190,7 @@ def render(args, trabajo, plan, pl):
     a_cfg = pl.get("audio", {})
     musica = ed.ruta(a_cfg.get("musica")) if a_cfg.get("musica") and not args.sin_musica else None
     hay_musica = bool(musica and Path(musica).exists())
-    f_audio, map_audio = ed.filtro_audio(pl, info, hay_musica, cortes)
+    f_audio, map_audio = ed.filtro_audio(pl, info, hay_musica, cortes, ed.mezcla_de(plan))
 
     cmd, salida, paso, tam = ed.salida_render(args, trabajo, plan, pl, W, H, fps, hay_musica, musica, f_audio,
                                               map_audio, salida)

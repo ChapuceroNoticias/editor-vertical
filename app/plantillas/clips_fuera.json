@@ -1,232 +1,234 @@
 {
-  "nombre": "clips_fuera",
-  "descripcion": "Clips Fuera: cuando Nacho graba de viaje con el celular. Toma completa de Nacho o pantalla partida (Nacho a la izquierda + video/tweet/documento a la derecha sobre negro). Mismo diseño que Clips Chapuceros, sin recortar pausas, sin música ni imágenes de internet; los videos van a pantalla completa, los documentos en pantalla dividida con seguimiento de lectura, y una cortinilla 'El Chapucero' al entrar y salir de la pantalla dividida.",
-  "salida": {
-    "ancho": 1080,
-    "alto": 1920,
-    "crf": 20,
-    "audio_kbps": 125
-  },
-  "fuente_16x9": {
-    "_nota": "Coordenadas en el video original 1920x1080: [x, y, ancho, alto]. Nacho a la izquierda y el contenido a la derecha.",
-    "persona_dividida": [
-      0,
-      0,
-      538,
-      1080
+ "nombre": "clips_fuera",
+ "descripcion": "Clips Fuera: cuando Nacho graba de viaje con el celular. Toma completa de Nacho o pantalla partida (Nacho a la izquierda + video/tweet/documento a la derecha sobre negro). Mismo diseño que Clips Chapuceros, sin recortar pausas, sin música ni imágenes de internet; los videos van a pantalla completa, los documentos en pantalla dividida con seguimiento de lectura, y una cortinilla 'El Chapucero' al entrar y salir de la pantalla dividida.",
+ "salida": {
+  "ancho": 1080,
+  "alto": 1920,
+  "crf": 20,
+  "audio_kbps": 125
+ },
+ "fuente_16x9": {
+  "_nota": "Coordenadas en el video original 1920x1080: [x, y, ancho, alto]. Nacho a la izquierda y el contenido a la derecha.",
+  "persona_dividida": [
+   0,
+   0,
+   538,
+   1080
+  ],
+  "proyeccion": [
+   556,
+   0,
+   1364,
+   1080
+  ]
+ },
+ "deteccion": {
+  "muestreo_fps": 4,
+  "duracion_minima_seg": 1.0,
+  "_nota": "Pantalla partida = franja negra arriba del contenido + columna negra justo a la derecha del recuadro de Nacho",
+  "franja_superior": [
+   600,
+   4,
+   500,
+   40
+  ],
+  "columna_separacion": [
+   540,
+   100,
+   16,
+   880
+  ],
+  "umbral_oscuro": 35,
+  "umbral_movimiento_proyeccion": 2.0,
+  "movimiento_en_contenido": true,
+  "actividad_persona": true,
+  "auto_geometria": true,
+  "umbral_borde": 14,
+  "_nota_auto": "auto_geometria: al analizar busca dónde termina el recuadro de Nacho y empieza el contenido (con o sin franja negra entre los dos), porque no todas las grabaciones quedan igual."
+ },
+ "proyeccion": {
+  "_nota": "Videos de celular: mientras Nacho habla van en pantalla dividida (Nacho arriba, video abajo); cuando se calla para ver el video, a pantalla completa centrados en quien habla o lo que se mueve (zoom_video). Imágenes fijas (tweets) a pantalla completa. Documentos en dividida con seguimiento de lectura. Todo se puede cambiar por tramo en la pestaña Pantalla.",
+  "modo": "auto",
+  "video_min_seg": 1.5,
+  "video_hueco_seg": 2.0,
+  "imagen_min_seg": 1.5,
+  "imagen_mostrar_seg": 8,
+  "imagen_ancho_min": 0.6,
+  "zoom_imagen": 1.5,
+  "imagen_estilo": "completa",
+  "video_vertical_completo": true,
+  "video_arranque_seg": 2.0,
+  "quieto_min_seg": 1.5,
+  "scroll_como_documento": true,
+  "dividir_cuando_habla": true,
+  "habla_umbral": 12,
+  "habla_umbral_min": 9,
+  "habla_umbral_max": 15,
+  "habla_ventana_seg": 1.75,
+  "habla_min_seg": 2.0,
+  "zoom_video": 1.25
+ },
+ "titulo": {
+  "barra": "assets/barra_titulo.png",
+  "fuente": "assets/Balinese_Culture.ttf",
+  "caja_texto": [
+   135,
+   72,
+   820,
+   88
+  ],
+  "escala": 1.17,
+  "color": "#FFFFFF",
+  "contorno": 4,
+  "color_contorno": "#000000",
+  "tam_max": 80,
+  "mayusculas": true
+ },
+ "subtitulos": {
+  "fuente": "assets/AkuKamu.otf",
+  "tam": 72,
+  "tam_min": 56,
+  "max_lineas": 2,
+  "color": "#FFFFFF",
+  "contorno": 8,
+  "color_contorno": "#000000",
+  "color_resalte": "#A8002F",
+  "max_palabras": 4,
+  "espacio": 0.09,
+  "pausa_corte_seg": 0.45,
+  "mayusculas": true
+ },
+ "layouts": {
+  "persona": {
+   "persona": {
+    "area": [
+     0,
+     0,
+     1080,
+     1920
     ],
-    "proyeccion": [
-      556,
-      0,
-      1364,
-      1080
+    "zoom": 1.0,
+    "cara_y": 0.35,
+    "margen_sup": 200,
+    "nitidez": 0.5
+   },
+   "subtitulos": {
+    "area": [
+     40,
+     1490,
+     860,
+     200
     ]
+   }
   },
-  "deteccion": {
-    "muestreo_fps": 4,
-    "duracion_minima_seg": 1.0,
-    "_nota": "Pantalla partida = franja negra arriba del contenido + columna negra justo a la derecha del recuadro de Nacho",
-    "franja_superior": [
-      600,
-      4,
-      500,
-      40
+  "dividida": {
+   "persona": {
+    "area": [
+     0,
+     0,
+     1080,
+     1070
     ],
-    "columna_separacion": [
-      540,
-      100,
-      16,
-      880
+    "zoom": 1.0,
+    "cara_y": 0.4,
+    "margen_sup": 200,
+    "nitidez": 0.4,
+    "ajuste": "contener",
+    "ancho_panel": 0.593,
+    "margen_sup_panel": 110,
+    "desenfoque": 22,
+    "oscurecer_fondo": 0.85,
+    "_nota": "ajuste=contener: el recuadro de Nacho (angosto) se ve completo al centro, sin acercarlo de más, con los lados rellenos con la misma imagen desenfocada. ancho_panel: qué fracción del ancho ocupa; margen_sup_panel: dónde queda la cabeza."
+   },
+   "franja": {
+    "area": [
+     0,
+     1070,
+     1080,
+     193
     ],
-    "umbral_oscuro": 35,
-    "umbral_movimiento_proyeccion": 2.0,
-    "movimiento_en_contenido": true,
-    "actividad_persona": true,
-    "auto_geometria": true,
-    "umbral_borde": 14,
-    "_nota_auto": "auto_geometria: al analizar busca dónde termina el recuadro de Nacho y empieza el contenido (con o sin franja negra entre los dos), porque no todas las grabaciones quedan igual."
-  },
-  "proyeccion": {
-    "_nota": "Videos de celular: mientras Nacho habla van en pantalla dividida (Nacho arriba, video abajo); cuando se calla para ver el video, a pantalla completa centrados en quien habla o lo que se mueve (zoom_video). Imágenes fijas (tweets) a pantalla completa. Documentos en dividida con seguimiento de lectura. Todo se puede cambiar por tramo en la pestaña Pantalla.",
-    "modo": "auto",
-    "video_min_seg": 1.5,
-    "video_hueco_seg": 2.0,
-    "imagen_min_seg": 1.5,
-    "imagen_mostrar_seg": 8,
-    "imagen_ancho_min": 0.6,
-    "zoom_imagen": 1.5,
-    "imagen_estilo": "completa",
-    "video_vertical_completo": true,
-    "video_arranque_seg": 2.0,
-    "quieto_min_seg": 1.5,
-    "scroll_como_documento": true,
-    "dividir_cuando_habla": true,
-    "habla_umbral": 12,
-    "habla_umbral_min": 9,
-    "habla_umbral_max": 15,
-    "habla_ventana_seg": 1.75,
-    "habla_min_seg": 2.0,
-    "zoom_video": 1.25
-  },
-  "titulo": {
-    "barra": "assets/barra_titulo.png",
-    "fuente": "assets/Balinese_Culture.ttf",
-    "caja_texto": [
-      135,
-      72,
-      820,
-      88
+    "fondo": "assets/franja_subtitulos.jpg"
+   },
+   "subtitulos": {
+    "area": [
+     30,
+     1070,
+     880,
+     193
+    ]
+   },
+   "inferior": {
+    "area": [
+     0,
+     1263,
+     1080,
+     657
     ],
-    "escala": 1.17,
-    "color": "#FFFFFF",
-    "contorno": 4,
-    "color_contorno": "#000000",
-    "tam_max": 80,
-    "mayusculas": true
-  },
-  "subtitulos": {
-    "fuente": "assets/AkuKamu.otf",
-    "tam": 72,
-    "tam_min": 56,
-    "max_lineas": 2,
-    "color": "#FFFFFF",
-    "contorno": 8,
-    "color_contorno": "#000000",
-    "color_resalte": "#A8002F",
-    "max_palabras": 4,
-    "espacio": 0.09,
-    "pausa_corte_seg": 0.45,
-    "mayusculas": true
-  },
-  "layouts": {
-    "persona": {
-      "persona": {
-        "area": [
-          0,
-          0,
-          1080,
-          1920
-        ],
-        "zoom": 1.0,
-        "cara_y": 0.35,
-        "margen_sup": 200,
-        "nitidez": 0.5
-      },
-      "subtitulos": {
-        "area": [
-          40,
-          1490,
-          860,
-          200
-        ]
-      }
-    },
-    "dividida": {
-      "persona": {
-        "area": [
-          0,
-          0,
-          1080,
-          1070
-        ],
-        "zoom": 1.0,
-        "cara_y": 0.4,
-        "margen_sup": 200,
-        "nitidez": 0.4,
-        "ajuste": "contener",
-        "ancho_panel": 0.593,
-        "margen_sup_panel": 110,
-        "desenfoque": 22,
-        "oscurecer_fondo": 0.85,
-        "_nota": "ajuste=contener: el recuadro de Nacho (angosto) se ve completo al centro, sin acercarlo de más, con los lados rellenos con la misma imagen desenfocada. ancho_panel: qué fracción del ancho ocupa; margen_sup_panel: dónde queda la cabeza."
-      },
-      "franja": {
-        "area": [
-          0,
-          1070,
-          1080,
-          193
-        ],
-        "fondo": "assets/franja_subtitulos.jpg"
-      },
-      "subtitulos": {
-        "area": [
-          30,
-          1070,
-          880,
-          193
-        ]
-      },
-      "inferior": {
-        "area": [
-          0,
-          1263,
-          1080,
-          657
-        ],
-        "ajuste": "cubrir",
-        "foco_y": 0.5
-      }
-    }
-  },
-  "momentos": {
-    "_nota": "activar=false: este estilo no busca imágenes en internet (solo se muestra lo que Nacho pone en pantalla). Puedes agregar momentos a mano en la interfaz.",
-    "cada_seg": 15,
-    "duracion_min": 4,
-    "duracion_max": 7,
-    "separacion_min": 8,
-    "inicio_min": 5,
-    "imagenes_por_momento": 2,
-    "estilos": [
-      "dividida",
-      "completa"
-    ],
-    "margen_proyeccion": 2,
-    "efecto": "auto",
-    "intensidad": 0.3,
-    "max_candidatos": 8,
-    "puntaje_min": 7,
-    "_nota_busqueda": "puntaje_min: calificación mínima (0-10) que el modelo de visión le da a una foto para usarla. Más alto = más estricto (menos fotos, pero más acertadas). max_candidatos: cuántas fotos revisa por búsqueda.",
-    "activar": false
-  },
-  "audio": {
-    "musica": null,
-    "nivelar_voz": false
-  },
-  "cortes": {
-    "_nota": "Los clips de viaje no se les quitan pausas (activar=false).",
-    "activar": false,
-    "umbral_rel_db": 16,
-    "pausa_min_seg": 0.2,
-    "dejar_seg": 0.12
-  },
-  "lectura": {
-    "_nota": "Cuando Nacho lee un texto de la proyección (tweet, nota), se muestra en pantalla dividida con zoom y la cámara sigue la palabra que va leyendo. lineas_visibles: cuántos renglones caben; posicion_x/y: dónde queda la palabra leída dentro del cuadro (0-1).",
-    "activar": true,
-    "lineas_visibles": 7.5,
-    "posicion_x": 0.45,
-    "posicion_y": 0.42,
-    "suavizado_seg": 0.25,
-    "min_palabras": 4,
-    "hueco_max_seg": 4.0,
-    "margen_inicio_seg": 0.5,
-    "margen_fin_seg": 1.2,
-    "vista_min_seg": 1.0,
-    "ocr_escala": 1.5
-  },
-  "transicion_dividida": {
-    "_nota": "Cortinilla que tapa el cambio al entrar y salir de la pantalla dividida.",
-    "carpeta": "assets/transicion_chapucero",
-    "fps": 25,
-    "antes": 0.5
-  },
-  "toma_fija": {
-    "_nota": "Tomas fijas: el recuadro NO sigue a la persona. Se queda quieto mientras la cara se mueva dentro del margen; si se sale, salta de golpe (corte) a otra posición fija, de preferencia en una pausa recortada cercana. margen_x: cuánto puede moverse de lado (fracción del ancho del recuadro). margen_y: cuánto arriba/abajo (en altos de cara). margen_tam: cuánto puede acercarse/alejarse (1.35 = 35%). min_seg: duración mínima de cada toma. adelantar_corte: hasta cuántos segundos antes se puede adelantar el salto para que caiga en una pausa recortada. activar=false regresa al seguimiento suave anterior.",
-    "activar": true,
-    "margen_x": 0.35,
-    "margen_y": 0.8,
-    "margen_tam": 1.35,
-    "min_seg": 1.5,
-    "adelantar_corte": 1.5
+    "ajuste": "cubrir",
+    "foco_y": 0.5
+   }
   }
+ },
+ "momentos": {
+  "_nota": "activar=false: este estilo no busca imágenes en internet (solo se muestra lo que Nacho pone en pantalla). Puedes agregar momentos a mano en la interfaz.",
+  "cada_seg": 15,
+  "duracion_min": 4,
+  "duracion_max": 7,
+  "separacion_min": 8,
+  "inicio_min": 5,
+  "imagenes_por_momento": 2,
+  "estilos": [
+   "dividida",
+   "completa"
+  ],
+  "margen_proyeccion": 2,
+  "efecto": "auto",
+  "intensidad": 0.3,
+  "max_candidatos": 8,
+  "puntaje_min": 7,
+  "_nota_busqueda": "puntaje_min: calificación mínima (0-10) que el modelo de visión le da a una foto para usarla. Más alto = más estricto (menos fotos, pero más acertadas). max_candidatos: cuántas fotos revisa por búsqueda.",
+  "activar": false
+ },
+ "audio": {
+  "musica": "assets/musica_fondo.mp3",
+  "volumen_musica": 0.9,
+  "nivelar_voz": false,
+  "_nota": "Música de fondo a volumen fijo (no baja sola cuando hablan). En la pestaña Edición se sube o baja (Fondo / Video)."
+ },
+ "cortes": {
+  "_nota": "Los clips de viaje no se les quitan pausas (activar=false).",
+  "activar": false,
+  "umbral_rel_db": 16,
+  "pausa_min_seg": 0.2,
+  "dejar_seg": 0.12
+ },
+ "lectura": {
+  "_nota": "Cuando Nacho lee un texto de la proyección (tweet, nota), se muestra en pantalla dividida con zoom y la cámara sigue la palabra que va leyendo. lineas_visibles: cuántos renglones caben; posicion_x/y: dónde queda la palabra leída dentro del cuadro (0-1).",
+  "activar": true,
+  "lineas_visibles": 7.5,
+  "posicion_x": 0.45,
+  "posicion_y": 0.42,
+  "suavizado_seg": 0.25,
+  "min_palabras": 4,
+  "hueco_max_seg": 4.0,
+  "margen_inicio_seg": 0.5,
+  "margen_fin_seg": 1.2,
+  "vista_min_seg": 1.0,
+  "ocr_escala": 1.5
+ },
+ "transicion_dividida": {
+  "_nota": "Cortinilla que tapa el cambio al entrar y salir de la pantalla dividida.",
+  "carpeta": "assets/transicion_chapucero",
+  "fps": 25,
+  "antes": 0.5
+ },
+ "toma_fija": {
+  "_nota": "Tomas fijas: el recuadro NO sigue a la persona. Se queda quieto mientras la cara se mueva dentro del margen; si se sale, salta de golpe (corte) a otra posición fija, de preferencia en una pausa recortada cercana. margen_x: cuánto puede moverse de lado (fracción del ancho del recuadro). margen_y: cuánto arriba/abajo (en altos de cara). margen_tam: cuánto puede acercarse/alejarse (1.35 = 35%). min_seg: duración mínima de cada toma. adelantar_corte: hasta cuántos segundos antes se puede adelantar el salto para que caiga en una pausa recortada. activar=false regresa al seguimiento suave anterior.",
+  "activar": true,
+  "margen_x": 0.35,
+  "margen_y": 0.8,
+  "margen_tam": 1.35,
+  "min_seg": 1.5,
+  "adelantar_corte": 1.5
+ }
 }
