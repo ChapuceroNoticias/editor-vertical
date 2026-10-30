@@ -737,7 +737,7 @@ def datos_encuadre(t):
     info = plan["info"]
     # las muestras no cambian si solo cambian los ajustes a mano
     firma = json.dumps({k: plan.get(k) for k in ("tomas", "proyeccion", "momentos", "cortes", "encuadres", "cara",
-                                                 "titulo", "titulo_fin", "plantilla")}, sort_keys=True, default=str)
+                                                 "titulo", "titulo_fin", "plantilla", "transiciones_camara")}, sort_keys=True, default=str)
     clave = (str(p_plan), hash(firma))
     if clave not in _CACHE_ENC:
         if estilo == "motivacional":
@@ -1049,6 +1049,75 @@ def estado_proxy(t, plan=None, arrancar=True):
     return {"proxy": None, "preparando": False}
 
 
+_CORTINILLA = {}
+
+
+def info_cortinilla(pl):
+    """Datos de la cortinilla limpia para las vistas previas (None si el estilo no la usa)."""
+    cfg = pl.get("transicion_camara") or {}
+    if not cfg.get("activar"):
+        return None
+    clave = str(cfg.get("video"))
+    if clave not in _CORTINILLA:
+        it = ed.info_transicion(cfg)
+        _CORTINILLA[clave] = {"n": it["cuadros"], "fps": it["fps"], "duracion": it["duracion"], "w": 270, "h": 480} if it else None
+    return _CORTINILLA[clave]
+
+
+def sprite_cortinilla(pl):
+    """Todos los cuadros de la cortinilla limpia en una sola imagen (uno debajo de otro), en chico."""
+    cfg = pl.get("transicion_camara") or {}
+    it = ed.info_transicion(cfg)
+    if not it:
+        return None
+    cap = cv2.VideoCapture(it["ruta"])
+    cuadros = []
+    while True:
+        ok, fr = cap.read()
+        if not ok:
+            break
+        cuadros.append(cv2.resize(fr, (270, 480), interpolation=cv2.INTER_AREA))
+    cap.release()
+    ok, buf = cv2.imencode(".jpg", np.vstack(cuadros), [cv2.IMWRITE_JPEG_QUALITY, 88])
+    return buf.tobytes() if ok else None
+
+
+def accion_transiciones(t, d):
+    """Pestaña Edición: agregar / quitar una transición de cámara en un momento, o volver a buscarlas."""
+    plan, _ = cargar(t)
+    pl = plantilla(plan)
+    cfg = pl.get("transicion_camara") or {}
+    if not cfg.get("activar"):
+        raise ValueError("Este estilo no usa la cortinilla de cambio de cámara")
+    trans = list(plan.get("transiciones_camara") or [])
+    acc = d.get("accion")
+    respaldar(t)
+    if acc == "buscar":
+        trans = ed.detectar_transiciones(plan["video"], plan["info"], cfg)
+        msg = f"{len(trans)} transición(es) encontradas."
+    elif acc == "agregar":
+        it = ed.info_transicion(cfg)
+        a = max(0.0, float(d["t_orig"]))
+        trans = [x for x in trans if not (x["inicio"] - 0.01 <= a < x["fin"])]
+        trans.append({"inicio": round(a, 4), "fin": round(min(plan["info"]["duracion"], a + it["duracion"]), 4), "manual": True})
+        msg = "Transición agregada aquí."
+    elif acc == "quitar":
+        a = float(d["t_orig"])
+        antes = len(trans)
+        trans = [x for x in trans if not (x["inicio"] - 0.05 <= a < x["fin"] + 0.05)]
+        msg = "Transición quitada." if len(trans) < antes else "Aquí no hay transición."
+    else:
+        raise ValueError("Acción desconocida")
+    trans.sort(key=lambda x: x["inicio"])
+    plan["transiciones_camara"] = trans
+    # que las pausas recortadas solas no se coman la cortinilla (los tramos quitados a mano se respetan)
+    auto = [c for c in plan.get("cortes", []) if not c.get("manual")]
+    man = [c for c in plan.get("cortes", []) if c.get("manual")]
+    plan["cortes"] = sorted(ed.respetar_transiciones(auto, trans) + man, key=lambda c: c["inicio"])
+    guardar_plan(t, plan)
+    return msg, len(trans)
+
+
 def datos_armado(plan, pl):
     """Lo que necesita la vista previa armada en vivo (pestaña Subtítulos): diseño de la plantilla,
     tramos de la pantalla de Nacho e imágenes de los momentos."""
@@ -1070,6 +1139,9 @@ def datos_armado(plan, pl):
                       "n": len(m.get("imagenes") or []), "marcos": marcos_momento(m, plan, pl)}
                      for m in plan.get("momentos", [])],
         "titulo_fin": plan.get("titulo_fin", 3.0) if plan.get("titulo") else 0,
+        # transiciones de cambio de cámara de Nacho (tiempo original) y la cortinilla limpia que las tapa
+        "transiciones": [[t_["inicio"], t_["fin"]] for t_ in plan.get("transiciones_camara") or []],
+        "cortinilla": info_cortinilla(pl),
     }
 
 
@@ -1955,6 +2027,20 @@ def crear_app():
         registrar("⏻ Editor cerrado desde el botón «Cerrar»")
         threading.Timer(0.8, lambda: os._exit(0)).start()
         return {"ok": True}
+
+    @app.get("/enc/cortinilla")
+    def enc_cortinilla(t: str):
+        plan, _ = cargar(validar(t))
+        img = sprite_cortinilla(plantilla(plan))
+        if not img:
+            raise HTTPException(404, "Sin cortinilla")
+        return Response(img, media_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})
+
+    @app.post("/edi/transiciones")
+    def edi_transiciones(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        msg, n = _ok(lambda: accion_transiciones(t, d))
+        return {"ok": True, "mensaje": msg, "n": n}
 
     @app.get("/edi/musica")
     def edi_musica(t: str):

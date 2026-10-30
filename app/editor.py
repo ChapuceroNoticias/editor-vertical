@@ -2173,7 +2173,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-10-30b v1.1.1"
+VERSION = "2026-10-30c v1.1.2"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -2240,9 +2240,11 @@ def _medida_cortinilla(rgb):
     """(amarillo, paleta) de un cuadro chico RGB: la cortinilla es amarillo pálido, negro y blanco."""
     s = rgb.reshape(-1, 3).astype(np.int16)
     r, g, b = s[:, 0], s[:, 1], s[:, 2]
-    amarillo = (r > 200) & (g > 185) & (b < 195) & (r - b > 45)
-    negro = s.max(1) < 45
-    blanco = s.min(1) > 210
+    mx, mn = s.max(1), s.min(1)
+    # amarillo pálido del fondo y amarillo fuerte de las letras «EL CHAPUCERO»
+    amarillo = ((r > 200) & (g > 185) & (b < 195) & (r - b > 45)) | ((r > 170) & (g > 150) & (r - b > 90))
+    negro = (mx < 80) & (mx - mn < 28)      # negro y gris oscuro (la franja de las letras)
+    blanco = mn > 200
     return float(amarillo.mean()), float((amarillo | negro | blanco).mean())
 
 
@@ -2298,7 +2300,7 @@ def detectar_transiciones(video, info, cfg):
     for k, chico in enumerate(_cuadros_chicos(video)):
         med = _medida_cortinilla(chico)
         if _es_cortinilla(med, cfg):
-            if ini is None or k - ult > max(1, int(0.07 * fps)):
+            if ini is None or k - ult > max(2, int(cfg.get("hueco_seg", 0.2) * fps)):
                 if ini is not None:
                     corridas.append((ini, ult, amar))
                 ini, amar = k, 0.0
@@ -2315,7 +2317,9 @@ def detectar_transiciones(video, info, cfg):
         if amar < cfg.get("min_amarillo", 0.08) or not (cfg.get("min_seg", 0.25) <= dur <= cfg.get("max_seg", 1.2)):
             continue
         inicio = max(0.0, a / fps - it["onset"])
-        out.append({"inicio": round(inicio, 4), "fin": round(min(info["duracion"], inicio + it["duracion"]), 4)})
+        # si la de Nacho dura más que la limpia, la limpia se estira para taparla completa
+        fin = max(inicio + it["duracion"], (b + 1) / fps)
+        out.append({"inicio": round(inicio, 4), "fin": round(min(info["duracion"], fin), 4)})
     log(f"{len(out)} transiciones de cambio de cámara (se tapan con la cortinilla limpia)")
     return out
 
@@ -2364,10 +2368,13 @@ class Cortinilla:
         cap.release()
         self._cache = (None, None)
 
-    def cuadro(self, dt):
-        """Cuadro a los dt segundos de empezada la cortinilla (o None si ya terminó)."""
+    def cuadro(self, dt, dur=None):
+        """Cuadro a los dt segundos de empezada la cortinilla (o None si ya terminó). Con 'dur' (lo que dura la
+        transición en el video de Nacho) se estira para ocuparla completa."""
         if not self.cuadros or dt < 0:
             return None
+        if dur and dur > self.it["duracion"]:
+            dt = dt * self.it["duracion"] / dur
         k = int(dt * self.it["fps"])
         if k >= len(self.cuadros):
             return None
@@ -3337,6 +3344,8 @@ def vista_previa_rapida(trabajo, plan=None):
     ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     cap = cv2.VideoCapture(plan["video"])
     lienzo = np.zeros((h, w, 3), np.uint8)
+    trans_cam = plan.get("transiciones_camara") or []
+    cort_cam = Cortinilla(pl.get("transicion_camara") or {}, w, h) if trans_cam else None
     idx, ci = 0, 0
     total = info.get("cuadros") or 1
     while True:
@@ -3361,6 +3370,12 @@ def vista_previa_rapida(trabajo, plan=None):
         y0 = int((h - sh) * 0.3)
         lienzo[:] = 0
         lienzo[y0:y0 + sh] = chico
+        for tr in trans_cam:   # cortinilla limpia sobre la transición de cambio de cámara
+            if tr["inicio"] <= t < tr["fin"] and cort_cam is not None:
+                c_ = cort_cam.cuadro(t - tr["inicio"], tr["fin"] - tr["inicio"])
+                if c_ is not None:
+                    lienzo[:] = c_
+                break
         try:
             ff.stdin.write(lienzo.tobytes())
         except (BrokenPipeError, OSError):
@@ -3972,7 +3987,7 @@ def cmd_render(args):
         if cort_cam is not None:
             for tr in trans_cam:
                 if tr["inicio"] <= t < tr["fin"]:
-                    c_ = cort_cam.cuadro(t - tr["inicio"])
+                    c_ = cort_cam.cuadro(t - tr["inicio"], tr["fin"] - tr["inicio"])
                     if c_ is not None:
                         lienzo[:] = c_
                     break

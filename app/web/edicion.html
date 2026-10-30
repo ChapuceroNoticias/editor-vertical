@@ -156,6 +156,14 @@
     <button class="btn" id="dif_quitar" title="Quita la franja difuminada que hay en este momento">Quitar el de aquí</button>
     <button class="btn" id="dif_buscar" title="Vuelve a buscar con el lector de texto los subtítulos del video que pone Nacho (los que pusiste a mano se conservan)">🔍 Buscar de nuevo</button>
   </div>
+  <div class="difbar" id="transbar" style="display:none">
+    <b>Transiciones de cambio de cámara:</b>
+    <span id="trans_info"></span>
+    <button class="btn" id="trans_aqui" title="Pone la cortinilla limpia empezando en este momento (si la plataforma no encontró la de Nacho)">＋ Transición aquí</button>
+    <button class="btn" id="trans_quitar" title="Quita la cortinilla que hay en este momento">Quitar la de aquí</button>
+    <button class="btn" id="trans_buscar" title="Vuelve a buscar en el video las transiciones de cambio de cámara de Nacho">🔍 Buscar de nuevo</button>
+    <button class="btn" id="trans_ir" title="Ir a la siguiente transición">Ir a la siguiente ▶</button>
+  </div>
 
   <div class="inspector">
     <!-- Pantalla -->
@@ -625,9 +633,28 @@ function componer(t, e, v) {
     pctx.restore();
     if (divi) dibujarAbajo(e, t, s);
   }
+  dibujarCortinilla(pctx, t, W, H);
   if (tituloImg && tituloImg.complete && tituloImg.naturalWidth && (E.estilo !== "motivacional" || t < E.armado.titulo_fin))
     pctx.drawImage(tituloImg, 0, 0, W, H);
 }
+// ---------- cortinilla limpia sobre las transiciones de cambio de cámara de Nacho (t = tiempo original) ----------
+let cortImg = null;
+function cargarCortinilla() {
+  const c = E && E.armado && E.armado.cortinilla;
+  if (c && (E.armado.transiciones || []).length && !cortImg) { cortImg = new Image(); cortImg.src = `/enc/cortinilla?t=${encodeURIComponent(T)}`; }
+}
+function dibujarCortinilla(cx, t, W, H) {
+  const c = E && E.armado && E.armado.cortinilla, tr = (E && E.armado && E.armado.transiciones || []).find(x => x[0] <= t && t < x[1]);
+  if (!c || !tr) return;
+  cargarCortinilla();
+  if (!cortImg || !cortImg.complete || !cortImg.naturalWidth) return;
+  let dt = t - tr[0];
+  const dur = tr[1] - tr[0];
+  if (dur > c.duracion) dt *= c.duracion / dur;   // la de Nacho dura más: la limpia se estira
+  const k = Math.min(c.n - 1, Math.max(0, Math.floor(dt * c.fps)));
+  cx.drawImage(cortImg, 0, k * c.h, c.w, c.h, 0, 0, W, H);
+}
+
 
 // ---------- dibujo del video original con el recuadro ----------
 function dibujarEscenario(t, e, v, vp, pe) {
@@ -1318,6 +1345,25 @@ async function buscarDifuminar() {
     vigilarBusquedaDif();
   } catch (err) { estado("No se pudo empezar la búsqueda: " + err.message, "err"); }
 }
+function pintarTransInfo() {
+  const bar = $("transbar"); if (!bar || !E || !E.armado) return;
+  bar.style.display = E.armado.cortinilla ? "" : "none";
+  const n = (E.armado.transiciones || []).length;
+  $("trans_info").textContent = n ? `${n} — se tapan con la cortinilla limpia (vista previa, Subtítulos y video final).`
+                                  : "ninguna detectada (si ves una, ponla con «＋ Transición aquí»).";
+}
+function iniciarTrans() {
+  const q = (accion, extra) => enviar("/edi/transiciones", { t: T, accion, ...extra }, "").then(() => pintarTransInfo());
+  $("trans_aqui").onclick = () => q("agregar", { t_orig: ahoraO() });
+  $("trans_quitar").onclick = () => q("quitar", { t_orig: ahoraO() });
+  $("trans_buscar").onclick = () => { estado("Buscando las transiciones en el video…", "pend"); q("buscar", {}); };
+  $("trans_ir").onclick = () => {
+    const t = ahoraO(), sig = (E.armado.transiciones || []).find(x => x[0] > t + 0.05) || (E.armado.transiciones || [])[0];
+    if (sig) { video.pause(); irO(sig[0] + 0.01); } else estado("No hay transiciones marcadas.", "err");
+  };
+  pintarTransInfo();
+}
+
 function pintarDifInfo() {
   const n = (E && E.difuminar || []).length, el = $("dif_info");
   if (!el) return;
@@ -1428,6 +1474,7 @@ async function recargar() {
   if (E.preparando) setTimeout(vigilarProxy, 5000);
   pintarBotonRender();
   pintarDifInfo();
+  pintarTransInfo();
   if (X.render && X.render.estado === "trabajando" && !renderActivo) { renderActivo = true; vigilarRender(); }
 }
 
@@ -1516,6 +1563,7 @@ async function iniciar() {
   ponerFuente();
   if (E.preparando) setTimeout(vigilarProxy, 5000);
   iniciarAudio();
+  iniciarTrans();
   video.addEventListener("loadedmetadata", medir);
   video.addEventListener("error", () => estado("El navegador no pudo abrir el video original.", "err"));
   new ResizeObserver(medir).observe($("escenario"));

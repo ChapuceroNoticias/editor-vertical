@@ -481,9 +481,28 @@ function componer() {
     actx.restore();
     if (divi) dibujarAbajo(e, t, s);
   }
+  dibujarCortinilla(actx, t, W, H);
   if (tituloImg && tituloImg.complete && tituloImg.naturalWidth && (E.estilo !== "motivacional" || t < E.armado.titulo_fin))
     actx.drawImage(tituloImg, 0, 0, W, H);
 }
+// ---------- cortinilla limpia sobre las transiciones de cambio de cámara de Nacho (t = tiempo original) ----------
+let cortImg = null;
+function cargarCortinilla() {
+  const c = E && E.armado && E.armado.cortinilla;
+  if (c && (E.armado.transiciones || []).length && !cortImg) { cortImg = new Image(); cortImg.src = `/enc/cortinilla?t=${encodeURIComponent(T)}`; }
+}
+function dibujarCortinilla(cx, t, W, H) {
+  const c = E && E.armado && E.armado.cortinilla, tr = (E && E.armado && E.armado.transiciones || []).find(x => x[0] <= t && t < x[1]);
+  if (!c || !tr) return;
+  cargarCortinilla();
+  if (!cortImg || !cortImg.complete || !cortImg.naturalWidth) return;
+  let dt = t - tr[0];
+  const dur = tr[1] - tr[0];
+  if (dur > c.duracion) dt *= c.duracion / dur;   // la de Nacho dura más: la limpia se estira
+  const k = Math.min(c.n - 1, Math.max(0, Math.floor(dt * c.fps)));
+  cx.drawImage(cortImg, 0, k * c.h, c.w, c.h, 0, 0, W, H);
+}
+
 function saltarPausas() {
   if (fuenteProxy || video.paused || video.seeking) return;
   const t = video.currentTime, c = E.cortes.find(c => c.inicio <= t && t < c.fin - 0.02);
