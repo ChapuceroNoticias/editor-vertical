@@ -73,6 +73,16 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
   - **Línea de tiempo:** regla con minutos y segundos (con zoom llega a décimas), el cursor rojo con el tiempo por
     el que va, una línea guía con el tiempo bajo el ratón y **doble clic** para llevar el cursor a ese punto
     (igual que en Video largo). **Ctrl + rueda** acerca o aleja.
+  - **Mover pedazos del video (línea «Pantalla»):** **Shift + arrastrar** sobre la línea Pantalla selecciona un
+    pedazo del video (amarillo). Luego: **✂ Cortar** (Ctrl+X: lo quita y lo guarda), **⧉ Copiar** (Ctrl+C), **📋 Pegar
+    en el cursor** (Ctrl+V: lo que sigue se recorre), **Duplicar** (Ctrl+D: lo repite justo después), **Quitar** (Supr:
+    como «Quitar tramo», se puede restaurar) o **arrástralo** a otro lugar para moverlo (se pega a pausas y cortes; con
+    Alt libre). El audio, los subtítulos, la pantalla, las imágenes y los encuadres de ese pedazo se van con él. El
+    video se vuelve a armar desde el original (no pierde calidad) en la carpeta del trabajo; **Deshacer** lo regresa.
+    Con un **tipo de pantalla** copiado de un bloque (Ctrl+C sobre un bloque de Pantalla) y un pedazo seleccionado,
+    **Ctrl+V** pone esa pantalla en ese pedazo.
+  - **Barra deslizable** debajo de la línea de tiempo: cuando la acercas (Ctrl + rueda) arrástrala para moverte por
+    el video; la rueda sola sobre la línea también avanza o regresa.
   - **«9:16» (Pantalla en este momento):** además de Pantalla completa, Dividida y Solo Nacho, en Clips Chapuceros y
     Clips Fuera hay **9:16**: todo el cuadro vertical sale de **cualquier parte del video completo** (no solo de la
     pantalla de Nacho), como si fuera un video de pantalla. Empieza centrado en Nacho; con el recuadro azul

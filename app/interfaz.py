@@ -33,6 +33,7 @@ BASE = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE))
 import editor as ed  # noqa: E402
 import aprendizaje  # noqa: E402
+import montaje  # noqa: E402
 
 # compatibilidad Gradio 5 y 6
 _TEMA_EN_BLOCKS = "theme" in inspect.signature(gr.Blocks.__init__).parameters
@@ -138,6 +139,8 @@ def _foto(trabajo, carpeta):
         shutil.copy2(sub, h / f"{marca}_subtitulos.json")
     else:
         (h / f"{marca}_subtitulos.json").write_text("null", encoding="utf-8")
+    if (t / "transcripcion.json").exists():   # el montaje (mover segmentos del video) también la cambia
+        shutil.copy2(t / "transcripcion.json", h / f"{marca}_transcripcion.json")
 
 
 def _restaurar(trabajo, carpeta):
@@ -158,6 +161,10 @@ def _restaurar(trabajo, carpeta):
         else:
             shutil.copy2(sub, destino)
         sub.unlink()
+    tr = h / f"{marca}_transcripcion.json"
+    if tr.exists():
+        shutil.copy2(tr, Path(trabajo) / "transcripcion.json")
+        tr.unlink()
     ultimo.unlink()
     return True
 
@@ -795,7 +802,8 @@ def datos_encuadre(t):
                              "armado": datos_armado(plan, pl)}
     base = _CACHE_ENC[clave]
     return {"soportado": True, "estilo": estilo, **base,
-            "video": {"ancho": info["ancho"], "alto": info["alto"], "duracion": info["duracion"], "fps": info["fps"]},
+            "video": {"ancho": info["ancho"], "alto": info["alto"], "duracion": info["duracion"], "fps": info["fps"],
+                      "archivo": Path(plan["video"]).name},
             "ajustes": plan.get("encuadre_manual") or [],
             "ajustes_pantalla": plan.get("encuadre_pantalla") or [],
             # franjas desenfocadas sobre los subtítulos que ya trae el video de Nacho (tiempo y px del original)
@@ -1215,6 +1223,8 @@ def datos_edicion(t):
             "titulo_fin": plan.get("titulo_fin") if estilo_de(plan) == "motivacional" and plan.get("titulo") else None,
             "pausas": pausas,
             "audio": datos_audio(plan),
+            "portapapeles": montaje.portapapeles(t),
+            "montaje": len(plan.get("montaje") or []) > 1 or bool(plan.get("montaje_n")),
             "estilo": estilo_de(plan), "historial": len(list((Path(t) / ".historial").glob("*_plan.json")))
             if (Path(t) / ".historial").exists() else 0}
 
@@ -2025,6 +2035,36 @@ def crear_app():
     @app.get("/edi/datos")
     def edi_datos(t: str):
         return JSONResponse(datos_edicion(validar(t)))
+
+    @app.post("/edi/montaje")
+    def edi_montaje(d: dict = Body(...)):
+        """Cortar / copiar / pegar / mover / duplicar segmentos del video (tiempos del video actual, sin quitar
+        pausas)."""
+        t = validar(d.get("t"))
+        acc = d.get("accion")
+        _I = sys.modules[__name__]   # este mismo módulo (cargar, respaldar, lanzar...)
+
+        def hacer():
+            if acc == "copiar":
+                dur = montaje.copiar(t, float(d["a"]), float(d["b"]), _I)
+                return f"Segmento copiado ({dur:.1f} s). Pégalo con Ctrl+V donde esté el cursor."
+            if acc == "cortar":
+                return montaje.cortar(t, float(d["a"]), float(d["b"]), _I, ed)
+            if acc == "pegar":
+                return montaje.pegar(t, float(d["p"]), _I, ed)
+            if acc == "mover":
+                return montaje.mover(t, float(d["a"]), float(d["b"]), float(d["p"]), _I, ed)
+            if acc == "duplicar":
+                return montaje.duplicar(t, float(d["a"]), float(d["b"]), _I, ed)
+            raise ValueError("Acción desconocida")
+        def seguro():
+            try:
+                return hacer()
+            except RuntimeError as e:
+                raise ValueError(str(e))
+        msg = _ok(seguro)
+        registrar(f"✂ Montaje ({acc}): {msg}")
+        return {"ok": True, "mensaje": msg}
 
     @app.post("/app/cerrar")
     def app_cerrar():

@@ -43,6 +43,13 @@
   .tiempo { font-variant-numeric: tabular-nums; font-weight: 700; }
   .tiempo small { color: var(--suave); font-weight: 500; }
   .linea { padding: 8px 12px 0; }
+  .segbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 12px 0; font-size: 12.5px; }
+  .segbar .sub { color: var(--suave); }
+  .segbar .btn:disabled { opacity: .35; }
+  .desliza { position: relative; height: 14px; margin-top: 4px; background: #101015; border: 1px solid var(--borde); border-radius: 7px; cursor: pointer; }
+  .desliza.oculta { visibility: hidden; }
+  #desliza_p { position: absolute; top: 1px; bottom: 1px; min-width: 24px; background: #4b4b57; border-radius: 6px; cursor: grab; }
+  #desliza_p:hover, #desliza_p.arrastrando { background: #6b6b78; }
   #linea { width: 100%; height: 150px; display: block; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde);
     cursor: pointer; }
   .leyenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--suave); padding: 6px 12px 0; }
@@ -135,7 +142,18 @@
         <input type="range" id="vol_voz" min="0" max="200" step="5" value="100"> <b id="vol_voz_txt">100%</b></label>
     </span>
   </div>
-  <div class="linea"><canvas id="linea"></canvas></div>
+  <div class="linea"><canvas id="linea"></canvas>
+    <div class="desliza" id="desliza" title="Arrastra para moverte por el video cuando la línea de tiempo está acercada (Ctrl + rueda)"><div id="desliza_p"></div></div></div>
+  <div class="segbar" id="segbar">
+    <b>Segmento del video:</b>
+    <span id="seg_info" class="sub">Shift + arrastrar sobre la línea «Pantalla» para seleccionar un pedazo del video.</span>
+    <button class="btn" id="seg_cortar" title="Quita ese pedazo del video y lo guarda para pegarlo en otro lugar (Ctrl+X)">✂ Cortar</button>
+    <button class="btn" id="seg_copiar" title="Lo guarda para pegarlo en otro lugar sin quitarlo (Ctrl+C)">⧉ Copiar</button>
+    <button class="btn" id="seg_pegar" title="Pega el pedazo copiado donde está el cursor; lo que sigue se recorre (Ctrl+V)">📋 Pegar en el cursor</button>
+    <button class="btn" id="seg_duplicar" title="Lo repite justo después (Ctrl+D)">⧉⧉ Duplicar</button>
+    <button class="btn" id="seg_quitar" title="Quita ese pedazo del video sin guardarlo (como «Quitar tramo»; se puede restaurar) (Supr)">🗑 Quitar</button>
+    <span class="sub">· Para moverlo, arrástralo con el ratón a donde lo quieras · Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+D / Supr</span>
+  </div>
   <div class="leyenda">
     <span><i style="background:var(--c-completa)"></i>Pantalla completa</span>
     <span><i style="background:var(--c-dividida)"></i>Dividida</span>
@@ -369,12 +387,14 @@ function irE(te) {
   video.currentTime = fuenteProxy ? te : Math.min(E.video.duracion, aOriginal(te) + 0.001);
 }
 const irO = (t) => irE(aEditado(t));
+let archivoFuente = null;
 function ponerFuente() {   // usa la copia ligera en cuanto está lista; mientras, el original
   const px = E.proxy ? E.proxy.firma : null;
-  if (video.src && px === (fuenteProxy && fuenteProxy.firma)) return;
+  if (video.src && px === (fuenteProxy && fuenteProxy.firma) && archivoFuente === E.video.archivo) return;
+  archivoFuente = E.video.archivo;
   const te = video.src ? ahoraE() : 0, seguia = video.src && !video.paused;
   fuenteProxy = E.proxy || null;
-  video.src = fuenteProxy ? `/enc/proxy?t=${encodeURIComponent(T)}&f=${fuenteProxy.firma}` : `/enc/video?t=${encodeURIComponent(T)}`;
+  video.src = fuenteProxy ? `/enc/proxy?t=${encodeURIComponent(T)}&f=${fuenteProxy.firma}` : `/enc/video?t=${encodeURIComponent(T)}&a=${encodeURIComponent(E.video.archivo || "")}`;
   video.addEventListener("loadedmetadata", () => { irE(te); if (seguia) video.play(); }, { once: true });
   $("fluida").textContent = fuenteProxy ? "✓ vista fluida" : (E.preparando ? "preparando vista fluida…" : "");
 }
@@ -742,7 +762,102 @@ function itemsLinea() {
   return it;
 }
 const xDe = (s) => (s - vista[0]) / (vista[1] - vista[0]) * linea.width;
+// ---------- segmentos del video (montaje): seleccionar con Shift + arrastrar en la línea Pantalla ----------
+let segSel = null;      // [a, b] en tiempo del video editado
+let creaSeg = null, mueveSeg = null;
+let ultimoPorta = null;  // «video» o «bloque»: qué pega Ctrl+V
+const enCarrilP = (ev) => { const r = linea.getBoundingClientRect(), y = ev.clientY - r.top; const [cy, ch] = CARRILES.p; return y >= cy - 4 && y <= cy + ch + 4; };
+function pintarSegbar() {
+  const hay = !!segSel, pp = X && X.portapapeles;
+  for (const id of ["seg_cortar", "seg_copiar", "seg_duplicar", "seg_quitar"]) $(id).disabled = !hay;
+  $("seg_pegar").disabled = !pp;
+  $("seg_info").textContent = hay ? `${mmss(segSel[0])} – ${mmss(segSel[1])} (${(segSel[1] - segSel[0]).toFixed(1)} s)`
+    : (pp ? `Hay un pedazo copiado (${pp.duracion.toFixed(1)} s). Shift + arrastrar en «Pantalla» selecciona otro.`
+          : "Shift + arrastrar sobre la línea «Pantalla» para seleccionar un pedazo del video.");
+  $("segbar").style.display = X && X.estilo === "solo_subtitulos" ? "none" : "";
+}
+let montajeOcupado = false;
+async function opMontaje(accion, extra, pendienteTxt) {
+  if (montajeOcupado) return estado("Espera: todavía se está armando el cambio anterior.", "pend");
+  montajeOcupado = true;
+  estado(pendienteTxt || "Armando el video con el cambio… (puede tardar un poco)", "pend");
+  try {
+    const r = await fetch("/edi/montaje", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ t: T, accion, ...extra }) });
+    if (!r.ok) throw new Error((await r.text()).replace(/^\{"detail":"|"\}$/g, ""));
+    const d = await r.json();
+    if (accion === "copiar" || accion === "cortar") ultimoPorta = "video";
+    if (accion !== "copiar") segSel = null;
+    const todo = vista[0] <= 0.01 && vista[1] >= durE() - 0.05;   // se veía todo el video: se sigue viendo todo
+    await recargar();
+    if (todo) vista = [0, durE()];
+    acotarVista(); pintarSegbar();
+    estado(d.mensaje, "ok");
+  } catch (err) { estado("No se pudo: " + err.message, "err"); }
+  finally { montajeOcupado = false; }
+}
+const segO = () => [aOriginal(segSel[0]), aOriginal(segSel[1])];
+function segCortar() { if (segSel) { const [a, b] = segO(); opMontaje("cortar", { a, b }); } }
+function segCopiar() { if (segSel) { const [a, b] = segO(); opMontaje("copiar", { a, b }, "Copiando…"); } }
+function segDuplicar() { if (segSel) { const [a, b] = segO(); opMontaje("duplicar", { a, b }); } }
+function segPegar() { opMontaje("pegar", { p: aOriginal(ahoraE()) }); }
+function segQuitar() {
+  if (!segSel) return;
+  const [a, b] = segO(); segSel = null; pintarSegbar();
+  enviar("/edi/cortar", { t: T, inicio: a, fin: b }, "Pedazo quitado del video (se puede restaurar en «Quitar tramos»).");
+}
+function dibujarSeg() {   // selección y, si se arrastra, dónde quedaría
+  if (!segSel) return;
+  const d = devicePixelRatio, H = linea.height;
+  const x0 = xDe(segSel[0]), x1 = xDe(segSel[1]);
+  lctx.fillStyle = "rgba(250,204,21,.16)"; lctx.fillRect(x0, REGLA * d, x1 - x0, H - REGLA * d);
+  lctx.strokeStyle = "#facc15"; lctx.lineWidth = 2 * d; lctx.strokeRect(x0, (REGLA + 1) * d, x1 - x0, H - (REGLA + 2) * d);
+  if (mueveSeg && mueveSeg.movido) {
+    const g0 = xDe(mueveSeg.nuevo), g1 = xDe(mueveSeg.nuevo + segSel[1] - segSel[0]);
+    lctx.setLineDash([6 * d, 4 * d]); lctx.strokeStyle = "#fff"; lctx.strokeRect(g0, (REGLA + 3) * d, g1 - g0, H - (REGLA + 6) * d);
+    lctx.setLineDash([]); lctx.fillStyle = "rgba(255,255,255,.12)"; lctx.fillRect(g0, (REGLA + 3) * d, g1 - g0, H - (REGLA + 6) * d);
+    const ins = xDe(mueveSeg.p); lctx.fillStyle = "#facc15"; lctx.fillRect(ins - d, REGLA * d, 3 * d, H - REGLA * d);
+  }
+}
+function pintarDeslizador() {   // barra para moverse por el video cuando la línea está acercada
+  const bar = $("desliza"), dur = durE();
+  if (!bar || !dur) return;
+  const ancho = (vista[1] - vista[0]) / dur;
+  bar.classList.toggle("oculta", ancho >= 0.999);
+  const p = $("desliza_p");
+  p.style.left = (vista[0] / dur * 100) + "%"; p.style.width = (ancho * 100) + "%";
+}
+function iniciarDeslizador() {
+  const bar = $("desliza"), p = $("desliza_p");
+  let arr = null;
+  p.addEventListener("pointerdown", (ev) => {
+    ev.stopPropagation(); p.setPointerCapture(ev.pointerId); p.classList.add("arrastrando");
+    arr = { x0: ev.clientX, v0: vista[0] };
+  });
+  p.addEventListener("pointermove", (ev) => {
+    if (!arr) return;
+    const w = vista[1] - vista[0], dt = (ev.clientX - arr.x0) / bar.clientWidth * durE();
+    vista = [arr.v0 + dt, arr.v0 + dt + w]; acotarVista();
+  });
+  p.addEventListener("pointerup", () => { arr = null; p.classList.remove("arrastrando"); });
+  bar.addEventListener("pointerdown", (ev) => {   // clic en la barra: la vista se centra ahí
+    if (ev.target === p) return;
+    const r = bar.getBoundingClientRect(), t = (ev.clientX - r.left) / r.width * durE(), w = vista[1] - vista[0];
+    vista = [t - w / 2, t + w / 2]; acotarVista();
+  });
+  // rueda sola (o Shift + rueda) sobre la línea acercada: avanza o regresa la vista
+  linea.addEventListener("wheel", (ev) => {
+    if (ev.ctrlKey || ev.metaKey) return;
+    const w = vista[1] - vista[0];
+    if (w >= durE() - 0.01) return;
+    const delta = Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : ev.deltaY;
+    ev.preventDefault();
+    const dt = delta / linea.clientWidth * w;
+    vista = [vista[0] + dt, vista[1] + dt]; acotarVista();
+  }, { passive: false });
+}
 function dibujarLinea(te) {
+  pintarDeslizador();
   const W = linea.width, H = linea.height, d = devicePixelRatio;
   lctx.clearRect(0, 0, W, H);
   const nombres = { p: "Pantalla", m: "Imágenes", en: "Encuadre Nacho", ep: "Encuadre pantalla", df: "Difuminar subtítulos" };
@@ -811,6 +926,7 @@ function dibujarLinea(te) {
     lctx.font = `600 ${10 * d}px system-ui`; lctx.textAlign = gx > W - 140 * d ? "right" : "left";
     lctx.fillText("🧲 " + arrLinea.guia.q, gx + (gx > W - 140 * d ? -4 : 4) * d, H - 16 * d);
   }
+  dibujarSeg();
   // línea guía con el tiempo bajo el ratón
   if (ratonX !== null && !arrLinea && ratonX >= vista[0] && ratonX <= vista[1]) {
     const gx = xDe(ratonX);
@@ -985,9 +1101,27 @@ function atajos(ev) {
   const hecho = () => { ev.preventDefault(); ev.stopPropagation(); };
   if (ctrl && k === "z" && !ev.shiftKey) { hecho(); return deshacerAccion(); }
   if (ctrl && (k === "y" || (k === "z" && ev.shiftKey))) { hecho(); return rehacerAccion(); }
-  if (ctrl && k === "c") { hecho(); return copiar(it); }
-  if (ctrl && k === "x") { hecho(); copiar(it); return borrar(it); }
-  if (ctrl && k === "v") { hecho(); return pegar(te); }
+  if (segSel) {   // hay un pedazo del video seleccionado (Shift + arrastrar en «Pantalla»)
+    if (ctrl && k === "c") { hecho(); return segCopiar(); }
+    if (ctrl && k === "x") { hecho(); return segCortar(); }
+    if (ctrl && k === "d") { hecho(); return segDuplicar(); }
+    if (k === "delete" || k === "backspace") { hecho(); return segQuitar(); }
+    if (ctrl && k === "v" && porta && (porta.tipo === "p" || porta.tipo === "e")) {   // pantalla copiada -> a ese pedazo
+      hecho();
+      const tr = tramoPantallaEn(segSel[0] + 0.01);
+      if (!tr || !tr.opciones.includes(porta.datos.pantalla)) return avisar("Aquí no se puede poner esa pantalla.");
+      const [a, b] = segSel; segSel = null; pintarSegbar();
+      return enviar("/pant/guardar", { t: T, cambios: [{ k: tr.k, pantalla: porta.datos.pantalla, inicio: mmss(a), fin: mmss(b) }] },
+        `Pantalla «${OPS[porta.datos.pantalla]}» aplicada a ese pedazo.`);
+    }
+  }
+  if (ctrl && k === "c") { hecho(); ultimoPorta = "bloque"; return copiar(it); }
+  if (ctrl && k === "x") { hecho(); ultimoPorta = "bloque"; copiar(it); return borrar(it); }
+  if (ctrl && k === "v") {
+    hecho();
+    if (ultimoPorta === "video" || (!porta && X.portapapeles)) return segPegar();
+    return pegar(te);
+  }
   if (ctrl && k === "d") { hecho(); if (!it) return avisar("Primero haz clic en un bloque."); copiar(it); return pegar(it.b); }
   if (ctrl && k === "s") { hecho(); return guardarTodo(); }
   if ((ctrl && k === "b") || (!ctrl && !ev.altKey && k === "s")) { hecho(); video.pause(); return partir(it, te); }
@@ -1000,7 +1134,7 @@ function atajos(ev) {
     const d = (ev.code === "ArrowLeft" ? -1 : 1) * (ev.shiftKey ? 1 : 1 / fps);
     return ajustarSel(it, it.a + d, it.b + d);
   }
-  if (k === "escape") { hecho(); seleccionar(null, false); edit = null; tramoE = null; editP = null; tramoPE = null; return estado(""); }
+  if (k === "escape") { hecho(); segSel = null; pintarSegbar(); seleccionar(null, false); edit = null; tramoE = null; editP = null; tramoPE = null; return estado(""); }
   if (k === "tab") { hecho(); return siguienteBloque(ev.shiftKey); }
   const mover = (d) => { video.pause(); irE(Math.min(durE(), Math.max(0, te + d))); };
   if (ev.code === "Space") { hecho(); return video.paused ? video.play() : video.pause(); }
@@ -1528,6 +1662,7 @@ async function recargar() {
   pintarBotonRender();
   pintarDifInfo();
   pintarTransInfo();
+  if ($("segbar")) pintarSegbar();
   if (X.render && X.render.estado === "trabajando" && !renderActivo) { renderActivo = true; vigilarRender(); }
 }
 
@@ -1617,6 +1752,10 @@ async function iniciar() {
   if (E.preparando) setTimeout(vigilarProxy, 5000);
   iniciarAudio();
   iniciarTrans();
+  iniciarDeslizador();
+  $("seg_cortar").onclick = segCortar; $("seg_copiar").onclick = segCopiar; $("seg_pegar").onclick = segPegar;
+  $("seg_duplicar").onclick = segDuplicar; $("seg_quitar").onclick = segQuitar;
+  pintarSegbar();
   video.addEventListener("loadedmetadata", medir);
   video.addEventListener("error", () => estado("El navegador no pudo abrir el video original.", "err"));
   new ResizeObserver(medir).observe($("escenario"));
@@ -1636,6 +1775,16 @@ async function iniciar() {
   const tLinea = (ev) => { const r = linea.getBoundingClientRect(); return vista[0] + (ev.clientX - r.left) / r.width * (vista[1] - vista[0]); };
   linea.addEventListener("pointerdown", (ev) => {
     linea.setPointerCapture(ev.pointerId); video.pause();
+    if (X.estilo !== "solo_subtitulos" && enCarrilP(ev)) {
+      const t = tLinea(ev);
+      if (ev.shiftKey) {   // Shift + arrastrar: seleccionar un pedazo del video
+        creaSeg = { t0: aCuadro(t) }; segSel = [creaSeg.t0, creaSeg.t0]; seleccionar(null, false); pintarSegbar(); return;
+      }
+      if (segSel && t >= segSel[0] && t <= segSel[1]) {   // arrastrar la selección: moverla
+        mueveSeg = { t0: t, x0: ev.clientX, movido: false, nuevo: segSel[0], p: null }; return;
+      }
+    }
+    if (segSel && !ev.shiftKey) { segSel = null; pintarSegbar(); }
     const h = tocarLinea(ev);
     if (h) { arrLinea = { ...h, t0: tLinea(ev), a0: h.it.a, b0: h.it.b, a: h.it.a, b: h.it.b, x0: ev.clientX, movido: false,
                           cursor: ahoraE() }; return; }
@@ -1643,6 +1792,21 @@ async function iniciar() {
     presionado = { x0: ev.clientX, movido: false };   // el tiempo solo se mueve si arrastras (clic sostenido)
   });
   linea.addEventListener("pointermove", (ev) => {
+    if (creaSeg) {
+      const t = aCuadro(Math.min(durE(), Math.max(0, tLinea(ev))));
+      segSel = [Math.min(creaSeg.t0, t), Math.max(creaSeg.t0, t)]; pintarSegbar(); return;
+    }
+    if (mueveSeg) {
+      if (Math.abs(ev.clientX - mueveSeg.x0) > 3) mueveSeg.movido = true;
+      if (!mueveSeg.movido) return;
+      const largo = segSel[1] - segSel[0];
+      let nuevo = Math.min(Math.max(0, segSel[0] + tLinea(ev) - mueveSeg.t0), durE() - largo);
+      // punto donde se inserta (en el video de antes): antes del pedazo = su nuevo inicio; después = su nuevo final
+      let p = nuevo < segSel[0] ? nuevo : nuevo + largo;
+      const im = !ev.altKey ? iman(p) : null;
+      if (im) { p = im.t; nuevo = p < segSel[0] ? p : p - largo; }
+      mueveSeg.nuevo = nuevo; mueveSeg.p = p; return;
+    }
     if (arrLinea) {
       const dt = tLinea(ev) - arrLinea.t0, D = durE(), MIN = 0.3;
       if (Math.abs(ev.clientX - arrLinea.x0) > 3) arrLinea.movido = true;
@@ -1688,6 +1852,20 @@ async function iniciar() {
     irE(Math.min(durE(), Math.max(0, tLinea(ev))));
   });
   linea.addEventListener("pointerup", async (ev) => {
+    if (creaSeg) {
+      creaSeg = null;
+      if (segSel[1] - segSel[0] < 0.2) segSel = null;
+      pintarSegbar();
+      if (segSel) estado("Pedazo seleccionado ✓", "ok");
+      return;
+    }
+    if (mueveSeg) {
+      const m = mueveSeg; mueveSeg = null;
+      if (!m.movido) { irE((segSel[0] + segSel[1]) / 2); return; }
+      if (m.p === null || (m.p >= segSel[0] - 0.02 && m.p <= segSel[1] + 0.02)) { estado("Suéltalo fuera del mismo pedazo.", "err"); return; }
+      const [a, b] = segO();
+      return opMontaje("mover", { a, b, p: aOriginal(m.p) });
+    }
     presionado = false;
     if (!arrLinea) return;
     const d = arrLinea;
