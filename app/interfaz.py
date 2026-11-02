@@ -1363,6 +1363,21 @@ def dividir_pantalla(t, i, tc):
     guardar_plan(t, plan)
 
 
+def partir_toma(t, tc):
+    """Parte en dos el bloque gris (la toma) en el tiempo tc (original), para mover o cambiar cada parte por separado."""
+    plan, _ = cargar(t)
+    tomas = plan.get("tomas", [])
+    for k, sg in enumerate(tomas):
+        if sg["inicio"] + 0.3 <= tc <= sg["fin"] - 0.3:
+            respaldar(t)
+            s2 = json.loads(json.dumps(sg))
+            sg["fin"], s2["inicio"] = round(tc, 3), round(tc, 3)
+            tomas.insert(k + 1, s2)
+            guardar_plan(t, plan)
+            return
+    raise ValueError("Pon el cursor dentro del bloque (no tan cerca de sus orillas) para partirlo")
+
+
 def guardar_subidas(t, i, archivos, reemplazar):
     plan, _ = cargar(t)
     moms = plan.get("momentos", [])
@@ -2035,6 +2050,12 @@ def crear_app():
     @app.get("/edi/datos")
     def edi_datos(t: str):
         return JSONResponse(datos_edicion(validar(t)))
+
+    @app.post("/edi/partir_toma")
+    def edi_partir_toma(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        _ok(lambda: partir_toma(t, float(d["t_corte"])))
+        return {"ok": True, "mensaje": "Bloque partido en dos."}
 
     @app.post("/edi/montaje")
     def edi_montaje(d: dict = Body(...)):

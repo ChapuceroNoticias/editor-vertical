@@ -146,7 +146,7 @@
     <div class="desliza" id="desliza" title="Arrastra para moverte por el video cuando la línea de tiempo está acercada (Ctrl + rueda)"><div id="desliza_p"></div></div></div>
   <div class="segbar" id="segbar">
     <b>Segmento del video:</b>
-    <span id="seg_info" class="sub">Shift + arrastrar sobre la línea «Pantalla» para seleccionar un pedazo del video.</span>
+    <span id="seg_info" class="sub">Clic en un bloque gris (o Shift + arrastrar en «Pantalla») para seleccionar un pedazo del video.</span>
     <button class="btn" id="seg_cortar" title="Quita ese pedazo del video y lo guarda para pegarlo en otro lugar (Ctrl+X)">✂ Cortar</button>
     <button class="btn" id="seg_copiar" title="Lo guarda para pegarlo en otro lugar sin quitarlo (Ctrl+C)">⧉ Copiar</button>
     <button class="btn" id="seg_pegar" title="Pega el pedazo copiado donde está el cursor; lo que sigue se recorre (Ctrl+V)">📋 Pegar en el cursor</button>
@@ -773,7 +773,7 @@ function pintarSegbar() {
   $("seg_pegar").disabled = !pp;
   $("seg_info").textContent = hay ? `${mmss(segSel[0])} – ${mmss(segSel[1])} (${(segSel[1] - segSel[0]).toFixed(1)} s)`
     : (pp ? `Hay un pedazo copiado (${pp.duracion.toFixed(1)} s). Shift + arrastrar en «Pantalla» selecciona otro.`
-          : "Shift + arrastrar sobre la línea «Pantalla» para seleccionar un pedazo del video.");
+          : "Clic en un bloque gris (o Shift + arrastrar en «Pantalla») para seleccionar un pedazo del video.");
   $("segbar").style.display = X && X.estilo === "solo_subtitulos" ? "none" : "";
 }
 let montajeOcupado = false;
@@ -1051,11 +1051,12 @@ async function borrar(it) {
 }
 async function partir(it, te) {
   if (it && !(it.a < te && te < it.b)) it = null;   // si el seleccionado no está bajo el cursor, se parte el que sí
-  if (!it) it = itemsLinea().find(x => x.tipo === "m" && x.a < te && te < x.b) || itemsLinea().find(x => x.tipo === "p" && x.a < te && te < x.b);
+  if (!it) it = itemsLinea().find(x => x.tipo === "m" && x.a < te && te < x.b) || itemsLinea().find(x => x.carril === "p" && x.a < te && te < x.b);
   if (!it) return avisar("Pon el cursor sobre un bloque (o selecciónalo) para partirlo.");
   if (!(it.a + 0.3 <= te && te <= it.b - 0.3)) return avisar("Pon el cursor dentro del bloque (no tan cerca de sus orillas).");
   if (it.tipo === "m") return enviar("/edi/momento", { t: T, accion: "dividir", i: parseInt(it.ref.k.slice(1)), t_corte: aOriginal(te) }, "Imagen partida en dos.");
   if (it.tipo === "p") return enviar("/edi/dividir_pantalla", { t: T, i: parseInt(it.ref.k.slice(1)), t_corte: aOriginal(te) }, "Tramo partido en dos.");
+  if (it.tipo === "n" || it.tipo === "g") { segSel = null; return enviar("/edi/partir_toma", { t: T, t_corte: aOriginal(te) }, "Bloque partido en dos."); }
   if (it.tipo === "df") {
     const tc = aOriginal(te), lista = E.difuminar.filter(x => x !== it.ref);
     lista.push({ ...it.ref, fin: tc, auto: false }, { ...it.ref, inicio: tc, auto: false });
@@ -1783,6 +1784,12 @@ async function iniciar() {
       if (segSel && t >= segSel[0] && t <= segSel[1]) {   // arrastrar la selección: moverla
         mueveSeg = { t0: t, x0: ev.clientX, movido: false, nuevo: segSel[0], p: null }; return;
       }
+      // bloque gris (Nacho / lo que no se está usando): es un pedazo del video; clic = seleccionarlo, arrastrar = moverlo
+      const gris = itemsLinea().find(x => x.carril === "p" && (x.op === "nacho" || !x.mov) && x.a <= t && t < x.b);
+      if (gris) {
+        segSel = [gris.a, gris.b]; seleccionar(null, false); pintarSegbar();
+        mueveSeg = { t0: t, x0: ev.clientX, movido: false, nuevo: segSel[0], p: null, gris: true }; return;
+      }
     }
     if (segSel && !ev.shiftKey) { segSel = null; pintarSegbar(); }
     const h = tocarLinea(ev);
@@ -1861,7 +1868,10 @@ async function iniciar() {
     }
     if (mueveSeg) {
       const m = mueveSeg; mueveSeg = null;
-      if (!m.movido) { irE((segSel[0] + segSel[1]) / 2); return; }
+      if (!m.movido) {
+        if (m.gris) estado("Pedazo de video seleccionado: arrástralo para moverlo · Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+D / Supr · S parte el bloque en el cursor.", "ok");
+        return;
+      }
       if (m.p === null || (m.p >= segSel[0] - 0.02 && m.p <= segSel[1] + 0.02)) { estado("Suéltalo fuera del mismo pedazo.", "err"); return; }
       const [a, b] = segO();
       return opMontaje("mover", { a, b, p: aOriginal(m.p) });
