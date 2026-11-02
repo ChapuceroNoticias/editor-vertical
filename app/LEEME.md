@@ -21,10 +21,10 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
   Usa OCR local (RapidOCR); la primera vez descarga sus modelos (~15 MB). Ajustes en la plantilla, sección `lectura`.
 - **Imágenes:** al analizar ya **no se buscan imágenes solas**: el video se arma igual (encuadres, pantalla dividida,
   lectura, cortes, subtítulos) pero sin fotos. Si hace falta una, se agrega a mano en la pestaña Edición
-  («Agregar imagen aquí», buscar en internet o subir tus fotos), o desde OpenCut. Para volver a la búsqueda
+  («Agregar imagen aquí», buscar en internet o subir tus fotos). Para volver a la búsqueda
   automática: `set IMAGENES_AUTOMATICAS=1` antes de `python interfaz.py`.
 - **⛔ Cancelar todo** (junto a la barra de progreso): detiene al instante lo que esté trabajando —análisis,
-  exportación, conversión, vista fluida, búsqueda de clips del video largo, video para OpenCut— y saca de la cola
+  exportación, conversión, vista fluida, búsqueda de clips del video largo— y saca de la cola
   los fragmentos que esperaban. Si se cancela una exportación, el video a medias se borra.
 - **Salida:** MP4 H.264 1080x1920, audio AAC a un máximo de 125 kbps (se cambia en la plantilla: `salida.audio_kbps`).
 
@@ -103,7 +103,7 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
     estíralo libre; se guarda al soltar) y como bloque morado en el carril «Difuminar subtítulos» (moverlo, estirarlo,
     Supr, Ctrl+C/V, Ctrl+B). Barra «Subtítulos que trae el video de Nacho»: **＋ Difuminar aquí**, **Quitar el de
     aquí** y **🔍 Buscar de nuevo** (para trabajos analizados antes de este cambio; conserva lo que pusiste a mano).
-    Se ve en las vistas previas, en el video final y en OpenCut.
+    Se ve en las vistas previas y en el video final.
   - Un clic sobre un recuadro (sin arrastrarlo) no crea ningún encuadre; solo reproduce o pausa.
   - **Teclado** (clic en un bloque de la línea de tiempo para seleccionarlo): Ctrl+C copiar · Ctrl+X cortar ·
     Ctrl+V pegar en el cursor · Ctrl+D duplicar · Supr borrar · Ctrl+B o S partir en el cursor · [ y ] mover el
@@ -117,7 +117,7 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
   (10 px; con Shift, 50 px), o escribe los píxeles (negativo = más arriba, 0 = donde lo pone la plataforma). También
   se puede **arrastrar el subtítulo arriba o abajo directamente sobre el video**, y Alt+↑/↓ mueve el que se ve en ese
   momento. Solo se mueve ese subtítulo; los demás se quedan donde los pone la plataforma (en la franja azul
-  incluida). Se guarda con **Guardar subtítulos** y se usa en el video final, en la vista previa y en OpenCut.
+  incluida). Se guarda con **Guardar subtítulos** y se usa en el video final y en la vista previa.
 - **Vista previa fluida:** al abrir un trabajo se prepara sola, en segundo plano, una copia ligera del video ya sin
   las pausas recortadas (`proxy.mp4` en la carpeta _trabajo). Mientras se prepara, las vistas previas usan el original
   (pueden trabarse en cada pausa); cuando está lista se cambian solas y junto al tiempo dice «✓ vista fluida».
@@ -171,39 +171,6 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
   - *Solo subtítulos (Chapucero)*: para un clip YA editado (vertical u horizontal). No recorta ni
     cambia nada: transcribe, corrige nombres y puntuación con el modelo local y le pone los subtítulos con el estilo
     elegido. El título no hace falta. Sale como `NOMBRE_subtitulado.mp4` en su carpeta `_trabajo`.
-
-## Corregir tiempos en OpenCut (opcional)
-
-La propuesta que arma la plataforma se puede abrir en OpenCut para acomodar los tiempos de las **imágenes**
-y de las **tomas** (pantalla completa / dividida / solo Nacho) con su línea de tiempo, y regresar los cambios.
-
-1. Una sola vez: copia el contenido de `opencut_parche.zip` dentro de tu carpeta `opencut-classic`
-   (reemplaza los archivos). Después, en esa carpeta: `bun install`, `cd apps\web`, `bun dev`.
-   OpenCut queda en http://localhost:3000 (si usas otra dirección: `set OPENCUT_URL=http://...` antes de
-   `python interfaz.py`).
-2. En la pestaña **Edición**, botón **✂ Abrir en OpenCut**. Se crea un proyecto 9:16 con:
-   - el video ya armado en vertical como en la vista previa (encuadres, pantalla dividida, título, subtítulos,
-     música) pero sin las imágenes; es de referencia, no lo muevas. La primera vez se arma como un render
-     (tarda lo mismo); se guarda en `_opencut` dentro de la carpeta de trabajo y se reusa mientras no cambies
-     las tomas, encuadres, cortes o subtítulos,
-   - las imágenes de los momentos en su pista, ya en su lugar (abajo si es dividida, todo el cuadro si es completa),
-   - los tramos de pantalla como textos (DIVIDIDA, PANTALLA COMPLETA, SOLO NACHO, NACHO CERCA/LEJOS) en una pista
-     oculta: se ven y se editan en la línea de tiempo, no tapan el cuadro. Si cambias una toma, el video de fondo
-     no se actualiza hasta que lo envíes y lo vuelvas a abrir en OpenCut,
-   - el TÍTULO en el estilo motivacional (su orilla derecha = cuándo se quita).
-3. Ahí mueves, alargas o acortas los bloques. Para cambiar una toma, **edita su texto** (por ejemplo
-   «DIVIDIDA» → «PANTALLA COMPLETA»). Para quitar una imagen, **bórrala u ocúltala**. Si borras un tramo de
-   pantalla, queda en «Solo Nacho». No cambies el nombre de los bloques: la clave entre corchetes ([m3], [p0]…)
-   es la que los une con el plan.
-   También puedes **agregar**: una imagen nueva (arrástrala o pégala en la línea de tiempo) se vuelve un momento
-   con esa foto; un texto nuevo que diga DIVIDIDA o PANTALLA COMPLETA se vuelve un tramo de pantalla nuevo.
-4. Arriba en OpenCut: **Enviar a editor vertical**. Los tiempos se guardan en `plan.json` (con respaldo: se puede
-   **Deshacer**) y la pestaña Edición se recarga sola. Puedes seguir corrigiendo y enviando desde el mismo proyecto.
-5. El video final se sigue exportando con **Exportar video final** de este programa (subtítulos, música, lectura y
-   lo aprendido funcionan igual). No uses el «Export» de OpenCut para el video final.
-
-Si cambias algo en la pestaña Edición mientras el proyecto está abierto en OpenCut, al enviar te pedirá volver
-a abrirlo (para no mezclar dos versiones). Si partes un bloque en OpenCut, se usa el pedazo más largo.
 
 ## Video largo (pestaña «Video largo»)
 

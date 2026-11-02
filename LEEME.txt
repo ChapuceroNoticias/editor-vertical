@@ -51,8 +51,6 @@ Si algo falla: pestaña «Registro de la plataforma» y manda ese texto.
 Archivos de registro: %LOCALAPPDATA%\EditorVertical\  (instalacion.log, arranque.log, servidor.log)
 Quitar: «Agregar o quitar programas» → «Editor Vertical · El Chapucero» (no borra VideosEdit ni Renders).
 
-OpenCut (opcional): el botón «Abrir en OpenCut» necesita OpenCut corriendo en esa PC
-(ver «Corregir tiempos en OpenCut» en app\LEEME.md). El instalador no lo instala.
 
 
 ACTUALIZAR TODAS LAS PCs DESDE GITHUB

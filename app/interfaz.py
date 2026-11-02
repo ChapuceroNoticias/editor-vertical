@@ -1019,7 +1019,7 @@ def estado_difuminar(t):
 
 def cancelar_todo():
     """Detiene todo lo que esté trabajando: análisis, exportación, conversión, vistas previas,
-    búsqueda de clips del video largo, video de OpenCut y la cola de fragmentos pendientes."""
+    búsqueda de clips del video largo y la cola de fragmentos pendientes."""
     _CANCELADO[0] = time.time()
     en_cola = 0
     while True:   # los fragmentos que esperaban en la cola ya no se hacen
@@ -2331,9 +2331,6 @@ def crear_app():
         n, cola = cancelar_todo()
         return {"ok": True, "procesos": n, "cola": cola}
 
-    # Puente con OpenCut (abrir la propuesta allá y regresar los tiempos corregidos)
-    import opencut_puente
-    opencut_puente.registrar(app, sys.modules[__name__])
     return app
 
 

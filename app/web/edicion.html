@@ -111,7 +111,6 @@
   <button class="btn" id="b_deshacer" title="Regresa el último cambio guardado (Ctrl+Z)">↶ Deshacer</button>
   <button class="btn" id="b_rehacer" title="Vuelve a hacer lo que deshiciste (Ctrl+Y)">↷ Rehacer</button>
   <button class="btn" id="b_atajos" title="Atajos de teclado">⌨ Atajos</button>
-  <button class="btn" id="b_opencut" title="Abre esta propuesta en OpenCut para acomodar los tiempos de imágenes y tomas; al terminar, allá presiona «Enviar a editor vertical»">✂ Abrir en OpenCut</button>
   <span id="version" style="color:var(--suave);font-size:11px"></span>
 </div>
 
@@ -1907,27 +1906,6 @@ async function iniciar() {
   $("b_deshacer").onclick = deshacerAccion;
   $("b_rehacer").onclick = rehacerAccion;
   $("b_atajos").onclick = () => $("m_atajos").classList.add("abierto");
-  // OpenCut: abre la propuesta allá; al regresar a esta ventana, si se enviaron cambios, se recarga sola
-  let esperaOC = false, ultimoOC = 0;
-  $("b_opencut").onclick = async () => {
-    try {
-      const c = await (await fetch("/oc/config")).json();
-      const e = await (await fetch(`/oc/estado?t=${encodeURIComponent(T)}`)).json();
-      ultimoOC = e.cambio || 0; esperaOC = true;
-      const url = `${c.opencut}/editor-vertical?t=${encodeURIComponent(T)}&puente=${encodeURIComponent(location.origin)}`;
-      window.open(url, "_blank");
-      estado("Abierto en OpenCut. Al terminar, allá presiona «Enviar a editor vertical».", "ok");
-    } catch (err) { estado("No pude abrir OpenCut: " + err, "err"); }
-  };
-  const revisarOC = async () => {
-    if (!esperaOC) return;
-    try {
-      const e = await (await fetch(`/oc/estado?t=${encodeURIComponent(T)}`)).json();
-      if ((e.cambio || 0) > ultimoOC) { ultimoOC = e.cambio; await recargar(); estado("Cambios de OpenCut cargados ✓", "ok"); }
-    } catch (err) { /* sin conexión: se revisa la próxima vez */ }
-  };
-  window.addEventListener("focus", revisarOC);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) revisarOC(); });
   document.querySelectorAll("#pm_ops .op, #pm_suav .op").forEach(b => b.onclick = () => { video.pause(); movimientoPantalla(b.dataset.m); });
   $("m_atajos_cerrar").onclick = () => $("m_atajos").classList.remove("abierto");
   // pantalla
