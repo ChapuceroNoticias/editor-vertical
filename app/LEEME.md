@@ -74,8 +74,10 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
     el que va, una línea guía con el tiempo bajo el ratón y **doble clic** para llevar el cursor a ese punto
     (igual que en Video largo). **Ctrl + rueda** acerca o aleja.
   - **Mover pedazos del video (línea «Pantalla»):** los **bloques grises** (Nacho / lo que no se está usando) son
-    pedazos del video: **clic** lo selecciona, **arrastrarlo** lo mueve a otro lugar y **S** (o Ctrl+B) lo parte en el
-    cursor para mover solo una parte. También **Shift + arrastrar** sobre la línea Pantalla selecciona cualquier
+    pedazos del video: **clic** lo selecciona (y lleva ahí el cursor), **arrastrarlo** lo mueve a otro lugar, **Ctrl +
+    arrastrarlo** deja una **copia** donde lo sueltes (para repetir una frase), y **S** (o Ctrl+B) lo parte en el cursor
+    para mover o copiar solo una parte. Otra forma de repetir: selecciónalo, **Ctrl+C**, clic donde lo quieras y
+    **Ctrl+V**. El clip dura más; con «Renderizar de nuevo» los subtítulos se acomodan. También **Shift + arrastrar** sobre la línea Pantalla selecciona cualquier
     pedazo del video (amarillo). Luego: **✂ Cortar** (Ctrl+X: lo quita y lo guarda), **⧉ Copiar** (Ctrl+C), **📋 Pegar
     en el cursor** (Ctrl+V: lo que sigue se recorre), **Duplicar** (Ctrl+D: lo repite justo después), **Quitar** (Supr:
     como «Quitar tramo», se puede restaurar) o **arrástralo** a otro lugar para moverlo (se pega a pausas y cortes; con

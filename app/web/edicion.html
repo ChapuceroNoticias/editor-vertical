@@ -28,7 +28,9 @@
     background: var(--panel); }
   .barra label { display: flex; gap: 8px; align-items: center; color: var(--suave); font-size: 13px; flex: 1 1 360px; }
   .barra #titulo { flex: 1; }
-  #estado { font-size: 13px; color: var(--suave); min-width: 120px; }
+  /* el aviso no cambia el alto de la barra (si no, la línea de tiempo se mueve mientras haces clic) */
+  #estado { font-size: 13px; color: var(--suave); min-width: 120px; flex: 1 1 200px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; }
   #estado.ok { color: var(--ok); } #estado.pend { color: var(--pend); } #estado.err { color: var(--rojo); }
   .zona { display: flex; gap: 12px; padding: 12px; align-items: flex-start; flex-wrap: wrap; }
   .zona { justify-content: center; }
@@ -152,7 +154,7 @@
     <button class="btn" id="seg_pegar" title="Pega el pedazo copiado donde está el cursor; lo que sigue se recorre (Ctrl+V)">📋 Pegar en el cursor</button>
     <button class="btn" id="seg_duplicar" title="Lo repite justo después (Ctrl+D)">⧉⧉ Duplicar</button>
     <button class="btn" id="seg_quitar" title="Quita ese pedazo del video sin guardarlo (como «Quitar tramo»; se puede restaurar) (Supr)">🗑 Quitar</button>
-    <span class="sub">· Para moverlo, arrástralo con el ratón a donde lo quieras · Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+D / Supr</span>
+    <span class="sub">· Arrástralo para moverlo; con <b>Ctrl</b> presionado al soltar deja una <b>copia</b> ahí · Ctrl+C y luego clic donde lo quieras y Ctrl+V</span>
   </div>
   <div class="leyenda">
     <span><i style="background:var(--c-completa)"></i>Pantalla completa</span>
@@ -357,7 +359,7 @@ let sel = null, porta = null;
 // selección de pantalla e imagen
 let tramoP = null, cambioP = null, momSel = -1, nuevoEstilo = "dividida", estiloMom = null, prioMom = "pantalla";
 
-function estado(txt, cls) { const e = $("estado"); e.textContent = txt || ""; e.className = cls || ""; }
+function estado(txt, cls) { const e = $("estado"); e.textContent = txt || ""; e.title = txt || ""; e.className = cls || ""; }
 
 // ---------- tiempos ----------
 function aEditado(t) {
@@ -786,7 +788,7 @@ async function opMontaje(accion, extra, pendienteTxt) {
       body: JSON.stringify({ t: T, accion, ...extra }) });
     if (!r.ok) throw new Error((await r.text()).replace(/^\{"detail":"|"\}$/g, ""));
     const d = await r.json();
-    if (accion === "copiar" || accion === "cortar") ultimoPorta = "video";
+    if (accion === "copiar" || accion === "cortar" || accion === "copiar_en") ultimoPorta = "video";
     if (accion !== "copiar") segSel = null;
     const todo = vista[0] <= 0.01 && vista[1] >= durE() - 0.05;   // se veía todo el video: se sigue viendo todo
     await recargar();
@@ -817,6 +819,7 @@ function dibujarSeg() {   // selección y, si se arrastra, dónde quedaría
     lctx.setLineDash([6 * d, 4 * d]); lctx.strokeStyle = "#fff"; lctx.strokeRect(g0, (REGLA + 3) * d, g1 - g0, H - (REGLA + 6) * d);
     lctx.setLineDash([]); lctx.fillStyle = "rgba(255,255,255,.12)"; lctx.fillRect(g0, (REGLA + 3) * d, g1 - g0, H - (REGLA + 6) * d);
     const ins = xDe(mueveSeg.p); lctx.fillStyle = "#facc15"; lctx.fillRect(ins - d, REGLA * d, 3 * d, H - REGLA * d);
+    pastilla(mueveSeg.copia ? "＋ copia aquí" : "mover aquí", ins, H - 20 * d, "#facc15", "#000");
   }
 }
 function pintarDeslizador() {   // barra para moverse por el video cuando la línea está acercada
@@ -1806,6 +1809,7 @@ async function iniciar() {
     if (mueveSeg) {
       if (Math.abs(ev.clientX - mueveSeg.x0) > 3) mueveSeg.movido = true;
       if (!mueveSeg.movido) return;
+      mueveSeg.copia = ev.ctrlKey || ev.metaKey;
       const largo = segSel[1] - segSel[0];
       let nuevo = Math.min(Math.max(0, segSel[0] + tLinea(ev) - mueveSeg.t0), durE() - largo);
       // punto donde se inserta (en el video de antes): antes del pedazo = su nuevo inicio; después = su nuevo final
@@ -1868,12 +1872,14 @@ async function iniciar() {
     }
     if (mueveSeg) {
       const m = mueveSeg; mueveSeg = null;
-      if (!m.movido) {
-        if (m.gris) estado("Pedazo de video seleccionado: arrástralo para moverlo · Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+D / Supr · S parte el bloque en el cursor.", "ok");
+      if (!m.movido) {   // clic sin arrastrar: también lleva el cursor ahí (para pegar en ese punto)
+        irE(Math.min(durE(), Math.max(0, m.t0)));
+        if (m.gris) estado("Pedazo seleccionado: arrástralo para moverlo (con Ctrl: copia) · Ctrl+C copiar · Ctrl+V pega en el cursor.", "ok");
         return;
       }
-      if (m.p === null || (m.p >= segSel[0] - 0.02 && m.p <= segSel[1] + 0.02)) { estado("Suéltalo fuera del mismo pedazo.", "err"); return; }
+      if (m.p === null || (!m.copia && m.p >= segSel[0] - 0.02 && m.p <= segSel[1] + 0.02)) { estado("Suéltalo fuera del mismo pedazo.", "err"); return; }
       const [a, b] = segO();
+      if (m.copia) return opMontaje("copiar_en", { a, b, p: aOriginal(m.p) });   // Ctrl + arrastrar: una copia
       return opMontaje("mover", { a, b, p: aOriginal(m.p) });
     }
     presionado = false;

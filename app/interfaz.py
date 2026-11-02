@@ -2075,6 +2075,9 @@ def crear_app():
                 return montaje.pegar(t, float(d["p"]), _I, ed)
             if acc == "mover":
                 return montaje.mover(t, float(d["a"]), float(d["b"]), float(d["p"]), _I, ed)
+            if acc == "copiar_en":   # Ctrl + arrastrar: copia el pedazo y la pega en p
+                montaje.copiar(t, float(d["a"]), float(d["b"]), _I)
+                return montaje.pegar(t, float(d["p"]), _I, ed).replace("pegado", "copiado ahí")
             if acc == "duplicar":
                 return montaje.duplicar(t, float(d["a"]), float(d["b"]), _I, ed)
             raise ValueError("Acción desconocida")
