@@ -662,7 +662,7 @@ def guardar_subtitulos(trabajo, tabla, cortes=None):
     for n, g in enumerate(viejos):
         if n not in usados and g.get("palabras") and all(ed.palabra_cortada(p, cortes_u) for p in g["palabras"]):
             nuevos.append(g)
-    nuevos.sort(key=lambda g: g["i"])
+    nuevos = ed.sanear_grupos(nuevos)
     respaldar(trabajo)
     ed.guardar_json(Path(trabajo) / "subtitulos.json", nuevos)
     return len(nuevos)

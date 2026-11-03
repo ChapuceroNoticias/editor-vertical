@@ -2173,7 +2173,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-03a v1.2.4"
+VERSION = "2026-11-03b v1.2.5"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3002,11 +3002,28 @@ def grupos_subtitulos(trabajo, palabras, cfg):
     p = Path(trabajo) / "subtitulos.json"
     if p.exists():
         grupos = cargar_json(p)
-        return [g for g in grupos if g.get("palabras")]
+        return sanear_grupos([g for g in grupos if g.get("palabras")])
     palabras = limpiar_transcripcion(palabras)
     if cfg.get("modo") == "frases":
         return estilo_motivacional().agrupar_frases(palabras, cfg)
     return agrupar_subtitulos(palabras, cfg)
+
+
+def sanear_grupos(grupos):
+    """Ordena los subtítulos y evita que uno siga activo encima de los siguientes: su fin no pasa del inicio del
+    que sigue (un fin mal escrito, p. ej. 390:11:00, hacía que una línea vieja reapareciera más adelante)."""
+    grupos = sorted(grupos, key=lambda g: float(g["i"]))
+    out = []
+    for k, g in enumerate(grupos):
+        i, f = float(g["i"]), float(g["f"])
+        sig = next((float(h["i"]) for h in grupos[k + 1:] if float(h["i"]) > i), None)
+        pal = g.get("palabras") or []
+        ult = max((float(p["f"]) for p in pal), default=i)
+        tope = sig if sig is not None else ult + 3.0
+        if f > tope or f <= i:
+            g = dict(g, f=round(max(i + 0.2, min(tope, max(f, ult)) if f > i else min(tope, ult)), 3))
+        out.append(g)
+    return out
 
 
 def palabra_cortada(p, cortes):

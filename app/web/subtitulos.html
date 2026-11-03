@@ -46,6 +46,7 @@
   .fila input { width: 100%; padding: 6px 7px; border: 1px solid var(--borde); border-radius: 6px; background: var(--fondo);
     color: var(--texto); font: inherit; }
   .fila input.t { font-variant-numeric: tabular-nums; font-size: 13px; }
+  .fila input.t.mal { border-color: #e5484d; color: #ff8a8d; background: rgba(229,72,77,.12); }
   .fila textarea.tx { width: 100%; padding: 6px 7px; border: 1px solid var(--borde); border-radius: 6px; background: var(--fondo);
     color: var(--texto); font: inherit; resize: none; overflow: hidden; line-height: 1.35; display: block; min-height: 32px; }
   .fila .ir, .fila .mas { border: 0; background: none; color: var(--suave); cursor: pointer; font-size: 15px; padding: 2px; }
@@ -126,6 +127,37 @@ function seg(v) {
   if (p.length === 2) return Number(p[0] || 0) * 60 + Number(p[1] || 0);
   return Number(p[0] || 0) * 60 + Number(p[1] || 0) + Number((p[2] || "0").padEnd(2, "0").slice(0, 2)) / 100;
 }
+// fin con el que se muestra: nunca pasa del inicio del subtítulo que sigue (un fin mal escrito no hace
+// que una línea vieja reaparezca más adelante)
+function finEf(n) {
+  const fl = filas[n], i = seg(fl.iTxt), f = seg(fl.fTxt);
+  if (i === null || f === null) return null;
+  for (let k = n + 1; k < filas.length; k++) {
+    const j = seg(filas[k].iTxt);
+    if (j !== null && j > i) return Math.min(f, j);
+  }
+  return f;
+}
+function tiempoMal(n, c) {
+  const fl = filas[n], i = seg(fl.iTxt), f = seg(fl.fTxt);
+  if (c === "iTxt") return i === null || (f !== null && i >= f) || (typeof E !== "undefined" && E && E.video && i > duracionEd() + 1);
+  if (f === null || (i !== null && f <= i)) return true;
+  for (let k = n + 1; k < filas.length; k++) {
+    const j = seg(filas[k].iTxt);
+    if (j !== null && i !== null && j > i) return f > j + 0.01;
+  }
+  return !!(typeof E !== "undefined" && E && E.video && f > duracionEd() + 1);
+}
+function marcarTiempos() {
+  document.querySelectorAll(".fila").forEach((el, n) => {
+    if (!filas[n]) return;
+    el.querySelectorAll("input.t").forEach(inp => {
+      const mal = tiempoMal(n, inp.dataset.c);
+      inp.classList.toggle("mal", mal);
+      inp.title = mal ? "Tiempo inválido: el fin no puede pasar del inicio del siguiente subtítulo (se corrige al guardar)" : "";
+    });
+  });
+}
 function estado(txt, cls) { $("estado").textContent = txt; $("estado").className = cls || ""; }
 
 // En vivo se reproduce el video ORIGINAL saltando las pausas recortadas; los subtítulos van en tiempo editado.
@@ -197,10 +229,10 @@ function dibujar() {
   const s = W / D.salida[0];
   const st = D.estilo;
   let act = null;
-  for (const fl of filas) {
-    const i = seg(fl.iTxt), f = seg(fl.fTxt);
+  filas.forEach((fl, n) => {
+    const i = seg(fl.iTxt), f = finEf(n);
     if (i !== null && f !== null && i <= t && t < f && fl.texto.trim()) act = fl;   // el último que empezó gana
-  }
+  });
   if (!act) { cajaSub = null; return; }
   const lay = disenoEn(t);
   // ESTE subtítulo, subido (−) o bajado (+) a mano; px de un video de 1920 de alto
@@ -632,7 +664,7 @@ let ultimaActiva = -1;
 function marcarActiva() {
   const t = ahora();
   let k = -1;
-  filas.forEach((fl, n) => { const i = seg(fl.iTxt), f = seg(fl.fTxt); if (i !== null && f !== null && i <= t && t < f) k = n; });
+  filas.forEach((fl, n) => { const i = seg(fl.iTxt), f = finEf(n); if (i !== null && f !== null && i <= t && t < f) k = n; });
   if (k === ultimaActiva) return;
   ultimaActiva = k;
   document.querySelectorAll(".fila").forEach((el, n) => el.classList.toggle("activa", n === k));
@@ -678,6 +710,7 @@ function pintarLista() {
       inp.oninput = () => {
         fl[inp.dataset.c] = inp.value;
         div.classList.toggle("cambiada", true);
+        if (inp.classList.contains("t")) marcarTiempos();
         actualizarBotones();
       };
       inp.onfocus = () => { const i = seg(fl.iTxt); if (i !== null && video.paused) irA(i + 0.01); };
@@ -691,6 +724,7 @@ function pintarLista() {
     };
     lista.appendChild(div);
   });
+  marcarTiempos();
   ultimaActiva = -2;
 }
 
