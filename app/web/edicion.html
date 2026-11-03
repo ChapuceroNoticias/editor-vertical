@@ -1613,7 +1613,10 @@ async function vigilarRender() {
   const venia = renderActivo;
   renderActivo = false;
   if (venia) {
-    if (d.estado === "listo") estado("Vista previa lista ✓ La pestaña Subtítulos ya tiene el acomodo nuevo. El video final se arma en Exportar.", "ok");
+    if (d.estado === "listo") {
+      estado("Vista previa lista ✓ La pestaña Subtítulos ya tiene el acomodo nuevo. El video final se arma en Exportar.", "ok");
+      try { new Audio("/app/notificacion.mp3").play().catch(() => {}); } catch (err) {}   // aviso de «terminó»
+    }
     else if (d.estado === "cancelado") estado("Vista previa cancelada.", "err");
     else if (d.estado === "error") estado("No se pudo armar la vista previa: " + (d.detalle || "mira el Registro de la plataforma"), "err");
     await recargar();

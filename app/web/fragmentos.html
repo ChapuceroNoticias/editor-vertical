@@ -581,7 +581,13 @@ async function refrescar(forzar) {
     D.pausas = d.pausas; D.sugerir = d.sugerir;
     pintarSugerir(d.sugerir);
     const firma = (xs) => JSON.stringify(xs.map(f => [f.id, f.inicio, f.fin, f.titulo, f.estilo, f.marcado, f.estado, f.detalle || "", f.trabajo || "", f.grupo || 0]));
-    if (firma(d.fragmentos) !== firma(F)) { adoptar(d.fragmentos); pintarTodo(); }
+    if (firma(d.fragmentos) !== firma(F)) {
+      // un clip (o grupo) terminó de cortarse y analizarse: aviso con sonido
+      const antes = new Set(F.filter(f => f.estado === "listo").map(f => f.id));
+      if (d.fragmentos.some(f => f.estado === "listo" && !antes.has(f.id) && F.some(x => x.id === f.id)))
+        try { new Audio("/app/notificacion.mp3").play().catch(() => {}); } catch (err) {}
+      adoptar(d.fragmentos); pintarTodo();
+    }
     else if (pausasNuevas) pintarRegla();
   } catch (e) {}
 }

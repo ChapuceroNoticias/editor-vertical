@@ -583,7 +583,7 @@ def guardar_subtitulos(trabajo, tabla, cortes=None):
     plan, palabras = cargar(trabajo)
     if cortes is not None:
         plan = dict(plan, cortes=cortes)
-    cortes_u = ed.unir_cortes(plan.get("cortes", []))
+    cortes_u = ed.cortes_quitados(plan.get("cortes", []))
     viejos = grupos_actuales(trabajo, plan, palabras)
     usados = set()
     nuevos = []
@@ -620,7 +620,11 @@ def guardar_subtitulos(trabajo, tabla, cortes=None):
                 igual["dy"] = dy
             nuevos.append(igual)
             continue
-        # los tiempos de la tabla son del video editado; se guardan en tiempo del original
+        # los tiempos de la tabla son del video editado; se guardan en tiempo del original. Las palabras se reparten
+        # en el tiempo EDITADO y luego se pasan al original, así ninguna cae dentro de una pausa recortada
+        # (antes una palabra agregada podía quedar ahí y desaparecer al guardar)
+        if fin_e <= ini_e:
+            fin_e = ini_e + 0.5
         ini, fin = orig_t(ini_e, plan), orig_t(fin_e, plan)
         if viejo and mmss(ed_t(viejo["i"], plan)) == mmss(ini_e):
             ini = viejo["i"]
@@ -628,15 +632,25 @@ def guardar_subtitulos(trabajo, tabla, cortes=None):
             fin = viejo["f"]
         if fin <= ini:
             fin = ini + 0.5
-        if viejo and len(viejo["palabras"]) == len(palabras_nuevas) and viejo["f"] > viejo["i"]:
-            # mismo número de palabras: conserva el ritmo original, ajustado a los tiempos nuevos
-            esc = (fin - ini) / (viejo["f"] - viejo["i"])
-            pal = [{"p": t, "i": round(ini + (p["i"] - viejo["i"]) * esc, 3), "f": round(ini + (p["f"] - viejo["i"]) * esc, 3)}
-                   for t, p in zip(palabras_nuevas, viejo["palabras"])]
+
+        def a_orig(te):
+            return round(orig_t(te, plan), 3)
+        if vis and len(vis) == len(palabras_nuevas):
+            # mismo número de palabras: conserva el ritmo que tenían, ajustado a los tiempos nuevos
+            vi, vf = ed_t(vis[0]["i"], plan), ed_t(vis[-1]["f"], plan)
+            esc = (fin_e - ini_e) / max(0.05, vf - vi)
+            tiempos = [(ini_e + (ed_t(p["i"], plan) - vi) * esc, ini_e + (ed_t(p["f"], plan) - vi) * esc) for p in vis]
         else:
-            paso = (fin - ini) / len(palabras_nuevas)
-            pal = [{"p": t, "i": round(ini + k * paso, 3), "f": round(ini + (k + 1) * paso, 3)}
-                   for k, t in enumerate(palabras_nuevas)]
+            paso = (fin_e - ini_e) / len(palabras_nuevas)
+            tiempos = [(ini_e + k * paso, ini_e + (k + 1) * paso) for k in range(len(palabras_nuevas))]
+        pal = []
+        for txt, (a_e, b_e) in zip(palabras_nuevas, tiempos):
+            a_o = a_orig(a_e + 0.001)
+            b_o = max(a_o + 0.02, a_orig(max(a_e + 0.002, b_e - 0.001)))
+            # si cruza una pausa recortada, la palabra se queda en el lado donde empieza (no dentro de la pausa)
+            if any(c["inicio"] < (a_o + b_o) / 2 < c["fin"] for c in ed.unir_cortes(plan.get("cortes", []))):
+                b_o = a_o + min(0.3, b_e - a_e)
+            pal.append({"p": txt, "i": a_o, "f": round(b_o, 3)})
         for k in saltos:
             if k < len(pal) - 1:
                 pal[k]["salto"] = True
@@ -1750,7 +1764,7 @@ def datos_subtitulos(t):
     cfg = pl["subtitulos"]
     cs = plan.get("cortes", [])
     grupos = []
-    cortes_u = ed.unir_cortes(cs)
+    cortes_u = ed.cortes_quitados(cs)
     for n, g in enumerate(grupos_actuales(t, plan, palabras)):
         # las palabras que quedaron en un tramo quitado (en Edición) no se ven; si se quitó todo, el subtítulo no sale
         vis = [p for p in g["palabras"] if not ed.palabra_cortada(p, cortes_u)]
@@ -1793,7 +1807,8 @@ def datos_subtitulos(t):
     return {
         "grupos": grupos, "modo": modo, "diseno": diseno, "areas": areas,
         # con qué tramos quitados se calcularon estos tiempos (si cambian en Edición, la pestaña se pone al día)
-        "cortes": [{"inicio": c["inicio"], "fin": c["fin"]} for c in cs], "firma_cortes": ed.firma_cortes(plan),
+        "cortes": [{"inicio": c["inicio"], "fin": c["fin"], **({"manual": True} if c.get("manual") else {})} for c in cs],
+        "firma_cortes": ed.firma_cortes(plan),
         "previa_v": round(vp.stat().st_mtime, 2) if vp.exists() else 0,
         "salida": salida,
         "estilo": {k: cfg.get(k) for k in ("tam", "tam_min", "max_lineas", "color", "contorno", "color_contorno",
@@ -2090,6 +2105,10 @@ def crear_app():
         registrar(f"✂ Montaje ({acc}): {msg}")
         return {"ok": True, "mensaje": msg}
 
+    @app.get("/app/notificacion.mp3")
+    def app_notificacion():
+        return FileResponse(BASE / "web" / "notificacion.mp3", media_type="audio/mpeg")
+
     @app.post("/app/cerrar")
     def app_cerrar():
         """Botón «Cerrar»: detiene todos los procesos de la plataforma y la apaga."""
@@ -2337,6 +2356,11 @@ def crear_app():
 # ----------------------------------------------------------------------------
 # Procesos largos con barra de progreso
 # ----------------------------------------------------------------------------
+def sonido_aviso():
+    """Sonido de «terminó» (web/notificacion.mp3) para la barra de progreso."""
+    return f'<audio autoplay src="/app/notificacion.mp3?v={int(time.time() * 1000)}" style="display:none"></audio>'
+
+
 def barra(frac=None, etapa="", estado="trabajando", detalle=""):
     """HTML de la barra de progreso que va arriba del video."""
     if frac is None:
@@ -2432,7 +2456,8 @@ def correr(cmd):
                 pass
             break
     if proc.returncode == 0 and final and final.get("ok"):
-        yield barra(1.0, "Listo ✓", "listo", "\n".join(avisos).replace("<", "&lt;")), final
+        # aviso con sonido al terminar (análisis o exportación)
+        yield barra(1.0, "Listo ✓", "listo", "\n".join(avisos).replace("<", "&lt;")) + sonido_aviso(), final
     else:
         utiles = [x for x in lineas if x.strip() and not x.startswith("[editor]")][-6:] or lineas[-6:]
         detalle = "\n".join(utiles).replace("<", "&lt;")

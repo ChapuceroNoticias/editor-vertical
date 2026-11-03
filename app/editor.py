@@ -2173,7 +2173,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-02d v1.2.3"
+VERSION = "2026-11-03a v1.2.4"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3015,11 +3015,17 @@ def palabra_cortada(p, cortes):
     return any(c["inicio"] <= m < c["fin"] for c in cortes or [])
 
 
+def cortes_quitados(cortes):
+    """Solo los tramos quitados A MANO (Edición › Quitar tramo): esos sí se llevan sus palabras. Las pausas que la
+    plataforma recorta sola son silencios; un subtítulo que las cruza no pierde palabras."""
+    return unir_cortes([c for c in cortes or [] if c.get("manual")])
+
+
 def sin_cortados(grupos, cortes):
     """Subtítulos sin las palabras que quedaron dentro de un tramo quitado (si se quitó un fragmento en Edición,
     sus palabras ya no salen; si se restaura, vuelven). Los que se quedan sin palabras no se muestran.
     No cambia subtitulos.json: solo lo que se ve."""
-    cortes = unir_cortes(cortes)
+    cortes = cortes_quitados(cortes)
     if not cortes:
         return grupos
     out = []

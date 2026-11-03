@@ -23,6 +23,8 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
   lectura, cortes, subtítulos) pero sin fotos. Si hace falta una, se agrega a mano en la pestaña Edición
   («Agregar imagen aquí», buscar en internet o subir tus fotos). Para volver a la búsqueda
   automática: `set IMAGENES_AUTOMATICAS=1` antes de `python interfaz.py`.
+- **Sonido de aviso:** suena (`web/notificacion.mp3`) cuando termina un análisis, una exportación, un «Renderizar de
+  nuevo» y cada clip de Video largo.
 - **⛔ Cancelar todo** (junto a la barra de progreso): detiene al instante lo que esté trabajando —análisis,
   exportación, conversión, vista fluida, búsqueda de clips del video largo— y saca de la cola
   los fragmentos que esperaban. Si se cancela una exportación, el video a medias se borra.
