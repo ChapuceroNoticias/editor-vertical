@@ -222,42 +222,63 @@ function ajustarCanvas() {
 
 // ---------- stickers (se ponen en Edición; aquí solo se ven) ----------
 const stHojas = {};
-let stTmpA = null, stTmpB = null;
-function hojaSticker(tipo) {
-  if (!stHojas[tipo]) { stHojas[tipo] = new Image(); stHojas[tipo].src = `/stk/hoja?tipo=${tipo}`; }
-  const im = stHojas[tipo];
+let stTmpA = null, stTmpB = null, stCapa = null, stTitulo = null;
+const propDe = (s) => Math.round(Math.max(0.1, Math.min(10, s.prop || 1)) * 100) / 100;
+function hojaSticker(tipo, prop) {
+  const clave = tipo + "@" + prop.toFixed(2);
+  if (!stHojas[clave]) { stHojas[clave] = new Image(); stHojas[clave].src = `/stk/hoja?tipo=${tipo}&prop=${prop.toFixed(2)}&t=${encodeURIComponent(T)}`; }
+  const im = stHojas[clave];
   return im.complete && im.naturalWidth ? im : null;
 }
-function cuadroTenido(tipo, color, k) {
-  const im = hojaSticker(tipo), m = D.meta_stickers, S = m.S, C = m.COLS;
+function cuadroTenido(tipo, color, k, prop) {
+  const im = hojaSticker(tipo, prop), m = D.meta_stickers, C = m.COLS;
   if (!im) return null;
+  const fw = Math.floor(im.naturalWidth / (2 * C)), fh = Math.floor(im.naturalHeight / Math.ceil(m.F / C));
   if (!stTmpA) { stTmpA = document.createElement("canvas"); stTmpB = document.createElement("canvas"); }
-  stTmpA.width = stTmpA.height = stTmpB.width = stTmpB.height = S;
+  if (stTmpA.width !== fw || stTmpA.height !== fh) { stTmpA.width = stTmpB.width = fw; stTmpA.height = stTmpB.height = fh; }
   const a = stTmpA.getContext("2d"), b = stTmpB.getContext("2d");
-  const fx = (k % C) * S, fy = Math.floor(k / C) * S;
-  b.clearRect(0, 0, S, S);
-  b.drawImage(im, C * S + fx, fy, S, S, 0, 0, S, S);
-  b.globalCompositeOperation = "multiply"; b.fillStyle = color; b.fillRect(0, 0, S, S);
-  b.globalCompositeOperation = "destination-in"; b.drawImage(im, C * S + fx, fy, S, S, 0, 0, S, S);
+  const fx = (k % C) * fw, fy = Math.floor(k / C) * fh;
+  b.clearRect(0, 0, fw, fh);
+  b.drawImage(im, C * fw + fx, fy, fw, fh, 0, 0, fw, fh);
+  b.globalCompositeOperation = "multiply"; b.fillStyle = color; b.fillRect(0, 0, fw, fh);
+  b.globalCompositeOperation = "destination-in"; b.drawImage(im, C * fw + fx, fy, fw, fh, 0, 0, fw, fh);
   b.globalCompositeOperation = "source-over";
-  a.clearRect(0, 0, S, S); a.drawImage(im, fx, fy, S, S, 0, 0, S, S); a.drawImage(stTmpB, 0, 0);
+  a.clearRect(0, 0, fw, fh); a.drawImage(im, fx, fy, fw, fh, 0, 0, fw, fh); a.drawImage(stTmpB, 0, 0);
   return stTmpA;
 }
+// se dibujan en una capa aparte y se les quita lo que tapa la franja azul y el título (van debajo de ellos)
 function dibujarStickers(cx, t, W, H) {
   const m = D && D.meta_stickers;
   if (!m) return;
-  for (const s of D.stickers || []) {
-    if (!(s.i <= t && t < s.f)) continue;
+  const activos = (D.stickers || []).filter(s => s.i <= t && t < s.f);
+  if (!activos.length) return;
+  if (!stCapa) stCapa = document.createElement("canvas");
+  if (stCapa.width !== W || stCapa.height !== H) { stCapa.width = W; stCapa.height = H; }
+  const g = stCapa.getContext("2d");
+  g.clearRect(0, 0, W, H);
+  for (const s of activos) {
     let k = Math.floor((t - s.i) * m.FPS);
     if (k >= m.INTRO) k = m.INTRO + (k - m.INTRO) % m.LOOP;
-    const c = cuadroTenido(s.tipo, s.color, k);
+    const prop = propDe(s), c = cuadroTenido(s.tipo, s.color, k, prop);
     if (!c) continue;
-    const lado = s.tam * W, resta = s.f - t;
-    cx.save(); cx.translate(s.x * W, s.y * H); cx.rotate((s.rot || 0) * Math.PI / 180); if (s.espejo) cx.scale(-1, 1);
-    cx.globalAlpha = resta < 0.12 ? Math.max(0, resta / 0.12) : 1;
-    cx.drawImage(c, -lado / 2, -lado / 2, lado, lado);
-    cx.restore();
+    const w = s.tam * W, h = w * prop, resta = s.f - t;
+    g.save(); g.translate(s.x * W, s.y * H); g.rotate((s.rot || 0) * Math.PI / 180); if (s.espejo) g.scale(-1, 1);
+    g.globalAlpha = resta < 0.12 ? Math.max(0, resta / 0.12) : 1;
+    g.drawImage(c, -w / 2, -h / 2, w, h);
+    g.restore();
   }
+  const esc = W / D.salida[0];
+  if (D.franja_area && disenoEn(t) === "dividida") {
+    const [fx, fy, fw, fh] = D.franja_area.map(v => v * esc);
+    g.clearRect(fx, fy, fw, fh);
+  }
+  if (D.titulo && (D.titulo_fin == null || t < D.titulo_fin)) {
+    if (!stTitulo) { stTitulo = new Image(); stTitulo.src = `/enc/titulo?t=${encodeURIComponent(T)}&v=${Date.now()}`; }
+    if (stTitulo.complete && stTitulo.naturalWidth) {
+      g.globalCompositeOperation = "destination-out"; g.drawImage(stTitulo, 0, 0, W, H); g.globalCompositeOperation = "source-over";
+    }
+  }
+  cx.drawImage(stCapa, 0, 0);
 }
 function dibujar() {
   if (!D) return;

@@ -1172,13 +1172,15 @@ def render(args, trabajo, plan, pl):
         img = cv2.warpAffine(frame, M, (W, alto_p), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
         return ed.enfocar(img, cfg_e.get("nitidez", 0.3))
 
-    def entrada_yair(frame, t, te):
+    def entrada_yair(frame, t, te, stickers_=None):
         lienzo = np.empty((H, W, 3), np.uint8)
         lienzo[:alto_p] = ventana_entrada(frame, t)
         if "img" not in abajo_cache:
             abajo_cache["img"] = fondo_entrada(plan, pl, W, H, previa=bool(getattr(args, "previa", False)),
                                                lienzo_persona=persona(frame, t))
         lienzo[alto_p:] = abajo_cache["img"]
+        if stickers_ is not None:   # debajo de los cuadros del título
+            stickers_.pegar(lienzo, t)
         for capa, caja in zip(tit_yair, (cfg_tit.get("arriba", {}), cfg_tit.get("abajo", {}))):
             if capa is None:
                 continue
@@ -1197,7 +1199,7 @@ def render(args, trabajo, plan, pl):
     previa = paso > 1 or getattr(args, "previa", False)
     ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     vista = ed.VistaPrevia(trabajo, W, H, fps, solo_diseno=previa)
-    stickers = ed.Stickers(plan.get("stickers"), W, H) if plan.get("stickers") else None
+    stickers = ed.Stickers(plan.get("stickers"), W, H, trabajo) if plan.get("stickers") else None
 
     cap = cv2.VideoCapture(plan["video"])
     idx, ci, n_out = 0, 0, 0
@@ -1243,17 +1245,23 @@ def render(args, trabajo, plan, pl):
                 else:
                     lienzo = actual
 
+        con_st = stickers is not None and not previa and stickers.activos(t)   # van debajo del título
         if t < t_titulo and yair and titulo is not None:
             # entrada de «Tiktoks Yair»: Yair arriba, imagen abajo y los dos cuadros del título entrando de lado
             lienzo = entrada_yair(frame, t, te)
             vista.escribir(lienzo, te, "titulo")
-            if stickers is not None and not previa:
-                stickers.pegar(lienzo, t)
+            if con_st:
+                lienzo = entrada_yair(frame, t, te, stickers)
         elif t < t_titulo:
-            ed.pegar(lienzo, titulo)
-            vista.escribir(lienzo, te, "titulo")
-            if stickers is not None and not previa:
+            if con_st:
+                limpio = lienzo.copy()
+                ed.pegar(limpio, titulo)
+                vista.escribir(limpio, te, "titulo")
                 stickers.pegar(lienzo, t)
+                ed.pegar(lienzo, titulo)
+            else:
+                ed.pegar(lienzo, titulo)
+                vista.escribir(lienzo, te, "titulo")
         else:
             vista.escribir(lienzo, te, "frases")
             if stickers is not None and not previa:   # en la vista previa se dibujan en vivo

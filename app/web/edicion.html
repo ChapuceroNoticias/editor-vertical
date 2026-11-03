@@ -271,14 +271,17 @@
     <div class="card" id="stk_card">
       <h3>Stickers</h3>
       <div class="sub">Clic en uno para ponerlo aquí (2.5 s). En la vista previa: <b>arrástralo</b> para moverlo,
-        la esquina <b>◢</b> lo agranda, el punto de arriba lo <b>gira</b>; <b>rueda</b> = tamaño, <b>Shift + rueda</b> = girar.
+        la esquina <b>◢</b> lo agranda parejo, las agarraderas de los lados lo <b>estiran</b> solo a lo ancho o solo a lo alto,
+        el punto de arriba lo <b>gira</b>; <b>rueda</b> = tamaño, <b>Shift + rueda</b> = girar.
         Su bloque rosa en la línea de tiempo se mueve y se estira como los demás.</div>
       <div class="stk_lib" id="stk_lib"></div>
       <div id="stk_sel" style="display:none;flex-direction:column;gap:8px">
         <div class="separador"></div>
         <div class="sub" id="stk_desc"></div>
         <div class="stk_colores" id="stk_colores"></div>
-        <div class="fila"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Tamaño<input type="range" id="stk_tam" min="4" max="120" step="1"><b id="stk_tam_txt"></b></label></div>
+        <div class="fila"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Ancho<input type="range" id="stk_ancho" min="3" max="120" step="1"><b id="stk_ancho_txt"></b></label></div>
+        <div class="fila"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Alto<input type="range" id="stk_alto" min="3" max="150" step="1"><b id="stk_alto_txt"></b></label>
+          <button class="btn" id="stk_prop1" title="Regresarlo a su proporción original (sin estirar)">↺ Proporción</button></div>
         <div class="fila"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Giro<input type="range" id="stk_rot" min="-180" max="180" step="1"><b id="stk_rot_txt"></b></label>
           <button class="btn" id="stk_rot0" title="Sin giro">0°</button></div>
         <div class="fila">
@@ -370,6 +373,7 @@
   </div>
 </div>
 
+<script src="/app/stickers_gen.js"></script>
 <script>
 const T = new URLSearchParams(location.search).get("t");
 const $ = (id) => document.getElementById(id);
@@ -644,13 +648,16 @@ function dibujarPantallaAbajo(i, t, dx, dy, dw, dh) {
   else { cw = Math.min(w, h * asp) / E.armado.zoom_imagen; ch = cw / asp; x0 = x + (w - cw) * (0.2 + 0.6 * fase); y0 = y + (h - ch) * 0.45; }
   deVideo(x0, y0, cw, ch, dx, dy, dw, dh);
 }
+function dibujarFranja(s) {   // franja azul de la pantalla dividida
+  const A = E.armado.dividida;
+  if (!A.franja) return;
+  const [fx, fy, fw, fh] = A.franja.map(v => v * s);
+  if (franjaImg && franjaImg.complete && franjaImg.naturalWidth) cubrir(franjaImg, franjaImg.naturalWidth, franjaImg.naturalHeight, fx, fy, fw, fh);
+  else { pctx.fillStyle = "#1e3a8a"; pctx.fillRect(fx, fy, fw, fh); }
+}
 function dibujarAbajo(e, t, s) {
   const A = E.armado.dividida;
-  if (A.franja) {
-    const [fx, fy, fw, fh] = A.franja.map(v => v * s);
-    if (franjaImg && franjaImg.complete && franjaImg.naturalWidth) cubrir(franjaImg, franjaImg.naturalWidth, franjaImg.naturalHeight, fx, fy, fw, fh);
-    else { pctx.fillStyle = "#1e3a8a"; pctx.fillRect(fx, fy, fw, fh); }
-  }
+  dibujarFranja(s);
   if (!A.inferior) return;
   const [ix, iy, iw, ih] = A.inferior.map(v => v * s);
   if (e.ex[0] >= 0) dibujarMomento(e.ex[0], t, ix, iy, iw, ih);
@@ -692,10 +699,12 @@ function componer(t, e, v) {
     pctx.restore();
     if (divi) dibujarAbajo(e, t, s);
   }
+  // stickers: encima de lo que se ve, debajo de la franja azul y del título (como en el video final)
+  if (dibujarStickers(pctx, t, W, H) && (e.tipo === "dividida" || (e.tipo === "contenida" && e.ex[6] === 1))) dibujarFranja(s);
   dibujarCortinilla(pctx, t, W, H);
   if (tituloImg && tituloImg.complete && tituloImg.naturalWidth && (E.estilo !== "motivacional" || t < E.armado.titulo_fin))
     pctx.drawImage(tituloImg, 0, 0, W, H);
-  dibujarStickers(pctx, t, W, H, true);
+  dibujarSelSticker(pctx, t, W, H);
 }
 // ---------- cortinilla limpia sobre las transiciones de cambio de cámara de Nacho (t = tiempo original) ----------
 let cortImg = null;
@@ -1568,15 +1577,43 @@ async function aplicarEncuadre() {   // aplica los tiempos escritos (al cambio p
 
 // ---------- stickers animados ----------
 let stSel = null;          // sticker seleccionado (objeto de E.stickers)
-let stArr = null;          // arrastre en la vista previa: { modo: mover|tam|rot, ... }
-const stHojas = {};
+let stArr = null;          // arrastre en la vista previa: { modo: mover|tam|ancho|alto|rot, ... }
+const stHojas = {};        // hojas base (Image)
+const stMedida = {};       // hojas de stickers de línea dibujadas a la medida (canvas), por «tipo@prop»
+const stSubidas = new Set();
 const STK_COLORES = ["#e6231b", "#f97316", "#ffd400", "#22c55e", "#0ea5e9", "#a855f7", "#ffffff", "#111111"];
+const STK_LINEA = ["circulo", "ovalo", "rectangulo", "enfoque", "subrayado", "tachado"];
 let stTmpA = null, stTmpB = null;
+const propDe = (s) => Math.round(Math.max(0.1, Math.min(10, s.prop || 1)) * 100) / 100;
 function nombreSticker(tipo) { const c = (E.catalogo_stickers || []).find(x => x.tipo === tipo); return c ? c.nombre : tipo; }
-function hojaSticker(tipo) {
+function hojaBase(tipo) {
   if (!stHojas[tipo]) { stHojas[tipo] = new Image(); stHojas[tipo].src = `/stk/hoja?tipo=${tipo}`; }
   const im = stHojas[tipo];
   return im.complete && im.naturalWidth ? im : null;
+}
+// hoja con la que se dibuja: la de línea a la medida si está estirado (se hace aquí y se manda al servidor para el
+// video final); mientras se arrastra se usa la base estirada
+function hojaSticker(tipo, prop) {
+  if (STK_LINEA.includes(tipo) && Math.abs(prop - 1) > 0.005 && window.hojaCanvas) {
+    const clave = tipo + "@" + prop.toFixed(2);
+    if (!stMedida[clave] && !stArr) {
+      stMedida[clave] = window.hojaCanvas(tipo, prop, 480);
+      subirHoja(tipo, prop, stMedida[clave]);
+    }
+    if (stMedida[clave]) return stMedida[clave];
+  }
+  return hojaBase(tipo);
+}
+function subirHoja(tipo, prop, cv) {
+  const clave = tipo + "@" + prop.toFixed(2);
+  if (stSubidas.has(clave)) return Promise.resolve();
+  stSubidas.add(clave);
+  return fetch("/stk/hoja_trabajo", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ t: T, tipo, prop, png: cv.toDataURL("image/png") }) }).catch(() => stSubidas.delete(clave));
+}
+function asegurarHojas() {   // antes de exportar: que el servidor tenga todas las hojas a la medida
+  return Promise.all((E.stickers || []).filter(s => STK_LINEA.includes(s.tipo) && Math.abs(propDe(s) - 1) > 0.005)
+    .map(s => { const p = propDe(s), c = hojaSticker(s.tipo, p); return c && c.getContext ? subirHoja(s.tipo, p, c) : null; }));
 }
 function cuadroSticker(local) {
   const m = E.meta_stickers;
@@ -1584,74 +1621,97 @@ function cuadroSticker(local) {
   if (k >= m.INTRO) k = m.INTRO + (k - m.INTRO) % m.LOOP;
   return k;
 }
-// cuadro k del sticker, teñido, en un lienzo de S x S (capa fija abajo y la de color encima)
-function cuadroTenido(tipo, color, k) {
-  const im = hojaSticker(tipo), m = E.meta_stickers, S = m.S, C = m.COLS;
+// cuadro k del sticker, teñido (capa fija abajo y la de color encima)
+function cuadroTenido(tipo, color, k, prop = 1) {
+  const im = hojaSticker(tipo, prop), m = E.meta_stickers, C = m.COLS;
   if (!im) return null;
+  const fw = Math.floor(im.width / (2 * C)), fh = Math.floor(im.height / Math.ceil(m.F / C));
   if (!stTmpA) { stTmpA = document.createElement("canvas"); stTmpB = document.createElement("canvas"); }
-  stTmpA.width = stTmpA.height = stTmpB.width = stTmpB.height = S;
+  if (stTmpA.width !== fw || stTmpA.height !== fh) { stTmpA.width = stTmpB.width = fw; stTmpA.height = stTmpB.height = fh; }
   const a = stTmpA.getContext("2d"), b = stTmpB.getContext("2d");
-  const fx = (k % C) * S, fy = Math.floor(k / C) * S;
-  b.clearRect(0, 0, S, S);
-  b.drawImage(im, C * S + fx, fy, S, S, 0, 0, S, S);
-  b.globalCompositeOperation = "multiply"; b.fillStyle = color; b.fillRect(0, 0, S, S);
-  b.globalCompositeOperation = "destination-in"; b.drawImage(im, C * S + fx, fy, S, S, 0, 0, S, S);
+  const fx = (k % C) * fw, fy = Math.floor(k / C) * fh;
+  b.clearRect(0, 0, fw, fh);
+  b.drawImage(im, C * fw + fx, fy, fw, fh, 0, 0, fw, fh);
+  b.globalCompositeOperation = "multiply"; b.fillStyle = color; b.fillRect(0, 0, fw, fh);
+  b.globalCompositeOperation = "destination-in"; b.drawImage(im, C * fw + fx, fy, fw, fh, 0, 0, fw, fh);
   b.globalCompositeOperation = "source-over";
-  a.clearRect(0, 0, S, S);
-  a.drawImage(im, fx, fy, S, S, 0, 0, S, S);
+  a.clearRect(0, 0, fw, fh);
+  a.drawImage(im, fx, fy, fw, fh, 0, 0, fw, fh);
   a.drawImage(stTmpB, 0, 0);
   return stTmpA;
 }
 function stickersEn(t) { return (E.stickers || []).filter(s => s.inicio <= t && t < s.fin); }
-function geomSticker(s, W, H) {   // centro, lado y giro en px del lienzo
-  return { cx: s.x * W, cy: s.y * H, lado: s.tam * W, rot: (s.rot || 0) * Math.PI / 180 };
+function geomSticker(s, W, H) {   // centro, ancho, alto y giro en px del lienzo
+  const w = s.tam * W;
+  return { cx: s.x * W, cy: s.y * H, w, h: w * propDe(s), rot: (s.rot || 0) * Math.PI / 180 };
 }
-function dibujarStickers(cx, t, W, H, conSel) {
-  if (!E.meta_stickers) return;
+function dibujarStickers(cx, t, W, H) {   // true si dibujó alguno
+  if (!E.meta_stickers) return false;
+  let alguno = false;
   for (const s of stickersEn(t)) {
-    const c = cuadroTenido(s.tipo, s.color, cuadroSticker(t - s.inicio));
+    const c = cuadroTenido(s.tipo, s.color, cuadroSticker(t - s.inicio), propDe(s));
     if (!c) continue;
     const g = geomSticker(s, W, H), resta = s.fin - t;
     cx.save(); cx.translate(g.cx, g.cy); cx.rotate(g.rot); if (s.espejo) cx.scale(-1, 1);
     cx.globalAlpha = resta < 0.12 ? Math.max(0, resta / 0.12) : 1;
-    cx.drawImage(c, -g.lado / 2, -g.lado / 2, g.lado, g.lado);
+    cx.drawImage(c, -g.w / 2, -g.h / 2, g.w, g.h);
     cx.restore();
+    alguno = true;
   }
-  if (!conSel || !stSel || !(stSel.inicio <= t && t < stSel.fin)) return;
-  const g = geomSticker(stSel, W, H), d = W / 300;
+  return alguno;
+}
+function dibujarSelSticker(cx, t, W, H) {   // recuadro del seleccionado con sus agarraderas
+  if (!stSel || !(stSel.inicio <= t && t < stSel.fin)) return;
+  const g = geomSticker(stSel, W, H), d = W / 300, a = g.w / 2, b = g.h / 2;
   cx.save(); cx.translate(g.cx, g.cy); cx.rotate(g.rot);
   cx.strokeStyle = "#fff"; cx.lineWidth = 1.5 * d; cx.setLineDash([5 * d, 4 * d]);
-  cx.strokeRect(-g.lado / 2, -g.lado / 2, g.lado, g.lado); cx.setLineDash([]);
+  cx.strokeRect(-a, -b, g.w, g.h); cx.setLineDash([]);
   cx.fillStyle = "#fb7185"; cx.strokeStyle = "#fff";
-  cx.beginPath(); cx.moveTo(g.lado / 2, g.lado / 2 - 12 * d); cx.lineTo(g.lado / 2, g.lado / 2); cx.lineTo(g.lado / 2 - 12 * d, g.lado / 2); cx.closePath(); cx.fill(); cx.stroke();
-  cx.beginPath(); cx.moveTo(0, -g.lado / 2); cx.lineTo(0, -g.lado / 2 - 14 * d); cx.stroke();
-  cx.beginPath(); cx.arc(0, -g.lado / 2 - 18 * d, 5 * d, 0, Math.PI * 2); cx.fill(); cx.stroke();
+  // esquina: agrandar parejo
+  cx.beginPath(); cx.moveTo(a, b - 12 * d); cx.lineTo(a, b); cx.lineTo(a - 12 * d, b); cx.closePath(); cx.fill(); cx.stroke();
+  // lados: solo ancho (derecha) o solo alto (abajo)
+  cx.fillStyle = "#fff"; cx.strokeStyle = "#fb7185";
+  cx.beginPath(); cx.roundRect(a - 3.5 * d, -9 * d, 7 * d, 18 * d, 3 * d); cx.fill(); cx.stroke();
+  cx.beginPath(); cx.roundRect(-9 * d, b - 3.5 * d, 18 * d, 7 * d, 3 * d); cx.fill(); cx.stroke();
+  // girar
+  cx.fillStyle = "#fb7185"; cx.strokeStyle = "#fff";
+  cx.beginPath(); cx.moveTo(0, -b); cx.lineTo(0, -b - 14 * d); cx.stroke();
+  cx.beginPath(); cx.arc(0, -b - 18 * d, 5 * d, 0, Math.PI * 2); cx.fill(); cx.stroke();
   cx.restore();
 }
 function guardarStickers(lista, msg) {
   const antes = stSel;
   return enviar("/edi/stickers", { t: T, lista: lista.map(x => ({ tipo: x.tipo, inicio: x.inicio, fin: x.fin, x: x.x, y: x.y,
-    tam: x.tam, rot: x.rot || 0, color: x.color, espejo: !!x.espejo })) }, msg).then(r => {
+    tam: x.tam, prop: propDe(x), rot: x.rot || 0, color: x.color, espejo: !!x.espejo })) }, msg).then(r => {
     if (antes) stSel = (E.stickers || []).find(s => s.tipo === antes.tipo && Math.abs(s.inicio - antes.inicio) < 0.002 &&
       Math.abs(s.x - antes.x) < 0.001 && Math.abs(s.y - antes.y) < 0.001) || null;
     pintarStickerSel(true);
+    asegurarHojas();
     return r;
   });
 }
 function agregarSticker(c) {
   const te = ahoraE(), a = aOriginal(te), b = aOriginal(Math.min(durE(), te + 2.5));
   if (b - a < 0.3) return avisar("No cabe aquí: estás al final del video.");
-  const nuevo = { tipo: c.tipo, inicio: a, fin: b, x: 0.5, y: 0.36, tam: c.tam, rot: 0, color: c.color, espejo: false };
+  const nuevo = { tipo: c.tipo, inicio: a, fin: b, x: 0.5, y: 0.36, tam: c.tam, prop: 1, rot: 0, color: c.color, espejo: false };
   stSel = nuevo; sel = null;
   guardarStickers([...(E.stickers || []), nuevo], `Sticker «${c.nombre}» puesto: muévelo en la vista previa.`);
 }
 function cambiarSticker(campos, guardar = true) {
   if (!stSel) return;
   Object.assign(stSel, campos);
+  if (campos.prop !== undefined) stSel.prop = Math.round(Math.max(0.1, Math.min(10, stSel.prop)) * 100) / 100;
   pintarStickerSel(true);
   if (!guardar) return;
   clearTimeout(cambiarSticker.tm);
   cambiarSticker.tm = setTimeout(() => guardarStickers(E.stickers, "Sticker guardado."), 350);
+}
+function ponerAncho(anchoFr) {   // cambia solo el ancho (el alto se queda)
+  const alto = stSel.tam * propDe(stSel), tam = Math.max(0.03, Math.min(1.5, anchoFr));
+  return { tam, prop: alto / tam };
+}
+function ponerAlto(altoFr) {     // cambia solo el alto
+  return { prop: Math.max(0.03, Math.min(1.8, altoFr)) / stSel.tam };
 }
 function pintarLibStickers() {
   const lib = $("stk_lib");
@@ -1675,7 +1735,9 @@ function pintarLibStickers() {
     `<input type="color" id="stk_color" title="Otro color">`;
   cols.querySelectorAll("button").forEach(b => b.onclick = () => cambiarSticker({ color: b.dataset.c }));
   $("stk_color").oninput = (ev) => cambiarSticker({ color: ev.target.value });
-  $("stk_tam").oninput = (ev) => cambiarSticker({ tam: Number(ev.target.value) / 100 });
+  $("stk_ancho").oninput = (ev) => cambiarSticker(ponerAncho(Number(ev.target.value) / 100));
+  $("stk_alto").oninput = (ev) => cambiarSticker(ponerAlto(Number(ev.target.value) / 100));
+  $("stk_prop1").onclick = () => cambiarSticker({ prop: 1 });
   $("stk_rot").oninput = (ev) => cambiarSticker({ rot: Number(ev.target.value) });
   $("stk_rot0").onclick = () => cambiarSticker({ rot: 0 });
   $("stk_espejo").onclick = () => cambiarSticker({ espejo: !stSel.espejo });
@@ -1693,7 +1755,10 @@ function pintarStickerSel(forzar) {
   $("stk_desc").textContent = `${nombreSticker(stSel.tipo)} · ${mmss(aEditado(stSel.inicio))} – ${mmss(aEditado(stSel.fin))}`;
   $("stk_colores").querySelectorAll("button").forEach(b => b.classList.toggle("activo", b.dataset.c === stSel.color));
   $("stk_color").value = stSel.color;
-  $("stk_tam").value = Math.round(stSel.tam * 100); $("stk_tam_txt").textContent = Math.round(stSel.tam * 100) + "%";
+  const an = Math.round(stSel.tam * 100), al = Math.round(stSel.tam * propDe(stSel) * 100);
+  $("stk_ancho").value = an; $("stk_ancho_txt").textContent = an + "%";
+  $("stk_alto").value = al; $("stk_alto_txt").textContent = al + "%";
+  $("stk_prop1").disabled = Math.abs(propDe(stSel) - 1) < 0.005;
   $("stk_rot").value = Math.round(stSel.rot || 0); $("stk_rot_txt").textContent = Math.round(stSel.rot || 0) + "°";
   $("stk_espejo").classList.toggle("activo", !!stSel.espejo);
 }
@@ -1701,23 +1766,28 @@ function puntoPrevia(ev) {   // en px internos del lienzo de la vista previa
   const r = previa.getBoundingClientRect();
   return [(ev.clientX - r.left) * previa.width / r.width, (ev.clientY - r.top) * previa.height / r.height];
 }
+function aLocal(s, p) {   // punto de la vista previa en el sistema del sticker (sin giro, centro = 0,0)
+  const g = geomSticker(s, previa.width, previa.height);
+  const dx = p[0] - g.cx, dy = p[1] - g.cy, c = Math.cos(-g.rot), sn = Math.sin(-g.rot);
+  return [dx * c - dy * sn, dx * sn + dy * c, g];
+}
 function tocarSticker(p) {   // qué sticker (y qué parte) está bajo el cursor en la vista previa
-  const W = previa.width, H = previa.height, t = ahoraO(), d = W / 300;
+  const t = ahoraO(), d = previa.width / 300;
   const lista = stickersEn(t);
   if (stSel && lista.includes(stSel)) { lista.splice(lista.indexOf(stSel), 1); lista.push(stSel); }   // el elegido va primero
   for (let i = lista.length - 1; i >= 0; i--) {
-    const s = lista[i], g = geomSticker(s, W, H);
-    // al sistema del sticker (sin giro)
-    const dx = p[0] - g.cx, dy = p[1] - g.cy, c = Math.cos(-g.rot), sn = Math.sin(-g.rot);
-    const lx = dx * c - dy * sn, ly = dx * sn + dy * c, m = g.lado / 2;
+    const s = lista[i], [lx, ly, g] = aLocal(s, p), a = g.w / 2, b = g.h / 2;
     if (s === stSel) {
-      if (Math.hypot(lx, ly + m + 18 * d) < 10 * d) return { s, modo: "rot" };
-      if (Math.abs(lx - m) < 12 * d && Math.abs(ly - m) < 12 * d) return { s, modo: "tam" };
+      if (Math.hypot(lx, ly + b + 18 * d) < 10 * d) return { s, modo: "rot" };
+      if (Math.abs(lx - a) < 12 * d && Math.abs(ly - b) < 12 * d) return { s, modo: "tam" };
+      if (Math.abs(lx - a) < 9 * d && Math.abs(ly) < 14 * d) return { s, modo: "ancho" };
+      if (Math.abs(ly - b) < 9 * d && Math.abs(lx) < 14 * d) return { s, modo: "alto" };
     }
-    if (Math.abs(lx) <= m && Math.abs(ly) <= m) return { s, modo: "mover" };
+    if (Math.abs(lx) <= a && Math.abs(ly) <= b) return { s, modo: "mover" };
   }
   return null;
 }
+const CURSOR_ST = { mover: "move", tam: "nwse-resize", ancho: "ew-resize", alto: "ns-resize", rot: "grab" };
 function iniciarStickers() {
   pintarLibStickers();
   let clicLibre = false;
@@ -1734,13 +1804,19 @@ function iniciarStickers() {
   });
   previa.addEventListener("pointermove", (ev) => {
     const p = puntoPrevia(ev), W = previa.width, H = previa.height;
-    if (!stArr) { const o = tocarSticker(p); previa.style.cursor = !o ? "pointer" : o.modo === "mover" ? "move" : o.modo === "tam" ? "nwse-resize" : "grab"; return; }
+    if (!stArr) { const o = tocarSticker(p); previa.style.cursor = o ? CURSOR_ST[o.modo] : "pointer"; return; }
     const s = stSel, g = geomSticker(s, W, H);
     stArr.movido = true;
     if (stArr.modo === "mover") cambiarSticker({ x: stArr.x0 + (p[0] - stArr.p0[0]) / W, y: stArr.y0 + (p[1] - stArr.p0[1]) / H }, false);
     else if (stArr.modo === "tam") {
       const d0 = Math.hypot(stArr.p0[0] - g.cx, stArr.p0[1] - g.cy), d1 = Math.hypot(p[0] - g.cx, p[1] - g.cy);
-      cambiarSticker({ tam: Math.max(0.04, Math.min(1.5, stArr.tam0 * d1 / Math.max(1, d0))) }, false);
+      cambiarSticker({ tam: Math.max(0.03, Math.min(1.5, stArr.tam0 * d1 / Math.max(1, d0))) }, false);
+    } else if (stArr.modo === "ancho") {
+      const [lx] = aLocal(s, p);
+      cambiarSticker(ponerAncho(2 * Math.abs(lx) / W), false);
+    } else if (stArr.modo === "alto") {
+      const [, ly] = aLocal(s, p);
+      cambiarSticker(ponerAlto(2 * Math.abs(ly) / W), false);
     } else {
       let a = Math.atan2(p[0] - g.cx, -(p[1] - g.cy)) * 180 / Math.PI;
       if (ev.shiftKey) a = Math.round(a / 15) * 15;
@@ -1762,7 +1838,7 @@ function iniciarStickers() {
     stSel = o.s;
     const k = (ev.deltaY || ev.deltaX) < 0 ? 1 : -1;
     if (ev.shiftKey) cambiarSticker({ rot: Math.round(((o.s.rot || 0) + k * 5 + 540) % 360 - 180) });
-    else cambiarSticker({ tam: Math.max(0.04, Math.min(1.5, o.s.tam * (k > 0 ? 1.06 : 1 / 1.06))) });
+    else cambiarSticker({ tam: Math.max(0.03, Math.min(1.5, o.s.tam * (k > 0 ? 1.06 : 1 / 1.06))) });
   }, { passive: false });
 }
 

@@ -2173,7 +2173,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-03d v1.2.7"
+VERSION = "2026-11-03e v1.2.8"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3029,7 +3029,10 @@ def sanear_grupos(grupos):
 # ----------------------------------------------------------------------------
 # Stickers animados (círculos, flechas, tache, mano…) que se ponen a mano en Edición
 # plan["stickers"] = [{tipo, inicio, fin (tiempo del original), x, y (centro, 0-1 del video vertical),
-#                      tam (ancho, fracción del ancho del video), rot (grados), color "#rrggbb", espejo}]
+#                      tam (ancho, fracción del ancho del video), prop (alto / ancho, 1 = como viene),
+#                      rot (grados), color "#rrggbb", espejo}]
+# Estirados (prop != 1): los de línea (STICKERS_LINEA) se dibujan a la medida para que la línea no se engorde;
+# esa hoja la hace la pestaña Edición y queda en <trabajo>/stickers/<tipo>_<prop>.png. Los demás se estiran.
 # Cada sticker es una hoja PNG (assets/stickers/<tipo>.png): a la izquierda la capa fija (contornos negros y
 # blanco) y a la derecha la capa de color (en blanco y grises, se tiñe del color elegido). Cuadros: entrada y luego
 # un ciclo que se repite mientras dura.
@@ -3046,6 +3049,25 @@ CATALOGO_STICKERS = [
     ("exclamacion", "¡!", "#ffd400", 0.26), ("interrogacion", "¿?", "#ffd400", 0.26),
     ("destello", "Destello", "#ffd400", 0.36), ("explosion", "Explosión", "#ffd400", 0.36),
 ]
+
+
+STICKERS_LINEA = ("circulo", "ovalo", "rectangulo", "enfoque", "subrayado", "tachado")
+
+
+def prop_sticker(s):
+    try:
+        return round(max(0.1, min(10.0, float(s.get("prop", 1) or 1))), 2)
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def hoja_sticker(tipo, prop=1.0, trabajo=None):
+    """Ruta de la hoja del sticker: la hecha a la medida en el trabajo (si es de línea y está estirado) o la base."""
+    if trabajo and tipo in STICKERS_LINEA and abs(prop - 1) > 0.005:
+        p = Path(trabajo) / "stickers" / f"{tipo}_{prop:.2f}.png"
+        if p.exists():
+            return p
+    return DIR_STICKERS / f"{tipo}.png"
 
 
 def meta_stickers():
@@ -3067,31 +3089,39 @@ def cuadro_sticker(local, meta=None):
 class Stickers:
     """Pega los stickers en cada cuadro del video vertical (W x H). t = tiempo del video original."""
 
-    def __init__(self, lista, W, H):
+    def __init__(self, lista, W, H, trabajo=None):
         self.lista = sorted([s for s in lista or [] if (DIR_STICKERS / f"{s.get('tipo')}.png").exists()],
                             key=lambda s: s["inicio"])
         self.W, self.H = W, H
+        self.trabajo = trabajo
         self.meta = meta_stickers()
         self.hojas = {}
         self.cache = {}
 
-    def _hoja(self, tipo):
-        if tipo not in self.hojas:
-            h = cv2.imread(str(DIR_STICKERS / f"{tipo}.png"), cv2.IMREAD_UNCHANGED)
-            self.hojas[tipo] = h.astype(np.float32) / 255.0 if h is not None else None
-        return self.hojas[tipo]
+    def activos(self, t):
+        return any(s["inicio"] <= t < s["fin"] for s in self.lista)
+
+    def _hoja(self, tipo, prop):
+        ruta_h = hoja_sticker(tipo, prop, self.trabajo)
+        if ruta_h not in self.hojas:
+            h = cv2.imread(str(ruta_h), cv2.IMREAD_UNCHANGED)
+            self.hojas[ruta_h] = h.astype(np.float32) / 255.0 if h is not None else None
+        return self.hojas[ruta_h]
 
     def _imagen(self, n, s, k):
         clave = (n, k)
         if clave in self.cache:
             return self.cache[clave]
-        hoja = self._hoja(s["tipo"])
+        prop = prop_sticker(s)
+        hoja = self._hoja(s["tipo"], prop)
         if hoja is None:
             return None
-        S, C = self.meta["S"], self.meta["COLS"]
-        x, y = (k % C) * S, (k // C) * S
-        fijo = hoja[y:y + S, x:x + S]
-        col = hoja[y:y + S, C * S + x:C * S + x + S].copy()
+        C = self.meta["COLS"]
+        filas = -(-self.meta["F"] // C)
+        fw, fh = hoja.shape[1] // (2 * C), hoja.shape[0] // filas   # medida de cada cuadro de esta hoja
+        x, y = (k % C) * fw, (k // C) * fh
+        fijo = hoja[y:y + fh, x:x + fw]
+        col = hoja[y:y + fh, C * fw + x:C * fw + x + fw].copy()
         r, g, b = hex_rgb(s.get("color") or "#e6231b")
         col[..., 0] *= b / 255.0
         col[..., 1] *= g / 255.0
@@ -3103,14 +3133,15 @@ class Stickers:
         img = np.concatenate([rgb, a], axis=2)
         if s.get("espejo"):
             img = img[:, ::-1]
-        lado = max(4, int(round(float(s.get("tam", 0.35)) * self.W)))
-        img = cv2.resize(img, (lado, lado), interpolation=cv2.INTER_AREA if lado < S else cv2.INTER_CUBIC)
+        ancho = max(4, int(round(float(s.get("tam", 0.35)) * self.W)))
+        alto = max(4, int(round(ancho * prop)))
+        img = cv2.resize(img, (ancho, alto), interpolation=cv2.INTER_AREA if ancho < fw else cv2.INTER_CUBIC)
         rot = float(s.get("rot", 0) or 0)
         if abs(rot) > 0.01:
-            diag = int(np.ceil(lado * 1.4143)) + 2
-            M = cv2.getRotationMatrix2D((lado / 2, lado / 2), -rot, 1.0)
-            M[0, 2] += (diag - lado) / 2
-            M[1, 2] += (diag - lado) / 2
+            diag = int(np.ceil(np.hypot(ancho, alto))) + 2
+            M = cv2.getRotationMatrix2D((ancho / 2, alto / 2), -rot, 1.0)
+            M[0, 2] += (diag - ancho) / 2
+            M[1, 2] += (diag - alto) / 2
             img = cv2.warpAffine(img, M, (diag, diag), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
                                  borderValue=(0, 0, 0, 0))
         img = np.clip(img, 0, 1)
@@ -4042,7 +4073,7 @@ def cmd_render(args):
     if cort_cam is not None and cort_cam.cuadros:
         log(f"{len(trans_cam)} transiciones de cambio de cámara con la cortinilla limpia")
 
-    stickers = Stickers(plan.get("stickers"), W, H) if plan.get("stickers") else None
+    stickers = Stickers(plan.get("stickers"), W, H, trabajo) if plan.get("stickers") else None
     idx, ti, ci, n_out = 0, 0, 0, 0
     total = info["cuadros"] or 1
     lienzo = np.zeros((H, W, 3), np.uint8)
@@ -4149,10 +4180,21 @@ def cmd_render(args):
                         vent = ventana_manual(manual_p, t, pv["caja"], iw / ih, vent)
                     lienzo[iy:iy + ih, ix:ix + iw] = recortar(frame, vent, iw, ih)
 
+        # stickers: encima de lo que se ve, pero debajo de la franja azul y del título. La vista previa va sin
+        # ellos (se dibujan en vivo), así que se guarda una copia limpia para ella.
+        limpio = None
+        if stickers is not None and not previa and stickers.activos(t):
+            limpio = lienzo.copy()
+            stickers.pegar(lienzo, t)
+            if lay == "dividida" and franja is not None:
+                fx, fy, fw, fh = L["dividida"]["franja"]["area"]
+                lienzo[fy:fy + fh, fx:fx + fw] = franja
         for a_c, b_c in ventanas_cort:
             if a_c <= te < b_c:
                 k = min(len(cortinilla) - 1, int((te - a_c) / (b_c - a_c) * len(cortinilla)))
                 lienzo[:] = cortinilla[k]
+                if limpio is not None:
+                    limpio[:] = cortinilla[k]
                 break
         if cort_cam is not None:
             for tr in trans_cam:
@@ -4160,12 +4202,14 @@ def cmd_render(args):
                     c_ = cort_cam.cuadro(t - tr["inicio"], tr["fin"] - tr["inicio"])
                     if c_ is not None:
                         lienzo[:] = c_
+                        if limpio is not None:
+                            limpio[:] = c_
                     break
         pegar(lienzo, titulo)
-        vista.escribir(lienzo, te, lay)
+        if limpio is not None:
+            pegar(limpio, titulo)
+        vista.escribir(limpio if limpio is not None else lienzo, te, lay)
 
-        if stickers is not None and not previa:   # en la vista previa se dibujan en vivo
-            stickers.pegar(lienzo, t)
         act = subs.activo(t) if not previa else None   # la vista previa va sin subtítulos (se dibujan en vivo)
         if act:
             sx, sy, sw, sh = L[lay]["subtitulos"]["area"]

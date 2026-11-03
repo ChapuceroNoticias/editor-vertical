@@ -52,8 +52,11 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
     **📸 Captura** la agrega como otra foto de ese momento.
   - *Stickers:* biblioteca de stickers animados (círculo, óvalo, recuadro, esquinas, subrayado, tachado, flechas,
     tache, palomita, mano dando clic, ¡!, ¿?, destello, explosión). Clic en uno = se pone donde va el video (2.5 s).
-    En la vista previa vertical se arrastra, la esquina ◢ lo agranda, el punto de arriba lo gira (rueda = tamaño,
-    Shift + rueda = girar). En el panel: color, tamaño, giro, voltear, centrar, duplicar, quitar. Su bloque rosa en la
+    En la vista previa vertical se arrastra, la esquina ◢ lo agranda parejo, las agarraderas de los lados lo estiran
+    solo a lo ancho o solo a lo alto (los de línea —círculo, óvalo, recuadro, esquinas, subrayado, tachado— se dibujan
+    a la medida y la línea no se engorda), el punto de arriba lo gira (rueda = tamaño, Shift + rueda = girar).
+    En el panel: color, ancho, alto, ↺ proporción, giro, voltear, centrar, duplicar, quitar. Quedan encima de lo que
+    se ve pero debajo de la franja azul y del título. Su bloque rosa en la
     línea de tiempo (carril «Stickers») se mueve, se estira, se parte y se copia como los demás. Salen en el video
     final y se ven en vivo en Subtítulos.
   - *Encuadre:* sobre el video original hay dos recuadros. **Amarillo/verde = Nacho** (arrástralo, esquinas o Ctrl + rueda

@@ -1034,7 +1034,8 @@ def guardar_stickers(t, lista):
             color = tipos[tipo]
         limpios.append({"tipo": tipo, "inicio": round(a, 3), "fin": round(b, 3),
                         "x": round(max(-0.2, min(1.2, x)), 4), "y": round(max(-0.2, min(1.2, y)), 4),
-                        "tam": round(max(0.04, min(1.5, tam)), 4), "rot": round(((rot + 180) % 360) - 180, 1),
+                        "tam": round(max(0.04, min(1.5, tam)), 4), "prop": ed.prop_sticker(d),
+                        "rot": round(((rot + 180) % 360) - 180, 1),
                         "color": color.lower(), "espejo": bool(d.get("espejo"))})
     limpios.sort(key=lambda d: d["inicio"])
     # los stickers se dibujan en vivo en la vista previa: cambiarlos no la deja «desactualizada»
@@ -1916,6 +1917,10 @@ def datos_subtitulos(t):
         "stickers": [dict(s_, i=round(ed_t(s_["inicio"], plan), 3), f=round(ed_t(s_["fin"], plan), 3))
                      for s_ in plan.get("stickers") or []],
         "meta_stickers": ed.meta_stickers(),
+        # para que los stickers queden debajo de la franja azul y del título (en px del video vertical)
+        "franja_area": (pl.get("layouts", {}).get("dividida", {}).get("franja") or {}).get("area"),
+        "titulo": bool(plan.get("titulo")) and (estilo_de(plan) == "motivacional" or bool(pl.get("titulo", {}).get("barra"))),
+        "titulo_fin": round(ed_t(float(plan.get("titulo_fin", 3.0)), plan), 3) if estilo_de(plan) == "motivacional" else None,
     }
 
 
@@ -2201,6 +2206,10 @@ def crear_app():
         registrar(f"✂ Montaje ({acc}): {msg}")
         return {"ok": True, "mensaje": msg}
 
+    @app.get("/app/stickers_gen.js")
+    def app_stickers_gen():
+        return FileResponse(BASE / "web" / "stickers_gen.js", media_type="text/javascript", headers={"Cache-Control": "no-store"})
+
     @app.get("/app/notificacion.mp3")
     def app_notificacion():
         return FileResponse(BASE / "web" / "notificacion.mp3", media_type="audio/mpeg")
@@ -2437,11 +2446,34 @@ def crear_app():
         return {"ok": True, "n": len(lista)}
 
     @app.get("/stk/hoja")
-    def stk_hoja(tipo: str):
+    def stk_hoja(tipo: str, prop: float = 1.0, t: str = ""):
+        """Hoja del sticker; con prop y trabajo, la hecha a la medida (si ya está; si no, la base)."""
         if tipo not in {a for a, *_ in ed.CATALOGO_STICKERS}:
             raise HTTPException(404)
-        return FileResponse(ed.DIR_STICKERS / f"{tipo}.png", media_type="image/png",
-                            headers={"Cache-Control": "max-age=86400"})
+        trabajo = validar(t) if t else None
+        p = ed.hoja_sticker(tipo, ed.prop_sticker({"prop": prop}), trabajo)
+        return FileResponse(p, media_type="image/png",
+                            headers={"Cache-Control": "max-age=86400" if p.parent == ed.DIR_STICKERS else "no-store"})
+
+    @app.post("/stk/hoja_trabajo")
+    def stk_hoja_trabajo(d: dict = Body(...)):
+        """La pestaña Edición manda la hoja de un sticker de línea estirado (dibujado a la medida)."""
+        t = validar(d.get("t"))
+        tipo = str(d.get("tipo"))
+        if tipo not in ed.STICKERS_LINEA:
+            raise HTTPException(400, "Ese sticker no se dibuja a la medida")
+        prop = ed.prop_sticker(d)
+        datos = str(d.get("png") or "")
+        if "," in datos:
+            datos = datos.split(",", 1)[1]
+        import base64
+        crudo = base64.b64decode(datos)
+        if not crudo.startswith(b"\x89PNG"):
+            raise HTTPException(400, "No es una imagen PNG")
+        carpeta = Path(t) / "stickers"
+        carpeta.mkdir(exist_ok=True)
+        (carpeta / f"{tipo}_{prop:.2f}.png").write_bytes(crudo)
+        return {"ok": True}
 
     @app.post("/edi/difuminar_buscar")
     def edi_difuminar_buscar(d: dict = Body(...)):
