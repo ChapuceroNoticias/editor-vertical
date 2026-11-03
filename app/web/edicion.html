@@ -125,7 +125,7 @@
   .mesa { display: flex; align-items: flex-start; min-height: calc(100vh - 56px); }
   .principal { flex: 1 1 auto; min-width: 0; padding-bottom: 14px; }
   .zona { padding: 14px; gap: 14px; }
-  #previa { width: 270px; border-color: var(--linea); }
+  #previa { width: 270px; height: auto; border-color: var(--linea); }
   .lado .rotulo { font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--tenue); order: -1; align-self: flex-start; }
   .controles { padding: 0 14px; gap: 6px; }
   .tiempo { font-family: var(--mono); font-weight: 500; font-size: 14px; margin-left: 6px; }
@@ -2184,7 +2184,7 @@ async function iniciar() {
   linea = $("linea"); lctx = linea.getContext("2d");
   const [W, H] = E.salida;
   previa.height = Math.round(previa.width * H / W);
-  previa.style.height = Math.round(300 * H / W) + "px";
+  previa.style.height = "auto";   // alto según su ancho (proporción del video vertical)
   $("escenario").style.aspectRatio = `${E.video.ancho} / ${E.video.alto}`;
   vista = [0, durE()];
   if (E.armado.dividida.franja_fondo) { franjaImg = new Image(); franjaImg.src = `/enc/franja?t=${encodeURIComponent(T)}`; }
