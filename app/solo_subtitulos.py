@@ -218,6 +218,7 @@ def analizar(args, video, pl, pl_path, trabajo):
         # para el editor de subtítulos en vivo (posición y tamaño ya ajustados a este video)
         "franjas": franjas,
         "subtitulos_render": {"salida": [W, H], "areas": areas, "estilo": cfg},
+        "video_firma": firma_video(video),
     }
     ed.guardar_json(trabajo / "plan.json", plan)
     ed.log(f"Plan guardado en {trabajo / 'plan.json'}")
@@ -225,6 +226,84 @@ def analizar(args, video, pl, pl_path, trabajo):
     ed.copia_navegador(video, trabajo)
     ed.Progreso.paso(1.0, "Análisis terminado")
     return trabajo
+
+
+# ----------------------------------------------------------------------------
+# Video reemplazado: si en VideosEdit se pone otra versión del video con el MISMO nombre (por ejemplo, editado en
+# otro programa), se pueden seguir usando los mismos subtítulos sin transcribir de nuevo.
+# ----------------------------------------------------------------------------
+TOLERANCIA_DURACION = 0.1   # segundos: si la duración cambia menos que esto, se toma como la misma
+
+
+def firma_video(video):
+    st = Path(video).stat()
+    return f"{st.st_size}-{int(st.st_mtime)}"
+
+
+def estado_video(trabajo):
+    """¿Cambió el video desde que se hicieron los subtítulos? None si es el mismo (o no existe); si cambió,
+    {"antes": duración guardada, "ahora": duración del video nuevo, "igual": True si dura lo mismo}."""
+    trabajo = Path(trabajo)
+    plan = ed.cargar_json(trabajo / "plan.json")
+    video = Path(plan["video"])
+    if not video.exists():
+        return None
+    firma = firma_video(video)
+    vieja = plan.get("video_firma")
+    if vieja is None:   # trabajos de antes de esta función: se compara con la fecha de la transcripción
+        tr = trabajo / "transcripcion.json"
+        vieja = firma if not tr.exists() or video.stat().st_mtime <= tr.stat().st_mtime + 2 else "?"
+        if vieja == firma:   # desde ahora queda anotado
+            plan["video_firma"] = firma
+            ed.guardar_json(trabajo / "plan.json", plan)
+    if vieja == firma:
+        return None
+    fps, n, _, _ = ed.info_video(video)
+    ahora = n / fps if fps else 0.0
+    antes = float(plan["info"]["duracion"])
+    return {"antes": round(antes, 2), "ahora": round(ahora, 2), "igual": abs(ahora - antes) <= TOLERANCIA_DURACION}
+
+
+def refrescar_video(trabajo):
+    """Usa el video nuevo con los MISMOS subtítulos: vuelve a medir el video y a buscar lo que depende de la
+    imagen (franja azul, título del inicio); los subtítulos que queden después del final se quitan o se recortan."""
+    trabajo = Path(trabajo)
+    plan = ed.cargar_json(trabajo / "plan.json")
+    pl = ed.cargar_json(ed.ruta(plan["plantilla"]))
+    video = Path(plan["video"])
+    fps, n, W, H = ed.info_video(video)
+    info = {"fps": fps, "cuadros": n, "ancho": W, "alto": H, "duracion": n / fps if fps else 0,
+            "audio": ed.tiene_audio(video)}
+    cfg, area = medidas(pl, W, H)
+    franjas = detectar_franjas(video, info, pl.get("franja_azul", {})) if pl.get("franja_azul", {}).get("activar", True) else []
+    areas = {"persona": area} if area else {}
+    if franjas:
+        fx0, fw = pl.get("franja_azul", {}).get("x_ancho", [30, 880])
+        ys0 = int(np.median([f[2] for f in franjas])); ys1 = int(np.median([f[3] for f in franjas]))
+        areas["dividida"] = [int(fx0 * W / 1080), ys0, int(fw * W / 1080), ys1 - ys0]
+    if cfg.get("modo") == "frases":
+        plan["titulo_fin"] = detectar_titulo(video, info)
+    dur = info["duracion"]
+    plan.update(info=info, franjas=franjas, video_firma=firma_video(video),
+                subtitulos_render={"salida": [W, H], "areas": areas, "estilo": cfg},
+                tomas=[{"inicio": 0.0, "fin": dur, "layout": "persona"}])
+    ed.guardar_json(trabajo / "plan.json", plan)
+    quitados = 0
+    sp = trabajo / "subtitulos.json"
+    if sp.exists():   # lo que quedó después del final del video nuevo
+        grupos = []
+        for g in ed.cargar_json(sp):
+            if g["i"] >= dur - 0.05:
+                quitados += 1
+                continue
+            if g["f"] > dur:
+                g["f"] = round(dur, 3)
+                g["palabras"] = [dict(p, f=min(p["f"], round(dur, 3))) for p in g["palabras"] if p["i"] < dur]
+            grupos.append(g)
+        ed.guardar_json(sp, grupos)
+    ed.copia_navegador(video, trabajo)
+    ed.log(f"Video nuevo con los mismos subtítulos ({dur:.2f} s)" + (f"; {quitados} quedaron después del final" if quitados else ""))
+    return {"duracion": round(dur, 2), "quitados": quitados}
 
 
 def render(args, trabajo, plan, pl):

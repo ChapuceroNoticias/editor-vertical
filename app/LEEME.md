@@ -191,6 +191,11 @@ o sticker que eliges.
   - *Solo subtítulos (Chapucero)*: para un clip YA editado (vertical u horizontal). No recorta ni
     cambia nada: transcribe, corrige nombres y puntuación con el modelo local y le pone los subtítulos con el estilo
     elegido. El título no hace falta. Sale como `NOMBRE_subtitulado.mp4` en su carpeta `_trabajo`.
+    **Si cambias el video** (otra versión con el MISMO nombre en VideosEdit, junto a su carpeta `_trabajo`): al abrir
+    el trabajo o darle Analizar, la plataforma lo detecta. Si dura lo mismo, usa los mismos subtítulos sin preguntar
+    (solo vuelve a buscar la franja azul y el título del inicio). Si la duración es distinta, pregunta: **Usar los
+    mismos subtítulos** (los que queden después del final se quitan) o **Transcribir de nuevo**. Si el video no
+    cambió y le das Analizar, también pregunta, para no perder las correcciones.
 
 ## Video largo (pestaña «Video largo»)
 

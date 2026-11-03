@@ -2756,6 +2756,9 @@ button.secondary { background: #1D1D22 !important; border: 1px solid #2A2A30 !im
 #pasos [role=tablist] button.selected::after, #pasos [role=tablist] button::after { display: none !important; }
 #pasos > .tabitem { padding: 10px 0 0 !important; border: 0 !important; }
 .vacio-editor { padding: 60px 20px; text-align: center; color: #9A9AA3; border: 1px dashed #2A2A30; border-radius: 12px; }
+#aviso_video { margin: 16px 44px 0 !important; padding: 18px 20px !important; border: 1px solid #5A4520 !important; border-radius: 12px !important;
+  background: #17140D !important; gap: 12px !important; }
+#aviso_video p { margin: 0 0 4px; color: #EDEDF0; }
 #caja_registro textarea { font: 12.5px/1.5 "Geist Mono", monospace !important; background: #0B0B0D !important; }
 """
 
@@ -2839,6 +2842,14 @@ def construir():
                 with gr.Row(elem_id="progreso_caja", equal_height=True):
                     progreso = gr.HTML(elem_id="progreso")
                     btn_cancelar = gr.Button("Cancelar todo", elem_id="btn_cancelar", scale=0, min_width=130)
+                # «Solo subtítulos»: el video cambió (o ya tenía subtítulos): ¿mismos subtítulos o transcribir de nuevo?
+                aviso_t = gr.State("")
+                with gr.Column(visible=False, elem_id="aviso_video") as col_aviso:
+                    aviso_txt = gr.Markdown()
+                    with gr.Row():
+                        btn_mismos = gr.Button("Usar los mismos subtítulos", variant="primary", scale=0, min_width=230)
+                        btn_transcribir = gr.Button("Transcribir de nuevo", scale=0, min_width=190)
+                        btn_aviso_no = gr.Button("Cancelar", scale=0, min_width=110)
                 with gr.Tabs(elem_id="secciones", selected="editor") as secciones:
                     # ---------- Editor ----------
                     with gr.Tab("Editor", id="editor"):
@@ -2954,31 +2965,80 @@ def construir():
                     gr.Column(visible=False), gr.Column(visible=True))
 
         salidas_ui = [trabajo, editor_edi, editor_subs, video, actual, col_inicio, col_area]
+        sin_aviso = (gr.update(),) * 3   # col_aviso, aviso_txt, aviso_t
+        salidas_aviso = [col_aviso, aviso_txt, aviso_t]
 
         def accion_cargar(ruta):
             t = limpiar_ruta(ruta)
             if not t or not (Path(t) / "plan.json").exists():
                 gr.Warning("Esa carpeta no tiene plan.json")
-                return ("", iframe_edi(None), iframe_subs(None), None, "", gr.update(), gr.update(), "")
-            return (*todo_ui(t), "")
+                return ("", iframe_edi(None), iframe_subs(None), None, "", gr.update(), gr.update(), "", *sin_aviso)
+            try:
+                r = revisar_solo_subs(t, False)
+            except Exception as e:
+                registrar(f"⚠ No pude revisar si el video cambió: {e}")
+                r = None
+            if r and r != "mismo":   # cambió la duración: se abre y se pregunta qué hacer
+                return (*todo_ui(t), "", gr.Column(visible=True), r, t)
+            return (*todo_ui(t), "", gr.Column(visible=False), "", "")
 
-        btn_cargar.click(accion_cargar, ruta_trabajo, salidas_ui + [progreso])
+        btn_cargar.click(accion_cargar, ruta_trabajo, salidas_ui + [progreso] + salidas_aviso)
 
         def abrir_reciente(ruta):
             if not ruta:
-                return (*(gr.update(),) * (len(salidas_ui) + 1), gr.update())
+                return (*(gr.update(),) * (len(salidas_ui) + 4), gr.update())
             return (*accion_cargar(ruta), gr.update(value=None))
 
-        recientes.input(abrir_reciente, recientes, salidas_ui + [progreso, recientes])
+        recientes.input(abrir_reciente, recientes, salidas_ui + [progreso] + salidas_aviso + [recientes])
 
         def volver():
             return gr.Column(visible=True), gr.Column(visible=False), gr.update(choices=opciones_recientes(), value=None)
 
         btn_volver.click(volver, None, [col_inicio, col_area, recientes], queue=False)
 
+
+        def texto_aviso(t, est_v):
+            nombre = Path(cargar(t)[0]["video"]).name
+            if est_v is None:
+                return (f"**{nombre}** ya tiene sus subtítulos de «Solo subtítulos» (el video no ha cambiado). "
+                        "Si lo analizas de nuevo se transcribe otra vez y **se pierden las correcciones**.")
+            return (f"**El video {nombre} cambió y su duración es distinta**: antes {est_v['antes']:.2f} s, ahora "
+                    f"{est_v['ahora']:.2f} s ({est_v['ahora'] - est_v['antes']:+.2f} s). ¿Usar los mismos subtítulos "
+                    "(los que queden después del final se quitan) o transcribir de nuevo?")
+
+        def revisar_solo_subs(t, al_analizar):
+            """Para «Solo subtítulos»: None = seguir normal; "mismo" = se refrescó solo (dura lo mismo);
+            o el texto del aviso para preguntar."""
+            plan, _ = cargar(t)
+            if estilo_de(plan) != "solo_subtitulos":
+                return None
+            est_v = ed.estilo_solo_subtitulos().estado_video(t)
+            if est_v is None:
+                return texto_aviso(t, None) if al_analizar else None
+            if est_v["igual"]:
+                ed.estilo_solo_subtitulos().refrescar_video(t)
+                registrar(f"● El video de {Path(t).name} cambió y dura lo mismo: se usan los mismos subtítulos")
+                gr.Info("El video cambió y dura lo mismo: se conservaron los subtítulos.")
+                return "mismo"
+            return texto_aviso(t, est_v)
+
         def accion_procesar(ruta, tit, gpu, est):
             nada = (gr.update(),) * len(salidas_ui)
             encontrado = buscar_video(ruta)
+            if encontrado and est.startswith("Solo subtítulos"):
+                t_ex = encontrado.with_name(encontrado.stem + "_trabajo")
+                if (t_ex / "plan.json").exists() and ((t_ex / "subtitulos.json").exists() or (t_ex / "transcripcion.json").exists()):
+                    r = revisar_solo_subs(str(t_ex), True)
+                    if r == "mismo":
+                        yield (*todo_ui(str(t_ex)), "", *sin_aviso)
+                        return
+                    if r:
+                        yield (*nada, "", gr.Column(visible=True), r, str(t_ex))
+                        return
+            yield from ((*x, *sin_aviso) for x in analizar_video(encontrado, ruta, tit, gpu, est))
+
+        def analizar_video(encontrado, ruta, tit, gpu, est, plantilla_ruta=None):
+            nada = (gr.update(),) * len(salidas_ui)
             if not encontrado:
                 gr.Warning(f"No encuentro «{limpiar_ruta(ruta)}» en {CARPETA_VIDEOS}")
                 yield (*nada, barra(1.0, f"No encontré «{limpiar_ruta(ruta)}» en {CARPETA_VIDEOS}", "error"))
@@ -3000,7 +3060,7 @@ def construir():
                     else:
                         yield (*nada, html)
                 v = convertido
-            plantilla_est = str(BASE / ESTILOS.get(est, ESTILOS["Clips Chapuceros"]))
+            plantilla_est = plantilla_ruta or str(BASE / ESTILOS.get(est, ESTILOS["Clips Chapuceros"]))
             # solo análisis: la revisión se hace con las vistas previas en vivo; el video final se exporta al terminar
             cmd = [sys.executable, str(BASE / "editor.py"), "analizar", v, "--titulo", (tit or "").strip(),
                    "--plantilla", plantilla_est, "--vista-previa"] + (["--solo-gpu", "--dispositivo", "cuda"] if gpu else [])
@@ -3012,7 +3072,32 @@ def construir():
                     yield (*nada, html)
 
         ev_procesar = btn_procesar.click(accion_procesar, [ruta_video, titulo_nuevo, usar_gpu, estilo_edicion],
-                                         salidas_ui + [progreso])
+                                         salidas_ui + [progreso] + salidas_aviso)
+
+        # respuestas del aviso de «Solo subtítulos»
+        def usar_mismos(t):
+            if not t:
+                return (*(gr.update(),) * len(salidas_ui), "", gr.Column(visible=False), "", "")
+            r = ed.estilo_solo_subtitulos().refrescar_video(t)
+            registrar(f"● {Path(t).name}: se usan los mismos subtítulos con el video nuevo ({r['duracion']:.2f} s)")
+            gr.Info("Listo: el video nuevo quedó con los mismos subtítulos." +
+                    (f" {r['quitados']} subtítulo(s) quedaban después del final y se quitaron." if r["quitados"] else ""))
+            return (*todo_ui(t), "", gr.Column(visible=False), "", "")
+
+        def transcribir_otra_vez(t, gpu):
+            if not t:
+                yield (*(gr.update(),) * len(salidas_ui), "", gr.Column(visible=False), "", "")
+                return
+            plan, _ = cargar(t)
+            v = Path(plan["video"])
+            yield (*(gr.update(),) * len(salidas_ui), gr.update(), gr.Column(visible=False), "", "")
+            yield from ((*x, *sin_aviso) for x in analizar_video(v, str(v), plan.get("titulo", ""), gpu,
+                                                                  "Solo subtítulos (Chapucero)", str(ed.ruta(plan["plantilla"]))))
+
+        btn_mismos.click(usar_mismos, aviso_t, salidas_ui + [progreso] + salidas_aviso)
+        ev_transcribir = btn_transcribir.click(transcribir_otra_vez, [aviso_t, usar_gpu], salidas_ui + [progreso] + salidas_aviso)
+        ev_transcribir.then(refrescar_listas, None, [ruta_video, ruta_trabajo, recientes])
+        btn_aviso_no.click(lambda: (gr.Column(visible=False), "", ""), None, salidas_aviso, queue=False)
         ev_procesar.then(refrescar_listas, None, [ruta_video, ruta_trabajo, recientes])
 
         def accion_render(t, gpu):
@@ -3065,7 +3150,7 @@ def construir():
             return barra(1.0, f"⛔ Cancelado: se detuvo lo que estaba trabajando ({n} proceso(s)"
                               + (f", {cola} en cola" if cola else "") + ").", "error")
 
-        btn_cancelar.click(accion_cancelar, None, progreso, cancels=[ev_procesar, ev_render, ev_exportar], queue=False)
+        btn_cancelar.click(accion_cancelar, None, progreso, cancels=[ev_procesar, ev_render, ev_exportar, ev_transcribir], queue=False)
     return demo
 
 
