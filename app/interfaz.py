@@ -1508,10 +1508,12 @@ def captura_pantalla(t, d):
             if nuevo else "📸 Captura agregada a las fotos de esta imagen."}
 
 
-def guardar_titulo(t, titulo):
+def guardar_titulo(t, titulo, en_video=None):
     plan, _ = cargar(t)
     respaldar(t)
     plan["titulo"] = (titulo or "").strip()
+    if en_video is not None:   # «Solo subtítulos»: poner o no la barra del título encima del clip
+        plan["titulo_en_video"] = bool(en_video)
     guardar_plan(t, plan)
 
 
@@ -1914,7 +1916,7 @@ def datos_subtitulos(t):
                           (Path(t) / "plan.json").stat().st_mtime > (Path(t) / "vista_previa.mp4").stat().st_mtime + 1,
         "hay_video": solo or (Path(t) / "vista_previa.mp4").exists() or bool(video_salida(t)),
         # «Solo subtítulos»: el título se escribe aquí mismo (con él se nombra el video al exportar)
-        "solo": solo, "titulo_texto": plan.get("titulo", "") or "",
+        "solo": solo, "titulo_texto": plan.get("titulo", "") or "", "titulo_en_video": plan.get("titulo_en_video"),   # None = nunca se ha elegido
         "nombre_sin_titulo": Path(plan["video"]).stem + "_subtitulado.mp4",
         # stickers (se dibujan en vivo encima de la vista previa; tiempos del video editado)
         "stickers": [dict(s_, i=round(ed_t(s_["inicio"], plan), 3), f=round(ed_t(s_["fin"], plan), 3))
@@ -2132,10 +2134,13 @@ def crear_app():
         """Capa del título (PNG transparente del tamaño de la salida) para la vista previa."""
         plan, _ = cargar(validar(t))
         pl = plantilla(plan)
-        W, H = pl["salida"]["ancho"], pl["salida"]["alto"]
+        solo = estilo_de(plan) == "solo_subtitulos"
+        W, H = (plan["info"]["ancho"], plan["info"]["alto"]) if solo else (pl["salida"]["ancho"], pl["salida"]["alto"])
         try:
             moti = ed.estilo_motivacional()
-            if estilo_de(plan) == "motivacional" and moti.es_yair(pl) and plan.get("titulo"):
+            if solo:   # «Solo subtítulos»: la barra del título encima del clip, si se pidió
+                sup = ed.estilo_solo_subtitulos().titulo_del_plan(plan, pl)
+            elif estilo_de(plan) == "motivacional" and moti.es_yair(pl) and plan.get("titulo"):
                 sup = moti.capa_vista_previa_yair(plan, pl, W, H)   # cuadros del título + imagen de la entrada
             elif estilo_de(plan) == "motivacional":   # recuadro negro del estilo motivacional
                 sup = moti.capa_titulo(pl["titulo"], plan.get("titulo", ""), W, H)
@@ -2298,7 +2303,7 @@ def crear_app():
     @app.post("/edi/titulo")
     def edi_titulo(d: dict = Body(...)):
         t = validar(d.get("t"))
-        guardar_titulo(t, d.get("titulo"))
+        guardar_titulo(t, d.get("titulo"), d.get("en_video"))
         return {"ok": True}
 
     @app.post("/edi/titulo_fin")

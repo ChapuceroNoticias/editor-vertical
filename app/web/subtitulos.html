@@ -115,6 +115,8 @@
   .titulo_solo label { font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--tenue); }
   .titulo_solo input { flex: 1 1 320px; height: 36px; padding: 0 12px; font-size: 14px; }
   .titulo_solo input.falta { border-color: #7A5A1E; }
+  .titulo_solo .en_video { display: flex; align-items: center; gap: 6px; font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--texto2); cursor: pointer; }
+  .titulo_solo .en_video input { accent-color: var(--texto); width: 15px; height: 15px; }
   .aviso_titulo { flex-basis: 100%; font-size: 12.5px; color: var(--suave); }
   .aviso_titulo.falta { color: var(--pend); }
   .aviso_titulo.ok { color: var(--ok); }
@@ -145,6 +147,7 @@
     <div class="titulo_solo" id="titulo_solo" hidden>
       <label for="titulo_txt">Título</label>
       <input type="text" id="titulo_txt" placeholder="Título del video (con él se nombra el archivo al exportar)">
+      <label class="en_video" title="Pone la barra roja del título encima del clip (se ve aquí en vivo y sale en el video exportado)"><input type="checkbox" id="titulo_en_video"> Ponerlo en el video</label>
       <button class="btn" id="titulo_guardar" disabled>Guardar título</button>
       <span class="aviso_titulo" id="titulo_aviso"></span>
     </div>
@@ -372,6 +375,7 @@ function dibujar() {
   if ((!D.limpia && !vivo) || !fuenteLista) { cajaSub = null; return; }
   const t = ahora();
   dibujarStickers(ctx, t, W, H);   // debajo de los subtítulos, como en el video final
+  if (D.solo && tituloSoloImg) ctx.drawImage(tituloSoloImg, 0, 0, W, H);   // barra del título encima del clip
   const s = W / D.salida[0];
   const st = D.estilo;
   let act = null;
@@ -755,6 +759,7 @@ $("buscar").addEventListener("input", filtrar);
 $("titulo_txt").addEventListener("input", () => pintarTitulo());
 $("titulo_txt").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (!$("titulo_guardar").disabled) guardarTitulo(); } });
 $("titulo_guardar").onclick = guardarTitulo;
+$("titulo_en_video").addEventListener("change", () => pintarTitulo());
 $("m_render").onclick = () => { if (vivo) ponerModo(false); };
 new ResizeObserver(ajustarArmado).observe(video);
 let pestanaOculta = false;
@@ -879,27 +884,37 @@ function pintarLista() {
   ultimaActiva = -2;
 }
 
-let tituloGuardado = "";
+let tituloGuardado = "", enVideoGuardado = false;
+let tituloSoloImg = null;   // la barra del título encima del clip (la arma el servidor igual que en el export)
+function cargarTituloImg() {
+  tituloSoloImg = null;
+  if (!D || !D.solo || !enVideoGuardado || !tituloGuardado) return;
+  const im = new Image();
+  im.onload = () => { tituloSoloImg = im; };
+  im.src = `/enc/titulo?t=${encodeURIComponent(T)}&v=${Date.now()}`;
+}
 function pintarTitulo(msg) {
   const caja = $("titulo_solo");
   caja.hidden = !D.solo;
   if (!D.solo) return;
   const txt = $("titulo_txt").value.trim(), falta = !tituloGuardado;
-  $("titulo_guardar").disabled = txt === tituloGuardado;
+  $("titulo_guardar").disabled = txt === tituloGuardado && $("titulo_en_video").checked === enVideoGuardado;
   $("titulo_txt").classList.toggle("falta", falta && !txt);
   const av = $("titulo_aviso");
   if (msg) { av.textContent = msg; av.className = "aviso_titulo ok"; return; }
   av.className = "aviso_titulo" + (falta ? " falta" : "");
   av.textContent = falta ? `⚠ Este video no tiene título: al exportar se llamará «${D.nombre_sin_titulo}». Escríbelo y dale Guardar título.`
-    : (txt !== tituloGuardado ? "Cambios sin guardar en el título." : "");
+    : (!$("titulo_guardar").disabled ? "Cambios sin guardar en el título." :
+       (enVideoGuardado ? "El título se ve encima del clip y saldrá así en el video exportado." : "El título solo da nombre al archivo (no se pone encima del clip)."));
 }
 async function guardarTitulo() {
-  const titulo = $("titulo_txt").value.trim();
+  const titulo = $("titulo_txt").value.trim(), en_video = $("titulo_en_video").checked;
   try {
-    const r = await fetch("/edi/titulo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ t: T, titulo }) });
+    const r = await fetch("/edi/titulo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ t: T, titulo, en_video }) });
     if (!r.ok) throw new Error(await r.text());
-    tituloGuardado = titulo;
-    pintarTitulo(titulo ? "Título guardado ✓ El video se exportará con este nombre." : "");
+    tituloGuardado = titulo; enVideoGuardado = en_video;
+    cargarTituloImg();
+    pintarTitulo(titulo ? "Título guardado ✓ " + (en_video ? "Se ve encima del clip y saldrá así al exportar." : "El video se exportará con este nombre.") : "");
   } catch (err) { $("titulo_aviso").textContent = "No se pudo guardar el título: " + err.message; $("titulo_aviso").className = "aviso_titulo falta"; }
 }
 function desdeDatos(d) {
@@ -907,6 +922,9 @@ function desdeDatos(d) {
   if (D.solo && document.activeElement !== $("titulo_txt")) {
     tituloGuardado = (D.titulo_texto || "").trim();
     $("titulo_txt").value = tituloGuardado;
+    enVideoGuardado = !!D.titulo_en_video;
+    $("titulo_en_video").checked = D.titulo_en_video == null ? true : enVideoGuardado;   // si nunca se eligió, se propone ponerlo
+    cargarTituloImg();
   }
   pintarTitulo();
   filas = d.grupos.map((g, n) => ({ id: g.id ?? n, iTxt: mmss(g.i), fTxt: mmss(g.f), texto: g.texto, palabras: g.palabras, i0: g.i, f0: g.f, dy: g.dy || 0 }));

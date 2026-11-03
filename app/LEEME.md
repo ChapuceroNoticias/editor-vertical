@@ -197,7 +197,9 @@ o sticker que eliges.
     mismos subtítulos** (los que queden después del final se quitan) o **Transcribir de nuevo**. Si el video no
     cambió y le das Analizar, también pregunta, para no perder las correcciones.
     El **título** se escribe en la misma pestaña Subtítulos (arriba de la lista) y se cambia ahí cuando haga falta;
-    con él se nombra el video al exportar. Si no tiene, sale el aviso con el nombre que tendría el archivo.
+    con él se nombra el video al exportar. Si no tiene, sale el aviso con el nombre que tendría el archivo. Con
+    **Ponerlo en el video** marcado, la barra roja del título se ve encima del clip en vivo (vertical: en su lugar de
+    siempre; horizontal: arriba al centro) y sale igual en el video exportado.
 
 ## Video largo (pestaña «Video largo»)
 

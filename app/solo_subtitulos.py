@@ -229,6 +229,42 @@ def analizar(args, video, pl, pl_path, trabajo):
 
 
 # ----------------------------------------------------------------------------
+# Título encima del clip (barra roja de Chapucero), si se pide en la pestaña Subtítulos
+# ----------------------------------------------------------------------------
+def capa_titulo_clip(pl, titulo, W, H):
+    """Superposición (bgr, alpha, caja) del título para un clip de W x H, o None. La barra se arma en 1080x1920
+    (como en los clips Chapuceros) y se recorta: en vertical va en su lugar; en horizontal, arriba al centro."""
+    if not titulo or "titulo" not in pl:
+        return None
+    sup = ed.capa_titulo(pl, titulo, 1080, 1920)
+    if sup is None:
+        return None
+    bgr, alpha, (x0, y0, x1, y1) = sup
+    cfg = pl["titulo"]
+    if H >= W:
+        k = W / 1080
+        ancho = (x1 - x0) * k
+        nx, ny = x0 * k, y0 * H / 1920
+    else:
+        ancho = W * float(cfg.get("ancho_horizontal", 0.56))
+        k = ancho / (x1 - x0)
+        nx, ny = (W - ancho) / 2, H * 0.035
+    alto = (y1 - y0) * k
+    w_, h_ = max(2, int(round(ancho))), max(2, int(round(alto)))
+    bgr = cv2.resize(bgr, (w_, h_), interpolation=cv2.INTER_AREA)
+    alpha = cv2.resize(alpha[:, :, 0], (w_, h_), interpolation=cv2.INTER_AREA)[:, :, None]
+    nx, ny = int(round(nx)), int(round(ny))
+    return bgr, alpha, (nx, ny, nx + w_, ny + h_)
+
+
+def titulo_del_plan(plan, pl):
+    """El título que va encima del clip (solo si está marcado «Ponerlo en el video»)."""
+    if not plan.get("titulo_en_video"):
+        return None
+    return capa_titulo_clip(pl, (plan.get("titulo") or "").strip(), plan["info"]["ancho"], plan["info"]["alto"])
+
+
+# ----------------------------------------------------------------------------
 # Video reemplazado: si en VideosEdit se pone otra versión del video con el MISMO nombre (por ejemplo, editado en
 # otro programa), se pueden seguir usando los mismos subtítulos sin transcribir de nuevo.
 # ----------------------------------------------------------------------------
@@ -332,6 +368,9 @@ def render(args, trabajo, plan, pl):
     ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     vista = ed.VistaPrevia(trabajo, W, H, fps)
 
+    titulo_capa = titulo_del_plan(plan, pl)   # barra del título encima del clip (si se pidió)
+    if titulo_capa is not None:
+        ed.log(f"Título encima del clip: «{plan.get('titulo', '')}»")
     franjas = plan.get("franjas", [])
     fx0, fw = pl.get("franja_azul", {}).get("x_ancho", [30, 880])
     fx0, fw = int(fx0 * W / 1080), int(fw * W / 1080)
@@ -357,6 +396,8 @@ def render(args, trabajo, plan, pl):
         if frame.shape[1] != W or frame.shape[0] != H:
             frame = cv2.resize(frame, (W, H))
         fj = franja_t(t)
+        if titulo_capa is not None:
+            ed.pegar(frame, titulo_capa)
         if t < t_titulo:
             # el título del clip ocupa el lugar de los subtítulos
             vista.escribir(frame, t, "titulo")

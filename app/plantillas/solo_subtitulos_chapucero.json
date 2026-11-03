@@ -55,5 +55,23 @@
     "azul_fraccion": 0.7,
     "azul_alto_min": 0.05,
     "azul_alto_max": 0.2
+  },
+  "titulo": {
+    "barra": "assets/barra_titulo.png",
+    "fuente": "assets/Balinese_Culture.ttf",
+    "caja_texto": [
+      135,
+      72,
+      820,
+      88
+    ],
+    "escala": 1.17,
+    "color": "#FFFFFF",
+    "contorno": 4,
+    "color_contorno": "#000000",
+    "tam_max": 80,
+    "mayusculas": true,
+    "_nota": "Solo si se marca «Ponerlo en el video» en la pestaña Subtítulos. En clips horizontales la barra va arriba al centro.",
+    "ancho_horizontal": 0.56
   }
 }
