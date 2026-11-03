@@ -1913,6 +1913,9 @@ def datos_subtitulos(t):
         "desactualizada": not solo and (Path(t) / "vista_previa.mp4").exists() and
                           (Path(t) / "plan.json").stat().st_mtime > (Path(t) / "vista_previa.mp4").stat().st_mtime + 1,
         "hay_video": solo or (Path(t) / "vista_previa.mp4").exists() or bool(video_salida(t)),
+        # «Solo subtítulos»: el título se escribe aquí mismo (con él se nombra el video al exportar)
+        "solo": solo, "titulo_texto": plan.get("titulo", "") or "",
+        "nombre_sin_titulo": Path(plan["video"]).stem + "_subtitulado.mp4",
         # stickers (se dibujan en vivo encima de la vista previa; tiempos del video editado)
         "stickers": [dict(s_, i=round(ed_t(s_["inicio"], plan), 3), f=round(ed_t(s_["fin"], plan), 3))
                      for s_ in plan.get("stickers") or []],

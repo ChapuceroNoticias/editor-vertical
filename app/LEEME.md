@@ -196,6 +196,8 @@ o sticker que eliges.
     (solo vuelve a buscar la franja azul y el título del inicio). Si la duración es distinta, pregunta: **Usar los
     mismos subtítulos** (los que queden después del final se quitan) o **Transcribir de nuevo**. Si el video no
     cambió y le das Analizar, también pregunta, para no perder las correcciones.
+    El **título** se escribe en la misma pestaña Subtítulos (arriba de la lista) y se cambia ahí cuando haga falta;
+    con él se nombra el video al exportar. Si no tiene, sale el aviso con el nombre que tendría el archivo.
 
 ## Video largo (pestaña «Video largo»)
 

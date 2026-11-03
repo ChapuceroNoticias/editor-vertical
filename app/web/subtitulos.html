@@ -110,6 +110,14 @@
   .fila .alt button:hover { border-color: var(--borde); color: var(--texto); }
   .fila .alt input.dy { font-family: var(--mono); color: var(--tenue); }
   .fila.oculta { display: none; }
+  .titulo_solo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 20px; border-bottom: 1px solid var(--linea); }
+  .titulo_solo[hidden] { display: none; }
+  .titulo_solo label { font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--tenue); }
+  .titulo_solo input { flex: 1 1 320px; height: 36px; padding: 0 12px; font-size: 14px; }
+  .titulo_solo input.falta { border-color: #7A5A1E; }
+  .aviso_titulo { flex-basis: 100%; font-size: 12.5px; color: var(--suave); }
+  .aviso_titulo.falta { color: var(--pend); }
+  .aviso_titulo.ok { color: var(--ok); }
   .pie { padding: 10px 20px; border-top: 1px solid var(--linea); display: flex; gap: 6px 18px; flex-wrap: wrap; font-size: 12px; color: var(--tenue); }
   .pie b { font-family: var(--mono); font-weight: 500; color: var(--suave); }
 </style>
@@ -134,6 +142,12 @@
     <div class="nota" id="nota"></div>
   </div>
   <div class="der">
+    <div class="titulo_solo" id="titulo_solo" hidden>
+      <label for="titulo_txt">Título</label>
+      <input type="text" id="titulo_txt" placeholder="Título del video (con él se nombra el archivo al exportar)">
+      <button class="btn" id="titulo_guardar" disabled>Guardar título</button>
+      <span class="aviso_titulo" id="titulo_aviso"></span>
+    </div>
     <div class="barra">
       <h2 id="cuenta">Subtítulos</h2>
       <span class="chip mal" id="chip_mal" hidden></span>
@@ -738,6 +752,9 @@ $("barra_t").addEventListener("input", () => { arrastrando = true; irA(Number($(
 $("barra_t").addEventListener("change", () => { arrastrando = false; });
 $("m_vivo").onclick = () => { if (!vivo) ponerModo(true); };
 $("buscar").addEventListener("input", filtrar);
+$("titulo_txt").addEventListener("input", () => pintarTitulo());
+$("titulo_txt").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (!$("titulo_guardar").disabled) guardarTitulo(); } });
+$("titulo_guardar").onclick = guardarTitulo;
 $("m_render").onclick = () => { if (vivo) ponerModo(false); };
 new ResizeObserver(ajustarArmado).observe(video);
 let pestanaOculta = false;
@@ -862,8 +879,36 @@ function pintarLista() {
   ultimaActiva = -2;
 }
 
+let tituloGuardado = "";
+function pintarTitulo(msg) {
+  const caja = $("titulo_solo");
+  caja.hidden = !D.solo;
+  if (!D.solo) return;
+  const txt = $("titulo_txt").value.trim(), falta = !tituloGuardado;
+  $("titulo_guardar").disabled = txt === tituloGuardado;
+  $("titulo_txt").classList.toggle("falta", falta && !txt);
+  const av = $("titulo_aviso");
+  if (msg) { av.textContent = msg; av.className = "aviso_titulo ok"; return; }
+  av.className = "aviso_titulo" + (falta ? " falta" : "");
+  av.textContent = falta ? `⚠ Este video no tiene título: al exportar se llamará «${D.nombre_sin_titulo}». Escríbelo y dale Guardar título.`
+    : (txt !== tituloGuardado ? "Cambios sin guardar en el título." : "");
+}
+async function guardarTitulo() {
+  const titulo = $("titulo_txt").value.trim();
+  try {
+    const r = await fetch("/edi/titulo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ t: T, titulo }) });
+    if (!r.ok) throw new Error(await r.text());
+    tituloGuardado = titulo;
+    pintarTitulo(titulo ? "Título guardado ✓ El video se exportará con este nombre." : "");
+  } catch (err) { $("titulo_aviso").textContent = "No se pudo guardar el título: " + err.message; $("titulo_aviso").className = "aviso_titulo falta"; }
+}
 function desdeDatos(d) {
   D = d;
+  if (D.solo && document.activeElement !== $("titulo_txt")) {
+    tituloGuardado = (D.titulo_texto || "").trim();
+    $("titulo_txt").value = tituloGuardado;
+  }
+  pintarTitulo();
   filas = d.grupos.map((g, n) => ({ id: g.id ?? n, iTxt: mmss(g.i), fTxt: mmss(g.f), texto: g.texto, palabras: g.palabras, i0: g.i, f0: g.f, dy: g.dy || 0 }));
   base = firma();
   pintarLista();
