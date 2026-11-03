@@ -2173,7 +2173,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-03c v1.2.6"
+VERSION = "2026-11-03d v1.2.7"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3024,6 +3024,122 @@ def sanear_grupos(grupos):
             g = dict(g, f=round(max(i + 0.2, min(tope, max(f, ult)) if f > i else min(tope, ult)), 3))
         out.append(g)
     return out
+
+
+# ----------------------------------------------------------------------------
+# Stickers animados (círculos, flechas, tache, mano…) que se ponen a mano en Edición
+# plan["stickers"] = [{tipo, inicio, fin (tiempo del original), x, y (centro, 0-1 del video vertical),
+#                      tam (ancho, fracción del ancho del video), rot (grados), color "#rrggbb", espejo}]
+# Cada sticker es una hoja PNG (assets/stickers/<tipo>.png): a la izquierda la capa fija (contornos negros y
+# blanco) y a la derecha la capa de color (en blanco y grises, se tiñe del color elegido). Cuadros: entrada y luego
+# un ciclo que se repite mientras dura.
+# ----------------------------------------------------------------------------
+DIR_STICKERS = BASE / "assets" / "stickers"
+CATALOGO_STICKERS = [
+    # tipo, nombre, color, tamaño (fracción del ancho)
+    ("circulo", "Círculo", "#e6231b", 0.38), ("ovalo", "Óvalo", "#e6231b", 0.5),
+    ("rectangulo", "Recuadro", "#e6231b", 0.55), ("enfoque", "Esquinas", "#e6231b", 0.5),
+    ("subrayado", "Subrayado", "#e6231b", 0.5), ("tachado", "Tachado", "#e6231b", 0.5),
+    ("flecha_abajo", "Flecha abajo", "#e6231b", 0.28), ("flecha_recta", "Flecha", "#e6231b", 0.32),
+    ("flecha_curva", "Flecha curva", "#e8461c", 0.36), ("tache", "Tache", "#f0441a", 0.3),
+    ("palomita", "Palomita", "#22c55e", 0.3), ("mano", "Mano (clic)", "#e6231b", 0.3),
+    ("exclamacion", "¡!", "#ffd400", 0.26), ("interrogacion", "¿?", "#ffd400", 0.26),
+    ("destello", "Destello", "#ffd400", 0.36), ("explosion", "Explosión", "#ffd400", 0.36),
+]
+
+
+def meta_stickers():
+    try:
+        return cargar_json(DIR_STICKERS / "meta.json")
+    except Exception:
+        return {"S": 320, "FPS": 24, "INTRO": 12, "LOOP": 24, "F": 36, "COLS": 6}
+
+
+def cuadro_sticker(local, meta=None):
+    """Número de cuadro de la hoja para «local» segundos desde que aparece: entrada y luego el ciclo."""
+    m = meta or meta_stickers()
+    k = int(max(0.0, local) * m["FPS"])
+    if k >= m["INTRO"]:
+        k = m["INTRO"] + (k - m["INTRO"]) % m["LOOP"]
+    return k
+
+
+class Stickers:
+    """Pega los stickers en cada cuadro del video vertical (W x H). t = tiempo del video original."""
+
+    def __init__(self, lista, W, H):
+        self.lista = sorted([s for s in lista or [] if (DIR_STICKERS / f"{s.get('tipo')}.png").exists()],
+                            key=lambda s: s["inicio"])
+        self.W, self.H = W, H
+        self.meta = meta_stickers()
+        self.hojas = {}
+        self.cache = {}
+
+    def _hoja(self, tipo):
+        if tipo not in self.hojas:
+            h = cv2.imread(str(DIR_STICKERS / f"{tipo}.png"), cv2.IMREAD_UNCHANGED)
+            self.hojas[tipo] = h.astype(np.float32) / 255.0 if h is not None else None
+        return self.hojas[tipo]
+
+    def _imagen(self, n, s, k):
+        clave = (n, k)
+        if clave in self.cache:
+            return self.cache[clave]
+        hoja = self._hoja(s["tipo"])
+        if hoja is None:
+            return None
+        S, C = self.meta["S"], self.meta["COLS"]
+        x, y = (k % C) * S, (k // C) * S
+        fijo = hoja[y:y + S, x:x + S]
+        col = hoja[y:y + S, C * S + x:C * S + x + S].copy()
+        r, g, b = hex_rgb(s.get("color") or "#e6231b")
+        col[..., 0] *= b / 255.0
+        col[..., 1] *= g / 255.0
+        col[..., 2] *= r / 255.0
+        # capa fija abajo, la de color encima (premultiplicado para escalar/girar sin orillas oscuras)
+        af, ac = fijo[..., 3:], col[..., 3:]
+        a = ac + af * (1 - ac)
+        rgb = col[..., :3] * ac + fijo[..., :3] * af * (1 - ac)
+        img = np.concatenate([rgb, a], axis=2)
+        if s.get("espejo"):
+            img = img[:, ::-1]
+        lado = max(4, int(round(float(s.get("tam", 0.35)) * self.W)))
+        img = cv2.resize(img, (lado, lado), interpolation=cv2.INTER_AREA if lado < S else cv2.INTER_CUBIC)
+        rot = float(s.get("rot", 0) or 0)
+        if abs(rot) > 0.01:
+            diag = int(np.ceil(lado * 1.4143)) + 2
+            M = cv2.getRotationMatrix2D((lado / 2, lado / 2), -rot, 1.0)
+            M[0, 2] += (diag - lado) / 2
+            M[1, 2] += (diag - lado) / 2
+            img = cv2.warpAffine(img, M, (diag, diag), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
+                                 borderValue=(0, 0, 0, 0))
+        img = np.clip(img, 0, 1)
+        alpha = img[..., 3:]
+        bgr = np.where(alpha > 1e-4, img[..., :3] / np.maximum(alpha, 1e-4), 0) * 255.0
+        h, w = img.shape[:2]
+        cx, cy = float(s.get("x", 0.5)) * self.W, float(s.get("y", 0.5)) * self.H
+        x0, y0 = int(round(cx - w / 2)), int(round(cy - h / 2))
+        sup = (bgr.astype(np.float32), alpha.astype(np.float32), (x0, y0, x0 + w, y0 + h))
+        if len(self.cache) > 600:
+            self.cache.clear()
+        self.cache[clave] = sup
+        return sup
+
+    def pegar(self, lienzo, t):
+        for n, s in enumerate(self.lista):
+            if s["inicio"] > t:
+                break
+            if t >= s["fin"]:
+                continue
+            k = cuadro_sticker(t - s["inicio"], self.meta)
+            sup = self._imagen(n, s, k)
+            if sup is None:
+                continue
+            resta = s["fin"] - t
+            if resta < 0.12:   # se va con un desvanecido corto
+                bgr, a, caja = sup
+                sup = (bgr, a * max(0.0, resta / 0.12), caja)
+            pegar(lienzo, sup)
 
 
 def palabra_cortada(p, cortes):
@@ -3926,6 +4042,7 @@ def cmd_render(args):
     if cort_cam is not None and cort_cam.cuadros:
         log(f"{len(trans_cam)} transiciones de cambio de cámara con la cortinilla limpia")
 
+    stickers = Stickers(plan.get("stickers"), W, H) if plan.get("stickers") else None
     idx, ti, ci, n_out = 0, 0, 0, 0
     total = info["cuadros"] or 1
     lienzo = np.zeros((H, W, 3), np.uint8)
@@ -4047,6 +4164,8 @@ def cmd_render(args):
         pegar(lienzo, titulo)
         vista.escribir(lienzo, te, lay)
 
+        if stickers is not None and not previa:   # en la vista previa se dibujan en vivo
+            stickers.pegar(lienzo, t)
         act = subs.activo(t) if not previa else None   # la vista previa va sin subtítulos (se dibujan en vivo)
         if act:
             sx, sy, sw, sh = L[lay]["subtitulos"]["area"]

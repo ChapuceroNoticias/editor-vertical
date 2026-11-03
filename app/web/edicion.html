@@ -9,7 +9,7 @@
     --fondo: #0b0b0d; --panel: #15151a; --panel2: #1c1c22; --texto: #ececf1; --suave: #9a9aa6; --borde: #2a2a32;
     --acento: #d91e2b; --acento2: #ff4553; --ok: #22c55e; --pend: #f59e0b; --rojo: #ff4553;
     --c-completa: #e11d48; --c-dividida: #0ea5e9; --c-nacho: #52525b; --c-916: #a855f7; --c-cerca: #f59e0b; --c-lejos: #b45309;
-    --c-imagen: #22c55e; --c-quitar: #3f3f46; --c-manual: #22c55e; --c-pantallaman: #38bdf8; --c-titulo: #e5e7eb; --c-difuminar: #d946ef;
+    --c-imagen: #22c55e; --c-quitar: #3f3f46; --c-manual: #22c55e; --c-pantallaman: #38bdf8; --c-titulo: #e5e7eb; --c-difuminar: #d946ef; --c-sticker: #fb7185;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fondo); color: var(--texto); }
@@ -52,7 +52,7 @@
   .desliza.oculta { visibility: hidden; }
   #desliza_p { position: absolute; top: 1px; bottom: 1px; min-width: 24px; background: #4b4b57; border-radius: 6px; cursor: grab; }
   #desliza_p:hover, #desliza_p.arrastrando { background: #6b6b78; }
-  #linea { width: 100%; height: 150px; display: block; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde);
+  #linea { width: 100%; height: 192px; display: block; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde);
     cursor: pointer; }
   .leyenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--suave); padding: 6px 12px 0; }
   .difbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px 0; font-size: 12.5px; color: var(--suave); }
@@ -75,6 +75,16 @@
   #i_hay, #i_no { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
   .card { min-width: 0; }
   .fotos { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stk_lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+  .stk_lib button { background: #2a2a31; border: 1px solid var(--borde); border-radius: 8px; padding: 4px 2px 3px; cursor: pointer;
+    color: var(--suave); font-size: 10.5px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .stk_lib button:hover { border-color: var(--c-sticker); color: var(--texto); }
+  .stk_lib canvas { width: 52px; height: 52px; }
+  .stk_colores { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+  .stk_colores button { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #0006; cursor: pointer; padding: 0; }
+  .stk_colores button.activo { outline: 2px solid #fff; outline-offset: 1px; }
+  .stk_colores input[type=color] { width: 30px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer; }
+  #stk_sel input[type=range] { flex: 1; min-width: 90px; }
   .foto { position: relative; width: 104px; height: 74px; border-radius: 8px; overflow: hidden; border: 1px solid var(--borde); background: #000; }
   .foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .foto button { position: absolute; top: 3px; right: 3px; border: 0; border-radius: 6px; background: rgba(0,0,0,.7); color: #fff;
@@ -165,6 +175,7 @@
     <span><i style="background:var(--c-pantallaman)"></i>Pantalla de Nacho acomodada</span>
     <span><i style="background:var(--c-titulo)"></i>Título (motivacional: estira su orilla)</span>
     <span><i style="background:var(--c-difuminar)"></i>Difuminar subtítulos del video</span>
+    <span><i style="background:var(--c-sticker)"></i>Sticker</span>
     <span>Clic en un bloque: seleccionarlo (⌨ Ctrl+C/V/X, Supr, Ctrl+B, [ ]) · arrástralo o estira sus orillas
       (🧲 se pegan a cortes, pausas y otros bloques; con <b>Alt</b> libres) · <b>Ctrl + rueda</b>: acercar la línea ·
       <b>Doble clic</b>: llevar ahí el cursor</span>
@@ -252,6 +263,29 @@
         <div class="fila">
           <input type="search" id="n_busq" placeholder="Qué buscar (ej. «Carolina Viggiano»)" style="flex:1">
           <button class="btn" id="n_agregar">🔍 Buscar y agregar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stickers -->
+    <div class="card" id="stk_card">
+      <h3>Stickers</h3>
+      <div class="sub">Clic en uno para ponerlo aquí (2.5 s). En la vista previa: <b>arrástralo</b> para moverlo,
+        la esquina <b>◢</b> lo agranda, el punto de arriba lo <b>gira</b>; <b>rueda</b> = tamaño, <b>Shift + rueda</b> = girar.
+        Su bloque rosa en la línea de tiempo se mueve y se estira como los demás.</div>
+      <div class="stk_lib" id="stk_lib"></div>
+      <div id="stk_sel" style="display:none;flex-direction:column;gap:8px">
+        <div class="separador"></div>
+        <div class="sub" id="stk_desc"></div>
+        <div class="stk_colores" id="stk_colores"></div>
+        <div class="fila"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Tamaño<input type="range" id="stk_tam" min="4" max="120" step="1"><b id="stk_tam_txt"></b></label></div>
+        <div class="fila"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Giro<input type="range" id="stk_rot" min="-180" max="180" step="1"><b id="stk_rot_txt"></b></label>
+          <button class="btn" id="stk_rot0" title="Sin giro">0°</button></div>
+        <div class="fila">
+          <button class="btn" id="stk_espejo" title="Voltearlo (por ejemplo, para que la flecha o la mano apunten al otro lado)">⇋ Voltear</button>
+          <button class="btn" id="stk_centro" title="Ponerlo en medio del video">⊕ Centrar</button>
+          <button class="btn" id="stk_dup" title="Otro igual justo después (Ctrl+D)">⧉ Duplicar</button>
+          <button class="btn peligro" id="stk_borrar" title="Quitar este sticker (Supr)">🗑 Quitar</button>
         </div>
       </div>
     </div>
@@ -661,6 +695,7 @@ function componer(t, e, v) {
   dibujarCortinilla(pctx, t, W, H);
   if (tituloImg && tituloImg.complete && tituloImg.naturalWidth && (E.estilo !== "motivacional" || t < E.armado.titulo_fin))
     pctx.drawImage(tituloImg, 0, 0, W, H);
+  dibujarStickers(pctx, t, W, H, true);
 }
 // ---------- cortinilla limpia sobre las transiciones de cambio de cámara de Nacho (t = tiempo original) ----------
 let cortImg = null;
@@ -749,7 +784,7 @@ function dibujarDifuminar(t, s, d) {   // franja difuminada (morada): se mueve y
 // ---------- línea de tiempo (tiempo del video editado) ----------
 function colorOp(op) { return getComputedStyle(document.documentElement).getPropertyValue("--c-" + op).trim() || "#666"; }
 const REGLA = 26;   // alto de la regla de tiempo (arriba de los carriles)
-const CARRILES = { p: [REGLA + 6, 24], m: [REGLA + 34, 24], en: [REGLA + 62, 14], ep: [REGLA + 80, 14], df: [REGLA + 98, 14] };
+const CARRILES = { p: [REGLA + 6, 24], m: [REGLA + 34, 24], en: [REGLA + 62, 14], ep: [REGLA + 80, 14], df: [REGLA + 98, 14], st: [REGLA + 116, 39] };
 let ratonX = null;   // tiempo bajo el ratón (línea guía), o null
 function itemsLinea() {
   const it = [];
@@ -762,6 +797,15 @@ function itemsLinea() {
   E.ajustes.forEach(a => it.push({ carril: "en", tipo: "en", a: aEditado(a.inicio), b: aEditado(a.fin), op: "manual", ref: a, mov: true }));
   (E.ajustes_pantalla || []).forEach(a => it.push({ carril: "ep", tipo: "ep", a: aEditado(a.inicio), b: aEditado(a.fin), op: "pantallaman", ref: a, mov: true }));
   (E.difuminar || []).forEach(a => it.push({ carril: "df", tipo: "df", a: aEditado(a.inicio), b: aEditado(a.fin), op: "difuminar", ref: a, mov: true }));
+  // stickers: si se enciman en el tiempo, van en renglones (hasta 3) para que se vean y se puedan agarrar todos
+  const filasSt = [], itsSt = (E.stickers || []).map(a => ({ carril: "st", tipo: "st", a: aEditado(a.inicio), b: aEditado(a.fin), op: "sticker", ref: a, mov: true }));
+  itsSt.sort((x, y) => x.a - y.a).forEach(x => {
+    let f = filasSt.findIndex(fin => fin <= x.a + 1e-6);
+    if (f < 0) { f = filasSt.length < 3 ? filasSt.length : filasSt.indexOf(Math.min(...filasSt)); }
+    filasSt[f] = Math.max(filasSt[f] || 0, x.b); x.fila = f;
+  });
+  const [sy, sh] = CARRILES.st, nf = Math.max(1, filasSt.length);
+  itsSt.forEach(x => { x.yh = [sy + x.fila * sh / nf, sh / nf - (nf > 1 ? 1 : 0)]; it.push(x); });
   return it;
 }
 const xDe = (s) => (s - vista[0]) / (vista[1] - vista[0]) * linea.width;
@@ -864,7 +908,7 @@ function dibujarLinea(te) {
   pintarDeslizador();
   const W = linea.width, H = linea.height, d = devicePixelRatio;
   lctx.clearRect(0, 0, W, H);
-  const nombres = { p: "Pantalla", m: "Imágenes", en: "Encuadre Nacho", ep: "Encuadre pantalla", df: "Difuminar subtítulos" };
+  const nombres = { p: "Pantalla", m: "Imágenes", en: "Encuadre Nacho", ep: "Encuadre pantalla", df: "Difuminar subtítulos", st: "Stickers" };
   // regla: marcas grandes con su tiempo y chicas entre ellas; bandas alternas para ubicarse a simple vista
   const seg = vista[1] - vista[0], pxs = W / Math.max(0.001, seg);
   const pasos = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
@@ -894,12 +938,16 @@ function dibujarLinea(te) {
     const arr = arrLinea && arrLinea.it.ref === it.ref;
     if (arr) { a = arrLinea.a; b = arrLinea.b; }
     if (b < vista[0] || a > vista[1]) continue;
-    const [y, h] = CARRILES[it.carril];
+    const [y, h] = it.yh || CARRILES[it.carril];
     const x0 = xDe(a), x1 = xDe(b);
     lctx.fillStyle = colorOp(it.op);
     lctx.globalAlpha = it.mov ? 1 : 0.75;
     lctx.fillRect(x0, y * d, Math.max(2, x1 - x0 - 1), h * d);
     lctx.globalAlpha = 1;
+    if (it.tipo === "st" && x1 - x0 > 50 * d && h >= 9) {
+      lctx.fillStyle = "#111"; lctx.font = `600 ${Math.min(10, h - 3) * d}px system-ui`; lctx.textAlign = "left";
+      lctx.fillText(nombreSticker(it.ref.tipo), x0 + 6 * d, (y + h - Math.max(2, (h - Math.min(10, h - 3)) / 2) - 1) * d, x1 - x0 - 10 * d);
+    }
     if (it.tipo === "ti" && x1 - x0 > 40 * d) {
       lctx.fillStyle = "#111"; lctx.font = `700 ${10 * d}px system-ui`; lctx.textAlign = "left";
       lctx.fillText("TÍTULO", x0 + 6 * d, (y + h - 7) * d);
@@ -965,7 +1013,7 @@ function tocarLinea(ev) {   // qué bloque y qué parte (mover / inicio / fin) e
   const r = linea.getBoundingClientRect(), d = devicePixelRatio;
   const x = (ev.clientX - r.left) * d, y = (ev.clientY - r.top) * d;
   for (const it of itemsLinea()) {
-    const [cy, ch] = CARRILES[it.carril];
+    const [cy, ch] = it.yh || CARRILES[it.carril];
     if (!it.mov || y < cy * d || y > (cy + ch) * d) continue;
     const x0 = xDe(it.a), x1 = xDe(it.b), borde = Math.min(8 * d, (x1 - x0) / 3);
     if (x < x0 - 2 * d || x > x1 + 2 * d) continue;
@@ -996,7 +1044,7 @@ function iman(t, excluir) {   // el punto más cercano dentro de ~10 px (o null)
 }
 const aCuadro = (t) => { const f = E.video.fps || 30; return Math.round(t * f) / f; };   // cuadro exacto
 // ---------- selección y atajos de teclado ----------
-const NOMBRE_TIPO = { m: "Imagen", p: "Pantalla", e: "Encuadre", g: "Pantalla", n: "Nacho", en: "Encuadre de Nacho", ep: "Encuadre de la pantalla", df: "Difuminado" };
+const NOMBRE_TIPO = { m: "Imagen", p: "Pantalla", e: "Encuadre", g: "Pantalla", n: "Nacho", en: "Encuadre de Nacho", ep: "Encuadre de la pantalla", df: "Difuminado", st: "Sticker" };
 function claveDe(it) { return it.ref && it.ref.k ? it.ref.k : it.tipo + "@" + it.a.toFixed(2); }
 function itemSel() {
   if (!sel) return null;
@@ -1006,6 +1054,7 @@ function itemSel() {
 }
 function seleccionar(it, aviso = true) {
   sel = it ? { tipo: it.tipo, clave: claveDe(it), a: it.a, b: it.b } : null;
+  if (it && it.tipo === "st") stSel = it.ref;
   if (it && aviso) estado(`Seleccionado: ${NOMBRE_TIPO[it.tipo] || "bloque"} ${mmss(it.a)} – ${mmss(it.b)} (Ctrl+C, Supr, Ctrl+B…)`, "");
 }
 function avisar(txt, cls = "err") { estado(txt, cls); }
@@ -1017,6 +1066,7 @@ function copiar(it) {
   else if (it.tipo === "en" || it.tipo === "ep") { const x = { ...it.ref }; delete x.inicio; delete x.fin; porta = { tipo: it.tipo, dur, datos: x }; }
   else if (it.tipo === "p" || it.tipo === "e") porta = { tipo: it.tipo, dur, datos: { pantalla: it.ref.pantalla } };
   else if (it.tipo === "df") porta = { tipo: "df", dur, datos: { caja: it.ref.caja.slice() } };
+  else if (it.tipo === "st") { const x = { ...it.ref }; delete x.inicio; delete x.fin; porta = { tipo: "st", dur, datos: x }; }
   else return avisar("Ese bloque no se puede copiar.");
   estado(`Copiado: ${NOMBRE_TIPO[it.tipo]} (${(dur).toFixed(1)} s). Pon el cursor donde lo quieras y Ctrl+V.`, "ok");
 }
@@ -1027,6 +1077,11 @@ async function pegar(te) {
   if (porta.tipo !== "p" && porta.tipo !== "e") sel = { tipo: porta.tipo, clave: "", a, b };   // queda seleccionado lo pegado
   if (porta.tipo === "m")
     return enviar("/edi/momento", { t: T, accion: "pegar", datos: porta.datos, inicio: aOriginal(a), fin: aOriginal(b) }, "Imagen pegada.");
+  if (porta.tipo === "st") {
+    const nuevo = { ...porta.datos, inicio: aOriginal(a), fin: aOriginal(b) };
+    stSel = nuevo;
+    return guardarStickers([...(E.stickers || []), nuevo], "Sticker pegado.");
+  }
   if (porta.tipo === "df")
     return guardarDifuminar([...(E.difuminar || []), { inicio: aOriginal(a), fin: aOriginal(b), caja: porta.datos.caja.slice(), auto: false }], "Difuminado pegado.");
   if (porta.tipo === "en" || porta.tipo === "ep") {
@@ -1049,6 +1104,7 @@ async function borrar(it) {
     return enviar(it.tipo === "en" ? "/enc/guardar" : "/enc/guardar_pantalla", { t: T, ajustes: lista }, "Encuadre borrado (vuelve al automático).");
   }
   if (it.tipo === "df") { seleccionar(null, false); return guardarDifuminar(E.difuminar.filter(x => x !== it.ref), "Difuminado quitado."); }
+  if (it.tipo === "st") { seleccionar(null, false); stSel = null; return guardarStickers(E.stickers.filter(x => x !== it.ref), "Sticker quitado."); }
   if (it.tipo === "p" && it.ref.opciones.includes("nacho"))
     return enviar("/pant/guardar", { t: T, cambios: [{ k: it.ref.k, pantalla: "nacho", inicio: it.ref.inicio, fin: it.ref.fin }] }, "Ese tramo queda en Solo Nacho.");
   avisar("Ese bloque no se puede borrar.");
@@ -1061,6 +1117,11 @@ async function partir(it, te) {
   if (it.tipo === "m") return enviar("/edi/momento", { t: T, accion: "dividir", i: parseInt(it.ref.k.slice(1)), t_corte: aOriginal(te) }, "Imagen partida en dos.");
   if (it.tipo === "p") return enviar("/edi/dividir_pantalla", { t: T, i: parseInt(it.ref.k.slice(1)), t_corte: aOriginal(te) }, "Tramo partido en dos.");
   if (it.tipo === "n" || it.tipo === "g") { segSel = null; return enviar("/edi/partir_toma", { t: T, t_corte: aOriginal(te) }, "Bloque partido en dos."); }
+  if (it.tipo === "st") {
+    const tc = aOriginal(te), lista = E.stickers.filter(x => x !== it.ref);
+    lista.push({ ...it.ref, fin: tc }, { ...it.ref, inicio: tc });
+    return guardarStickers(lista, "Sticker partido en dos.");
+  }
   if (it.tipo === "df") {
     const tc = aOriginal(te), lista = E.difuminar.filter(x => x !== it.ref);
     lista.push({ ...it.ref, fin: tc, auto: false }, { ...it.ref, inicio: tc, auto: false });
@@ -1120,6 +1181,10 @@ function atajos(ev) {
         `Pantalla «${OPS[porta.datos.pantalla]}» aplicada a ese pedazo.`);
     }
   }
+  const itSt = !it && stSel ? itemsLinea().find(x => x.ref === stSel) : null;
+  if (itSt && (k === "delete" || k === "backspace")) { hecho(); return borrar(itSt); }
+  if (itSt && ctrl && k === "c") { hecho(); ultimoPorta = "bloque"; return copiar(itSt); }
+  if (itSt && ctrl && k === "d") { hecho(); copiar(itSt); return pegar(itSt.b); }
   if (ctrl && k === "c") { hecho(); ultimoPorta = "bloque"; return copiar(it); }
   if (ctrl && k === "x") { hecho(); ultimoPorta = "bloque"; copiar(it); return borrar(it); }
   if (ctrl && k === "v") {
@@ -1139,7 +1204,7 @@ function atajos(ev) {
     const d = (ev.code === "ArrowLeft" ? -1 : 1) * (ev.shiftKey ? 1 : 1 / fps);
     return ajustarSel(it, it.a + d, it.b + d);
   }
-  if (k === "escape") { hecho(); segSel = null; pintarSegbar(); seleccionar(null, false); edit = null; tramoE = null; editP = null; tramoPE = null; return estado(""); }
+  if (k === "escape") { hecho(); stSel = null; segSel = null; pintarSegbar(); seleccionar(null, false); edit = null; tramoE = null; editP = null; tramoPE = null; return estado(""); }
   if (k === "tab") { hecho(); return siguienteBloque(ev.shiftKey); }
   const mover = (d) => { video.pause(); irE(Math.min(durE(), Math.max(0, te + d))); };
   if (ev.code === "Space") { hecho(); return video.paused ? video.play() : video.pause(); }
@@ -1156,6 +1221,11 @@ async function guardarBloque(d) {
   if (it.tipo === "m")
     return enviar("/edi/momento", { t: T, accion: "guardar", i: parseInt(it.ref.k.slice(1)), estilo: null,
       inicio: aOriginal(a), fin: aOriginal(b) }, "Imagen ajustada.");
+  if (it.tipo === "st") {
+    const nuevo = { ...it.ref, inicio: aOriginal(a), fin: aOriginal(b) };
+    if (stSel === it.ref) stSel = nuevo;
+    return guardarStickers(E.stickers.map(x => x === it.ref ? nuevo : x), "Sticker ajustado.");
+  }
   if (it.tipo === "df")
     return guardarDifuminar(E.difuminar.map(x => x === it.ref ? { ...x, inicio: aOriginal(a), fin: aOriginal(b), auto: false } : x), "Difuminado ajustado.");
   const lista = (it.tipo === "en" ? E.ajustes : E.ajustes_pantalla)
@@ -1303,7 +1373,7 @@ function bucle() {
   dibujarLinea(te);
   $("tiempo").innerHTML = `${mmss(te)} <small>/ ${mmss(durE())}</small>`;
   $("b_play").textContent = video.paused ? "▶ Reproducir" : "❚❚ Pausa";
-  pintarPantalla(te); pintarImagen(t); pintarEncuadre(t, e, v);
+  pintarPantalla(te); pintarImagen(t); pintarEncuadre(t, e, v); pintarStickerSel();
   requestAnimationFrame(bucle);
 }
 
@@ -1494,6 +1564,206 @@ async function aplicarEncuadre() {   // aplica los tiempos escritos (al cambio p
   lista.push({ ...base, inicio: tr[0], fin: tr[1] });
   edit = null; tramoE = null; escribirTramoE();
   await guardarEncuadre(lista, "Encuadre guardado.");
+}
+
+// ---------- stickers animados ----------
+let stSel = null;          // sticker seleccionado (objeto de E.stickers)
+let stArr = null;          // arrastre en la vista previa: { modo: mover|tam|rot, ... }
+const stHojas = {};
+const STK_COLORES = ["#e6231b", "#f97316", "#ffd400", "#22c55e", "#0ea5e9", "#a855f7", "#ffffff", "#111111"];
+let stTmpA = null, stTmpB = null;
+function nombreSticker(tipo) { const c = (E.catalogo_stickers || []).find(x => x.tipo === tipo); return c ? c.nombre : tipo; }
+function hojaSticker(tipo) {
+  if (!stHojas[tipo]) { stHojas[tipo] = new Image(); stHojas[tipo].src = `/stk/hoja?tipo=${tipo}`; }
+  const im = stHojas[tipo];
+  return im.complete && im.naturalWidth ? im : null;
+}
+function cuadroSticker(local) {
+  const m = E.meta_stickers;
+  let k = Math.floor(Math.max(0, local) * m.FPS);
+  if (k >= m.INTRO) k = m.INTRO + (k - m.INTRO) % m.LOOP;
+  return k;
+}
+// cuadro k del sticker, teñido, en un lienzo de S x S (capa fija abajo y la de color encima)
+function cuadroTenido(tipo, color, k) {
+  const im = hojaSticker(tipo), m = E.meta_stickers, S = m.S, C = m.COLS;
+  if (!im) return null;
+  if (!stTmpA) { stTmpA = document.createElement("canvas"); stTmpB = document.createElement("canvas"); }
+  stTmpA.width = stTmpA.height = stTmpB.width = stTmpB.height = S;
+  const a = stTmpA.getContext("2d"), b = stTmpB.getContext("2d");
+  const fx = (k % C) * S, fy = Math.floor(k / C) * S;
+  b.clearRect(0, 0, S, S);
+  b.drawImage(im, C * S + fx, fy, S, S, 0, 0, S, S);
+  b.globalCompositeOperation = "multiply"; b.fillStyle = color; b.fillRect(0, 0, S, S);
+  b.globalCompositeOperation = "destination-in"; b.drawImage(im, C * S + fx, fy, S, S, 0, 0, S, S);
+  b.globalCompositeOperation = "source-over";
+  a.clearRect(0, 0, S, S);
+  a.drawImage(im, fx, fy, S, S, 0, 0, S, S);
+  a.drawImage(stTmpB, 0, 0);
+  return stTmpA;
+}
+function stickersEn(t) { return (E.stickers || []).filter(s => s.inicio <= t && t < s.fin); }
+function geomSticker(s, W, H) {   // centro, lado y giro en px del lienzo
+  return { cx: s.x * W, cy: s.y * H, lado: s.tam * W, rot: (s.rot || 0) * Math.PI / 180 };
+}
+function dibujarStickers(cx, t, W, H, conSel) {
+  if (!E.meta_stickers) return;
+  for (const s of stickersEn(t)) {
+    const c = cuadroTenido(s.tipo, s.color, cuadroSticker(t - s.inicio));
+    if (!c) continue;
+    const g = geomSticker(s, W, H), resta = s.fin - t;
+    cx.save(); cx.translate(g.cx, g.cy); cx.rotate(g.rot); if (s.espejo) cx.scale(-1, 1);
+    cx.globalAlpha = resta < 0.12 ? Math.max(0, resta / 0.12) : 1;
+    cx.drawImage(c, -g.lado / 2, -g.lado / 2, g.lado, g.lado);
+    cx.restore();
+  }
+  if (!conSel || !stSel || !(stSel.inicio <= t && t < stSel.fin)) return;
+  const g = geomSticker(stSel, W, H), d = W / 300;
+  cx.save(); cx.translate(g.cx, g.cy); cx.rotate(g.rot);
+  cx.strokeStyle = "#fff"; cx.lineWidth = 1.5 * d; cx.setLineDash([5 * d, 4 * d]);
+  cx.strokeRect(-g.lado / 2, -g.lado / 2, g.lado, g.lado); cx.setLineDash([]);
+  cx.fillStyle = "#fb7185"; cx.strokeStyle = "#fff";
+  cx.beginPath(); cx.moveTo(g.lado / 2, g.lado / 2 - 12 * d); cx.lineTo(g.lado / 2, g.lado / 2); cx.lineTo(g.lado / 2 - 12 * d, g.lado / 2); cx.closePath(); cx.fill(); cx.stroke();
+  cx.beginPath(); cx.moveTo(0, -g.lado / 2); cx.lineTo(0, -g.lado / 2 - 14 * d); cx.stroke();
+  cx.beginPath(); cx.arc(0, -g.lado / 2 - 18 * d, 5 * d, 0, Math.PI * 2); cx.fill(); cx.stroke();
+  cx.restore();
+}
+function guardarStickers(lista, msg) {
+  const antes = stSel;
+  return enviar("/edi/stickers", { t: T, lista: lista.map(x => ({ tipo: x.tipo, inicio: x.inicio, fin: x.fin, x: x.x, y: x.y,
+    tam: x.tam, rot: x.rot || 0, color: x.color, espejo: !!x.espejo })) }, msg).then(r => {
+    if (antes) stSel = (E.stickers || []).find(s => s.tipo === antes.tipo && Math.abs(s.inicio - antes.inicio) < 0.002 &&
+      Math.abs(s.x - antes.x) < 0.001 && Math.abs(s.y - antes.y) < 0.001) || null;
+    pintarStickerSel(true);
+    return r;
+  });
+}
+function agregarSticker(c) {
+  const te = ahoraE(), a = aOriginal(te), b = aOriginal(Math.min(durE(), te + 2.5));
+  if (b - a < 0.3) return avisar("No cabe aquí: estás al final del video.");
+  const nuevo = { tipo: c.tipo, inicio: a, fin: b, x: 0.5, y: 0.36, tam: c.tam, rot: 0, color: c.color, espejo: false };
+  stSel = nuevo; sel = null;
+  guardarStickers([...(E.stickers || []), nuevo], `Sticker «${c.nombre}» puesto: muévelo en la vista previa.`);
+}
+function cambiarSticker(campos, guardar = true) {
+  if (!stSel) return;
+  Object.assign(stSel, campos);
+  pintarStickerSel(true);
+  if (!guardar) return;
+  clearTimeout(cambiarSticker.tm);
+  cambiarSticker.tm = setTimeout(() => guardarStickers(E.stickers, "Sticker guardado."), 350);
+}
+function pintarLibStickers() {
+  const lib = $("stk_lib");
+  lib.innerHTML = "";
+  for (const c of E.catalogo_stickers || []) {
+    const b = document.createElement("button");
+    b.title = `Poner «${c.nombre}» aquí`;
+    b.innerHTML = `<canvas width="104" height="104"></canvas><span>${c.nombre}</span>`;
+    const cv = b.querySelector("canvas"), g = cv.getContext("2d");
+    let anim = null, t0 = 0;
+    const pinta = (k) => { const im = cuadroTenido(c.tipo, c.color, k); g.clearRect(0, 0, 104, 104); if (im) g.drawImage(im, 0, 0, 104, 104); return !!im; };
+    const espera = () => { if (!pinta(E.meta_stickers.INTRO)) setTimeout(espera, 200); };
+    espera();
+    b.onmouseenter = () => { t0 = performance.now(); const paso = () => { pinta(cuadroSticker((performance.now() - t0) / 1000)); anim = requestAnimationFrame(paso); }; paso(); };
+    b.onmouseleave = () => { cancelAnimationFrame(anim); pinta(E.meta_stickers.INTRO); };
+    b.onclick = () => agregarSticker(c);
+    lib.appendChild(b);
+  }
+  const cols = $("stk_colores");
+  cols.innerHTML = STK_COLORES.map(c => `<button data-c="${c}" style="background:${c}" title="${c}"></button>`).join("") +
+    `<input type="color" id="stk_color" title="Otro color">`;
+  cols.querySelectorAll("button").forEach(b => b.onclick = () => cambiarSticker({ color: b.dataset.c }));
+  $("stk_color").oninput = (ev) => cambiarSticker({ color: ev.target.value });
+  $("stk_tam").oninput = (ev) => cambiarSticker({ tam: Number(ev.target.value) / 100 });
+  $("stk_rot").oninput = (ev) => cambiarSticker({ rot: Number(ev.target.value) });
+  $("stk_rot0").onclick = () => cambiarSticker({ rot: 0 });
+  $("stk_espejo").onclick = () => cambiarSticker({ espejo: !stSel.espejo });
+  $("stk_centro").onclick = () => cambiarSticker({ x: 0.5, y: 0.5 });
+  $("stk_borrar").onclick = () => { const it = itemsLinea().find(x => x.ref === stSel); if (it) borrar(it); };
+  $("stk_dup").onclick = () => { const it = itemsLinea().find(x => x.ref === stSel); if (it) { copiar(it); pegar(it.b); } };
+}
+let stPintado = null;
+function pintarStickerSel(forzar) {
+  if (stSel && !(E.stickers || []).includes(stSel)) stSel = null;
+  if (!forzar && stPintado === stSel) return;
+  stPintado = stSel;
+  $("stk_sel").style.display = stSel ? "flex" : "none";
+  if (!stSel) return;
+  $("stk_desc").textContent = `${nombreSticker(stSel.tipo)} · ${mmss(aEditado(stSel.inicio))} – ${mmss(aEditado(stSel.fin))}`;
+  $("stk_colores").querySelectorAll("button").forEach(b => b.classList.toggle("activo", b.dataset.c === stSel.color));
+  $("stk_color").value = stSel.color;
+  $("stk_tam").value = Math.round(stSel.tam * 100); $("stk_tam_txt").textContent = Math.round(stSel.tam * 100) + "%";
+  $("stk_rot").value = Math.round(stSel.rot || 0); $("stk_rot_txt").textContent = Math.round(stSel.rot || 0) + "°";
+  $("stk_espejo").classList.toggle("activo", !!stSel.espejo);
+}
+function puntoPrevia(ev) {   // en px internos del lienzo de la vista previa
+  const r = previa.getBoundingClientRect();
+  return [(ev.clientX - r.left) * previa.width / r.width, (ev.clientY - r.top) * previa.height / r.height];
+}
+function tocarSticker(p) {   // qué sticker (y qué parte) está bajo el cursor en la vista previa
+  const W = previa.width, H = previa.height, t = ahoraO(), d = W / 300;
+  const lista = stickersEn(t);
+  if (stSel && lista.includes(stSel)) { lista.splice(lista.indexOf(stSel), 1); lista.push(stSel); }   // el elegido va primero
+  for (let i = lista.length - 1; i >= 0; i--) {
+    const s = lista[i], g = geomSticker(s, W, H);
+    // al sistema del sticker (sin giro)
+    const dx = p[0] - g.cx, dy = p[1] - g.cy, c = Math.cos(-g.rot), sn = Math.sin(-g.rot);
+    const lx = dx * c - dy * sn, ly = dx * sn + dy * c, m = g.lado / 2;
+    if (s === stSel) {
+      if (Math.hypot(lx, ly + m + 18 * d) < 10 * d) return { s, modo: "rot" };
+      if (Math.abs(lx - m) < 12 * d && Math.abs(ly - m) < 12 * d) return { s, modo: "tam" };
+    }
+    if (Math.abs(lx) <= m && Math.abs(ly) <= m) return { s, modo: "mover" };
+  }
+  return null;
+}
+function iniciarStickers() {
+  pintarLibStickers();
+  let clicLibre = false;
+  previa.addEventListener("pointerdown", (ev) => {
+    const p = puntoPrevia(ev), o = tocarSticker(p);
+    clicLibre = !o;
+    if (!o) return;
+    video.pause();
+    previa.setPointerCapture(ev.pointerId);
+    stSel = o.s; sel = null;
+    const it = itemsLinea().find(x => x.ref === o.s); if (it) seleccionar(it, false);
+    stArr = { modo: o.modo, p0: p, x0: o.s.x, y0: o.s.y, tam0: o.s.tam, rot0: o.s.rot || 0, movido: false };
+    ev.preventDefault();
+  });
+  previa.addEventListener("pointermove", (ev) => {
+    const p = puntoPrevia(ev), W = previa.width, H = previa.height;
+    if (!stArr) { const o = tocarSticker(p); previa.style.cursor = !o ? "pointer" : o.modo === "mover" ? "move" : o.modo === "tam" ? "nwse-resize" : "grab"; return; }
+    const s = stSel, g = geomSticker(s, W, H);
+    stArr.movido = true;
+    if (stArr.modo === "mover") cambiarSticker({ x: stArr.x0 + (p[0] - stArr.p0[0]) / W, y: stArr.y0 + (p[1] - stArr.p0[1]) / H }, false);
+    else if (stArr.modo === "tam") {
+      const d0 = Math.hypot(stArr.p0[0] - g.cx, stArr.p0[1] - g.cy), d1 = Math.hypot(p[0] - g.cx, p[1] - g.cy);
+      cambiarSticker({ tam: Math.max(0.04, Math.min(1.5, stArr.tam0 * d1 / Math.max(1, d0))) }, false);
+    } else {
+      let a = Math.atan2(p[0] - g.cx, -(p[1] - g.cy)) * 180 / Math.PI;
+      if (ev.shiftKey) a = Math.round(a / 15) * 15;
+      cambiarSticker({ rot: Math.round(a) }, false);
+    }
+  });
+  const soltar = () => {
+    if (!stArr) return;
+    const movido = stArr.movido; stArr = null;
+    if (movido) guardarStickers(E.stickers, "Sticker acomodado.");
+  };
+  previa.addEventListener("pointerup", soltar);
+  previa.addEventListener("pointercancel", soltar);
+  previa.addEventListener("click", () => { if (clicLibre) video.paused ? video.play() : video.pause(); clicLibre = false; });
+  previa.addEventListener("wheel", (ev) => {
+    const o = tocarSticker(puntoPrevia(ev));
+    if (!o) return;
+    ev.preventDefault();
+    stSel = o.s;
+    const k = (ev.deltaY || ev.deltaX) < 0 ? 1 : -1;
+    if (ev.shiftKey) cambiarSticker({ rot: Math.round(((o.s.rot || 0) + k * 5 + 540) % 360 - 180) });
+    else cambiarSticker({ tam: Math.max(0.04, Math.min(1.5, o.s.tam * (k > 0 ? 1.06 : 1 / 1.06))) });
+  }, { passive: false });
 }
 
 // ---------- difuminar los subtítulos que trae el video de Nacho ----------
@@ -1774,7 +2044,7 @@ async function iniciar() {
   const fps = E.video.fps || 30;
   const mover = (d) => { video.pause(); irE(Math.min(durE(), Math.max(0, ahoraE() + d))); };
   $("b_play").onclick = () => video.paused ? video.play() : video.pause();
-  previa.onclick = () => video.paused ? video.play() : video.pause();
+  iniciarStickers();
   $("b_m1").onclick = () => mover(-1); $("b_p1").onclick = () => mover(1);
   $("b_mf").onclick = () => mover(-1 / fps); $("b_pf").onclick = () => mover(1 / fps);
   document.addEventListener("keydown", atajos);

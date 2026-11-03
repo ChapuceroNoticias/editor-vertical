@@ -25,7 +25,7 @@ MIN_SEG = 0.2   # pedazo más corto que se acepta
 
 # listas del plan con elementos {inicio, fin, ...}
 LISTAS = ("tomas", "proyeccion", "momentos", "cortes", "encuadres", "encuadre_manual", "encuadre_pantalla",
-          "difuminar", "transiciones_camara")
+          "difuminar", "transiciones_camara", "stickers")
 PISTAS = ("cara", "camino")     # dentro de un elemento: [[t, ...], ...]
 PARES = ("ocultar",)            # dentro de un elemento: [[a, b], ...]
 

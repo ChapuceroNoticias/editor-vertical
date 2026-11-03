@@ -50,6 +50,12 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
     **📸 Captura de la pantalla de Nacho**: toma lo que Nacho proyecta (nota, tuit…) justo donde va el video, recortado
     del video horizontal en calidad completa, y lo pone como imagen con movimiento. Si ya hay imagen en ese punto,
     **📸 Captura** la agrega como otra foto de ese momento.
+  - *Stickers:* biblioteca de stickers animados (círculo, óvalo, recuadro, esquinas, subrayado, tachado, flechas,
+    tache, palomita, mano dando clic, ¡!, ¿?, destello, explosión). Clic en uno = se pone donde va el video (2.5 s).
+    En la vista previa vertical se arrastra, la esquina ◢ lo agranda, el punto de arriba lo gira (rueda = tamaño,
+    Shift + rueda = girar). En el panel: color, tamaño, giro, voltear, centrar, duplicar, quitar. Su bloque rosa en la
+    línea de tiempo (carril «Stickers») se mueve, se estira, se parte y se copia como los demás. Salen en el video
+    final y se ven en vivo en Subtítulos.
   - *Encuadre:* sobre el video original hay dos recuadros. **Amarillo/verde = Nacho** (arrástralo, esquinas o Ctrl + rueda
     para acercar, doble clic para centrar; Fijo o Seguir la toma; se guarda solo al soltar, para todo ese tramo;
     para otros tiempos escribe desde/hasta y «Aplicar tiempos» o estira su bloque en la línea de tiempo).

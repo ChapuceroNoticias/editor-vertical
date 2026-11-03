@@ -823,6 +823,11 @@ def datos_encuadre(t):
             # franjas desenfocadas sobre los subtítulos que ya trae el video de Nacho (tiempo y px del original)
             "difuminar": plan.get("difuminar") or [],
             "difuminar_busqueda": estado_difuminar(t),
+            # stickers animados (tiempo del original; posición y tamaño relativos al video vertical)
+            "stickers": plan.get("stickers") or [],
+            "catalogo_stickers": [{"tipo": a, "nombre": b, "color": c, "tam": d} for a, b, c, d in ed.CATALOGO_STICKERS
+                                  if (ed.DIR_STICKERS / f"{a}.png").exists()],
+            "meta_stickers": ed.meta_stickers(),
             **estado_proxy(t, plan),
             "cortes": [{"inicio": c["inicio"], "fin": c["fin"]} for c in ed.unir_cortes(plan.get("cortes", []))],
             "titulo": bool(plan.get("titulo")) and (estilo == "motivacional" or bool(pl.get("titulo", {}).get("barra")))}
@@ -1005,6 +1010,44 @@ def guardar_difuminar(t, lista):
     respaldar(t)
     plan["difuminar"] = limpios
     guardar_plan(t, plan)
+    return limpios
+
+
+def guardar_stickers(t, lista):
+    plan, _ = cargar(t)
+    dur = plan["info"]["duracion"]
+    tipos = {a: c for a, _, c, _ in ed.CATALOGO_STICKERS}
+    limpios = []
+    for d in lista or []:
+        try:
+            tipo = str(d["tipo"])
+            a, b = max(0.0, float(d["inicio"])), min(dur, float(d["fin"]))
+            x, y = float(d.get("x", 0.5)), float(d.get("y", 0.5))
+            tam = float(d.get("tam", 0.35))
+            rot = float(d.get("rot", 0) or 0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        if tipo not in tipos or b - a < 0.2:
+            continue
+        color = str(d.get("color") or tipos[tipo])
+        if not (len(color) == 7 and color.startswith("#") and all(ch in "0123456789abcdefABCDEF" for ch in color[1:])):
+            color = tipos[tipo]
+        limpios.append({"tipo": tipo, "inicio": round(a, 3), "fin": round(b, 3),
+                        "x": round(max(-0.2, min(1.2, x)), 4), "y": round(max(-0.2, min(1.2, y)), 4),
+                        "tam": round(max(0.04, min(1.5, tam)), 4), "rot": round(((rot + 180) % 360) - 180, 1),
+                        "color": color.lower(), "espejo": bool(d.get("espejo"))})
+    limpios.sort(key=lambda d: d["inicio"])
+    # los stickers se dibujan en vivo en la vista previa: cambiarlos no la deja «desactualizada»
+    vpm = Path(t) / "vista_previa.mp4"
+    al_dia = vpm.exists() and (Path(t) / "plan.json").stat().st_mtime <= vpm.stat().st_mtime + 1
+    respaldar(t)
+    plan["stickers"] = limpios
+    guardar_plan(t, plan)
+    if al_dia:
+        try:
+            os.utime(vpm, None)
+        except OSError:
+            pass
     return limpios
 
 
@@ -1869,6 +1912,10 @@ def datos_subtitulos(t):
         "desactualizada": not solo and (Path(t) / "vista_previa.mp4").exists() and
                           (Path(t) / "plan.json").stat().st_mtime > (Path(t) / "vista_previa.mp4").stat().st_mtime + 1,
         "hay_video": solo or (Path(t) / "vista_previa.mp4").exists() or bool(video_salida(t)),
+        # stickers (se dibujan en vivo encima de la vista previa; tiempos del video editado)
+        "stickers": [dict(s_, i=round(ed_t(s_["inicio"], plan), 3), f=round(ed_t(s_["fin"], plan), 3))
+                     for s_ in plan.get("stickers") or []],
+        "meta_stickers": ed.meta_stickers(),
     }
 
 
@@ -2382,6 +2429,19 @@ def crear_app():
         t = validar(d.get("t"))
         lista = guardar_difuminar(t, d.get("lista"))
         return {"ok": True, "n": len(lista)}   # el mensaje lo pone la pestaña Edición según lo que se hizo
+
+    @app.post("/edi/stickers")
+    def edi_stickers(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        lista = guardar_stickers(t, d.get("lista"))
+        return {"ok": True, "n": len(lista)}
+
+    @app.get("/stk/hoja")
+    def stk_hoja(tipo: str):
+        if tipo not in {a for a, *_ in ed.CATALOGO_STICKERS}:
+            raise HTTPException(404)
+        return FileResponse(ed.DIR_STICKERS / f"{tipo}.png", media_type="image/png",
+                            headers={"Cache-Control": "max-age=86400"})
 
     @app.post("/edi/difuminar_buscar")
     def edi_difuminar_buscar(d: dict = Body(...)):

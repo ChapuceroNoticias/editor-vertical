@@ -220,12 +220,52 @@ function ajustarCanvas() {
   capa.width = Math.round(r.width * dpr); capa.height = Math.round(r.height * dpr);
 }
 
+// ---------- stickers (se ponen en Edición; aquí solo se ven) ----------
+const stHojas = {};
+let stTmpA = null, stTmpB = null;
+function hojaSticker(tipo) {
+  if (!stHojas[tipo]) { stHojas[tipo] = new Image(); stHojas[tipo].src = `/stk/hoja?tipo=${tipo}`; }
+  const im = stHojas[tipo];
+  return im.complete && im.naturalWidth ? im : null;
+}
+function cuadroTenido(tipo, color, k) {
+  const im = hojaSticker(tipo), m = D.meta_stickers, S = m.S, C = m.COLS;
+  if (!im) return null;
+  if (!stTmpA) { stTmpA = document.createElement("canvas"); stTmpB = document.createElement("canvas"); }
+  stTmpA.width = stTmpA.height = stTmpB.width = stTmpB.height = S;
+  const a = stTmpA.getContext("2d"), b = stTmpB.getContext("2d");
+  const fx = (k % C) * S, fy = Math.floor(k / C) * S;
+  b.clearRect(0, 0, S, S);
+  b.drawImage(im, C * S + fx, fy, S, S, 0, 0, S, S);
+  b.globalCompositeOperation = "multiply"; b.fillStyle = color; b.fillRect(0, 0, S, S);
+  b.globalCompositeOperation = "destination-in"; b.drawImage(im, C * S + fx, fy, S, S, 0, 0, S, S);
+  b.globalCompositeOperation = "source-over";
+  a.clearRect(0, 0, S, S); a.drawImage(im, fx, fy, S, S, 0, 0, S, S); a.drawImage(stTmpB, 0, 0);
+  return stTmpA;
+}
+function dibujarStickers(cx, t, W, H) {
+  const m = D && D.meta_stickers;
+  if (!m) return;
+  for (const s of D.stickers || []) {
+    if (!(s.i <= t && t < s.f)) continue;
+    let k = Math.floor((t - s.i) * m.FPS);
+    if (k >= m.INTRO) k = m.INTRO + (k - m.INTRO) % m.LOOP;
+    const c = cuadroTenido(s.tipo, s.color, k);
+    if (!c) continue;
+    const lado = s.tam * W, resta = s.f - t;
+    cx.save(); cx.translate(s.x * W, s.y * H); cx.rotate((s.rot || 0) * Math.PI / 180); if (s.espejo) cx.scale(-1, 1);
+    cx.globalAlpha = resta < 0.12 ? Math.max(0, resta / 0.12) : 1;
+    cx.drawImage(c, -lado / 2, -lado / 2, lado, lado);
+    cx.restore();
+  }
+}
 function dibujar() {
   if (!D) return;
   const W = capa.width, H = capa.height;
   ctx.clearRect(0, 0, W, H);
   if ((!D.limpia && !vivo) || !fuenteLista) { cajaSub = null; return; }
   const t = ahora();
+  dibujarStickers(ctx, t, W, H);   // debajo de los subtítulos, como en el video final
   const s = W / D.salida[0];
   const st = D.estilo;
   let act = null;

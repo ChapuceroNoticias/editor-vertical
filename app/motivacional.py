@@ -1197,6 +1197,7 @@ def render(args, trabajo, plan, pl):
     previa = paso > 1 or getattr(args, "previa", False)
     ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     vista = ed.VistaPrevia(trabajo, W, H, fps, solo_diseno=previa)
+    stickers = ed.Stickers(plan.get("stickers"), W, H) if plan.get("stickers") else None
 
     cap = cv2.VideoCapture(plan["video"])
     idx, ci, n_out = 0, 0, 0
@@ -1246,11 +1247,17 @@ def render(args, trabajo, plan, pl):
             # entrada de «Tiktoks Yair»: Yair arriba, imagen abajo y los dos cuadros del título entrando de lado
             lienzo = entrada_yair(frame, t, te)
             vista.escribir(lienzo, te, "titulo")
+            if stickers is not None and not previa:
+                stickers.pegar(lienzo, t)
         elif t < t_titulo:
             ed.pegar(lienzo, titulo)
             vista.escribir(lienzo, te, "titulo")
+            if stickers is not None and not previa:
+                stickers.pegar(lienzo, t)
         else:
             vista.escribir(lienzo, te, "frases")
+            if stickers is not None and not previa:   # en la vista previa se dibujan en vivo
+                stickers.pegar(lienzo, t)
             act = subs.activo(t) if not previa else None   # la vista previa va sin subtítulos (se dibujan en vivo)
             if act is not None and por_frase:
                 ed.pegar(lienzo, subs.imagen(act), 0, ed.desplazamiento_subs(subs.grupos[act], H))
