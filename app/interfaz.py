@@ -2206,6 +2206,17 @@ def crear_app():
         registrar(f"✂ Montaje ({acc}): {msg}")
         return {"ok": True, "mensaje": msg}
 
+    @app.get("/app/grafito.css")
+    def app_grafito():
+        return FileResponse(BASE / "web" / "grafito.css", media_type="text/css", headers={"Cache-Control": "no-store"})
+
+    @app.get("/app/fuentes/{nombre}")
+    def app_fuente(nombre: str):
+        p = BASE / "web" / "fuentes" / Path(nombre).name
+        if p.suffix != ".woff2" or not p.exists():
+            raise HTTPException(404)
+        return FileResponse(p, media_type="font/woff2", headers={"Cache-Control": "max-age=604800"})
+
     @app.get("/app/stickers_gen.js")
     def app_stickers_gen():
         return FileResponse(BASE / "web" / "stickers_gen.js", media_type="text/javascript", headers={"Cache-Control": "no-store"})
@@ -2512,13 +2523,14 @@ def barra(frac=None, etapa="", estado="trabajando", detalle=""):
     if frac is None:
         return ""
     pct = int(round(100 * min(1.0, max(0.0, frac))))
-    color = {"trabajando": "#5b5bd6", "listo": "#16a34a", "error": "#dc2626"}[estado]
-    texto = f"{etapa}… {pct}%" if estado == "trabajando" else etapa
-    extra = (f'<div style="margin-top:6px;font-size:12px;color:#b91c1c;white-space:pre-wrap">{detalle}</div>'
+    color = {"trabajando": "#EDEDF0", "listo": "#3DD68C", "error": "#FF6B6F"}[estado]
+    texto = f"{etapa}… <span style=\"font-family:'Geist Mono',monospace;color:#9A9AA3\">{pct}%</span>" \
+        if estado == "trabajando" else etapa
+    extra = (f'<div style="margin-top:6px;font-size:12px;color:#FF8C8F;white-space:pre-wrap">{detalle}</div>'
              if detalle else "")
-    return (f'<div style="padding:4px 2px 8px">'
-            f'<div style="font-weight:600;font-size:14px;margin-bottom:6px;color:{color}">{texto}</div>'
-            f'<div style="background:rgba(127,127,127,.18);border-radius:999px;height:12px;overflow:hidden">'
+    return (f'<div class="barra-prog" style="padding:2px 0;font-family:Geist,system-ui,sans-serif">'
+            f'<div style="font-weight:500;font-size:13.5px;margin-bottom:8px;color:{color}">{texto}</div>'
+            f'<div style="background:#1D1D22;border-radius:999px;height:6px;overflow:hidden">'
             f'<div style="width:{pct}%;height:100%;background:{color};border-radius:999px;transition:width .4s"></div>'
             f'</div>{extra}</div>')
 
@@ -2624,7 +2636,7 @@ def iframe_edi(t):
         return ("<div class='vacio-editor'>Elige un video y presiona <b>Analizar video</b>, "
                 "o abre un trabajo que ya exista.</div>")
     url = f"/edi/editor?t={quote(t)}&v={int(time.time() * 1000)}"
-    return (f'<iframe src="{url}" style="width:100%;height:1500px;border:0;border-radius:12px;background:#0b0b0d"></iframe>'
+    return (f'<iframe src="{url}" style="width:100%;height:1040px;border:0;border-radius:12px;background:#0b0b0d"></iframe>'
             f'<div style="text-align:right;font-size:13px"><a href="{url}" target="_blank">Abrir en otra ventana ↗</a></div>')
 
 
@@ -2657,15 +2669,94 @@ def opciones_trabajos():
 
 
 TEMA_CSS = """
-:root, .dark { --color-accent: #d91e2b; }
-body, .gradio-container { background: #0b0b0d !important; }
-.gradio-container { max-width: 100% !important; }
-#cabecera { display: flex; align-items: center; gap: 14px; padding: 6px 4px 2px; }
-#cabecera .marca { font: 800 22px/1 system-ui, sans-serif; letter-spacing: .04em; color: #fff; }
-#cabecera .marca b { color: #e11d2e; }
-#cabecera .sub { color: #8b8b96; font-size: 13px; }
-.vacio-editor { padding: 60px 20px; text-align: center; color: #8b8b96; border: 1px dashed #2a2a32; border-radius: 12px; }
-#trabajo_actual { color: #c9c9d1; }
+@font-face { font-family: "Geist"; src: url("/app/fuentes/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Geist Mono"; src: url("/app/fuentes/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+:root, .dark { --color-accent: #E5252A; --font: "Geist", system-ui, sans-serif; --font-mono: "Geist Mono", monospace; }
+body, .gradio-container { background: #0B0B0D !important; font-family: "Geist", system-ui, sans-serif !important; }
+.gradio-container { max-width: 100% !important; padding: 0 !important; }
+.gradio-container > .main, .gradio-container .wrap.main { padding: 0 !important; }
+footer { display: none !important; }
+#marco { gap: 0 !important; min-height: 100vh; flex-wrap: nowrap !important; }
+/* menú lateral */
+#nav { flex: 0 0 232px !important; max-width: 232px; min-width: 232px !important; border-right: 1px solid #1D1D22; padding: 22px 14px !important;
+  gap: 4px !important; background: #0B0B0D; position: sticky; top: 0; align-self: flex-start; min-height: 100vh; }
+#nav .marca { display: flex; align-items: center; gap: 10px; padding: 4px 10px 22px; font: 600 15px "Geist", sans-serif; color: #EDEDF0; letter-spacing: -0.01em; }
+#nav .marca i { width: 26px; height: 26px; border-radius: 7px; background: #E5252A; display: inline-flex; align-items: center; justify-content: center; }
+#nav .marca i span { width: 9px; height: 14px; border: 1.8px solid #fff; border-radius: 2px; display: block; }
+#nav button.nav { justify-content: flex-start !important; height: 38px; padding: 0 10px !important; border-radius: 8px !important; border: 0 !important;
+  background: transparent !important; color: #C9C9CF !important; font: 400 14px "Geist", sans-serif !important; box-shadow: none !important; min-width: 0 !important; }
+#nav button.nav:hover { background: #141417 !important; color: #fff !important; }
+#nav button.nav.activo { background: #1D1D22 !important; color: #fff !important; font-weight: 500 !important; }
+#nav .relleno { flex: 1 1 auto; min-height: 40px; }
+#nav > *:has(.relleno) { flex: 1 1 auto !important; display: flex; flex-direction: column; justify-content: flex-end; }
+#nav > *:has(.relleno) > * { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: flex-end; }
+#nav .carpeta { padding: 10px; font-size: 12px; color: #6E6E78; line-height: 1.5; word-break: break-all; }
+#nav .carpeta b { display: block; font: 400 11.5px "Geist Mono", monospace; color: #9A9AA3; }
+#btn_cerrar { justify-content: flex-start !important; height: 38px; padding: 0 10px !important; border: 0 !important; background: transparent !important;
+  color: #9A9AA3 !important; font: 400 14px "Geist", sans-serif !important; box-shadow: none !important; }
+#btn_cerrar:hover { color: #FF8C8F !important; background: rgba(229,37,42,.08) !important; }
+/* contenido */
+#contenido { padding: 0 !important; min-width: 0 !important; gap: 0 !important; }
+#secciones > .tab-wrapper { display: none !important; }
+#secciones, #secciones > .tabitem { padding: 0 !important; border: 0 !important; background: transparent !important; }
+.seccion { padding: 36px 44px !important; gap: 26px !important; }
+.titulo-sec h1 { margin: 0; font: 600 28px/1.1 "Geist", sans-serif; letter-spacing: -0.02em; color: #EDEDF0; }
+.titulo-sec p { margin: 6px 0 0; color: #9A9AA3; font-size: 14px; }
+.etiqueta, .etiqueta * { font: 500 11px "Geist", sans-serif !important; letter-spacing: .12em !important; text-transform: uppercase; color: #9A9AA3 !important; }
+#progreso_caja { padding: 14px 44px !important; border-bottom: 1px solid #1D1D22; align-items: center !important; gap: 16px !important; }
+#progreso_caja:not(:has(.barra-prog)) { display: none !important; }
+#progreso_caja .block { background: transparent !important; border: 0 !important; padding: 0 !important; }
+/* bloques de Gradio más planos */
+.block, .form { border-color: #2A2A30 !important; }
+#inicio .block, #inicio .form { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+#inicio label > span[data-testid="block-info"], #inicio [data-testid="block-info"] { font: 500 11px "Geist", sans-serif !important;
+  letter-spacing: .12em; text-transform: uppercase; color: #9A9AA3 !important; margin-bottom: 8px; }
+#inicio input[type=text], #inicio textarea { background: #0B0B0D !important; border: 1px solid #2A2A30 !important; border-radius: 10px !important;
+  min-height: 44px; font-size: 15px !important; padding: 10px 14px !important; }
+#inicio .wrap-inner, #inicio .secondary-wrap { background: #141417 !important; border-radius: 10px !important; }
+/* estilos de edición como tarjetas */
+#estilo .wrap { display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px !important; }
+#estilo .wrap label { position: relative; display: flex !important; flex-direction: column; align-items: flex-start !important; gap: 10px !important; padding: 12px !important;
+  border-radius: 10px !important; border: 1px solid #2A2A30 !important; background: transparent !important; color: #C9C9CF !important;
+  font: 500 13px "Geist", sans-serif !important; min-height: 104px; cursor: pointer; box-shadow: none !important; }
+#estilo .wrap label:hover { border-color: #3A3A42 !important; color: #fff !important; }
+#estilo .wrap label.selected { border: 1.5px solid #E5252A !important; background: #141417 !important; color: #fff !important; }
+#estilo .wrap label input { position: absolute; opacity: 0; pointer-events: none; }
+#estilo .wrap label::before { content: ""; width: 34px; height: 56px; border-radius: 5px; background: #4A4A54; display: block; }
+#estilo .wrap label:nth-child(1)::before { background: linear-gradient(#4A4A54 0 52%, #3B82F6 52% 60%, #2A2A30 60%); }
+#estilo .wrap label:nth-child(2)::before { background: linear-gradient(#4A4A54 0 74%, #fff 74% 80%, #4A4A54 80%); background-size: 22px 100%; background-repeat: no-repeat; background-position: center; background-color: #4A4A54; }
+#estilo .wrap label:nth-child(3)::before { background: linear-gradient(#4A4A54 0 12%, #F2A33A 12% 20%, #4A4A54 20% 25%, #fff 25% 31%, #4A4A54 31%); }
+#estilo .wrap label:nth-child(4)::before { background: linear-gradient(#4A4A54 0 50%, #3A3A42 50%); }
+#estilo .wrap label:nth-child(5)::before { background: linear-gradient(#4A4A54 0 47%, #fff 47% 53%, #4A4A54 53%); background-size: 22px 100%; background-repeat: no-repeat; background-position: center; background-color: #4A4A54; }
+/* botones */
+button.primary, button.lg.primary { background: #E5252A !important; border: 0 !important; font-weight: 600 !important; border-radius: 10px !important; }
+button.primary:hover { background: #F23B40 !important; }
+button.secondary { background: #1D1D22 !important; border: 1px solid #2A2A30 !important; border-radius: 8px !important; font-weight: 500 !important; }
+#btn_procesar { min-height: 46px; font-size: 15px !important; }
+#fila_procesar { align-items: center !important; border-top: 1px solid #1D1D22; padding-top: 16px !important; }
+/* recientes */
+#recientes .wrap { display: flex !important; flex-direction: column; gap: 0 !important; border-top: 1px solid #1D1D22; }
+#recientes .wrap label { border: 0 !important; border-bottom: 1px solid #1D1D22 !important; border-radius: 0 !important; background: transparent !important;
+  padding: 14px 6px !important; box-shadow: none !important; color: #EDEDF0 !important; font: 400 14px "Geist", sans-serif !important; cursor: pointer; }
+#recientes .wrap label:hover { background: #141417 !important; }
+#recientes .wrap label input { display: none; }
+#otro_trabajo { border: 0 !important; background: transparent !important; }
+/* área de trabajo */
+#cabeza_trabajo { align-items: center !important; gap: 12px !important; padding: 12px 20px !important; border-bottom: 1px solid #1D1D22; flex-wrap: wrap !important; }
+#btn_volver { max-width: 40px; min-width: 40px !important; height: 36px; padding: 0 !important; background: transparent !important; border: 1px solid #2A2A30 !important; }
+#trabajo_actual { color: #EDEDF0; font-size: 14px; }
+#trabajo_actual p { margin: 0; }
+#btn_cancelar { background: transparent !important; border: 1px solid #2A2A30 !important; color: #9A9AA3 !important; }
+#btn_cancelar:hover { color: #FF8C8F !important; border-color: #4A2326 !important; }
+#btn_exportar { min-height: 36px; }
+#pasos > .tab-wrapper { padding: 10px 20px 0; border: 0 !important; }
+#pasos [role=tablist] { display: inline-flex !important; width: fit-content !important; flex: 0 0 auto !important; padding: 3px; background: #141417; border: 1px solid #2A2A30; border-radius: 9px; gap: 2px; }
+#pasos [role=tablist] button { height: 30px; padding: 0 16px !important; border-radius: 6px !important; color: #9A9AA3 !important; border: 0 !important; font: 500 13px "Geist", sans-serif !important; }
+#pasos [role=tablist] button.selected { background: #2A2A30 !important; color: #fff !important; }
+#pasos [role=tablist] button.selected::after, #pasos [role=tablist] button::after { display: none !important; }
+#pasos > .tabitem { padding: 10px 0 0 !important; border: 0 !important; }
+.vacio-editor { padding: 60px 20px; text-align: center; color: #9A9AA3; border: 1px dashed #2A2A30; border-radius: 12px; }
+#caja_registro textarea { font: 12.5px/1.5 "Geist Mono", monospace !important; background: #0B0B0D !important; }
 """
 
 TEMA_JS = "() => { document.body.classList.add('dark'); }"
@@ -2673,94 +2764,156 @@ TEMA_JS = "() => { document.body.classList.add('dark'); }"
 JS_CERRAR = """() => {
   if (!confirm('¿Cerrar el Editor Vertical? Se detiene todo lo que esté trabajando (análisis, exportación, vistas previas, video largo).')) return;
   fetch('/app/cerrar', {method: 'POST'}).catch(() => {});
-  document.body.innerHTML = '<div style="font:600 20px system-ui;color:#ececf1;background:#0b0b0d;height:100vh;display:flex;' +
+  document.body.innerHTML = '<div style="font:600 20px Geist,system-ui;color:#EDEDF0;background:#0B0B0D;height:100vh;display:flex;' +
     'flex-direction:column;align-items:center;justify-content:center;gap:10px"><div>El Editor Vertical se cerró.</div>' +
-    '<div style="font-weight:400;font-size:14px;color:#9a9aa6">Puedes cerrar esta pestaña. Para volver a usarlo, abre «Editor Vertical» desde el escritorio.</div></div>';
+    '<div style="font-weight:400;font-size:14px;color:#9A9AA3">Puedes cerrar esta pestaña. Para volver a usarlo, abre «Editor Vertical» desde el escritorio.</div></div>';
   setTimeout(() => { try { window.close(); } catch (e) {} }, 300);
 }"""
 
 
 def tema():
     t = gr.themes.Base(primary_hue=gr.themes.colors.red, secondary_hue=gr.themes.colors.red,
-                       neutral_hue=gr.themes.colors.zinc, radius_size=gr.themes.sizes.radius_md)
-    oscuro = dict(body_background_fill="#0b0b0d", background_fill_primary="#15151a", background_fill_secondary="#101014",
-                  block_background_fill="#15151a", block_border_color="#2a2a32", border_color_primary="#2a2a32",
-                  input_background_fill="#0b0b0d", body_text_color="#ececf1", block_label_text_color="#9a9aa6",
-                  block_title_text_color="#ececf1", button_primary_background_fill="#d91e2b",
-                  button_primary_background_fill_hover="#ff4553", button_primary_text_color="#ffffff",
-                  button_secondary_background_fill="#1c1c22", button_secondary_text_color="#ececf1",
-                  button_secondary_border_color="#2a2a32", checkbox_background_color_selected="#d91e2b",
-                  color_accent_soft="#3a1216", loader_color="#d91e2b", slider_color="#d91e2b")
+                       neutral_hue=gr.themes.colors.zinc, radius_size=gr.themes.sizes.radius_md,
+                       font=["Geist", "system-ui", "sans-serif"], font_mono=["Geist Mono", "monospace"])
+    oscuro = dict(body_background_fill="#0B0B0D", background_fill_primary="#141417", background_fill_secondary="#0B0B0D",
+                  block_background_fill="#141417", block_border_color="#2A2A30", border_color_primary="#2A2A30",
+                  input_background_fill="#0B0B0D", body_text_color="#EDEDF0", block_label_text_color="#9A9AA3",
+                  block_title_text_color="#EDEDF0", button_primary_background_fill="#E5252A",
+                  button_primary_background_fill_hover="#F23B40", button_primary_text_color="#ffffff",
+                  button_secondary_background_fill="#1D1D22", button_secondary_text_color="#EDEDF0",
+                  button_secondary_border_color="#2A2A30", checkbox_background_color_selected="#EDEDF0",
+                  checkbox_border_color_selected="#EDEDF0", color_accent_soft="#1D1D22", loader_color="#E5252A",
+                  slider_color="#EDEDF0", body_text_color_subdued="#9A9AA3")
     return t.set(**oscuro, **{k + "_dark": v for k, v in oscuro.items()})
+
+
+def hace_cuanto(ts):
+    d = time.time() - ts
+    if d < 3600:
+        return f"hace {max(1, int(d // 60))} min"
+    if d < 86400:
+        return f"hace {int(d // 3600)} h"
+    if d < 2 * 86400:
+        return "ayer"
+    return time.strftime("%d/%m", time.localtime(ts))
+
+
+def opciones_recientes(n=8):
+    """Los trabajos más recientes para la lista de inicio: (etiqueta, ruta)."""
+    nombres = {Path(v).name: k for k, v in ESTILOS.items()}
+    out = []
+    for nombre, ruta in opciones_trabajos()[:n]:
+        p = Path(ruta) / "plan.json"
+        try:
+            plan = ed.cargar_json(p)
+            est = nombres.get(Path(str(plan.get("plantilla", ""))).name, "")
+            est = est.replace(" (Chapucero)", "")
+            titulo = (plan.get("titulo") or "").strip()
+        except Exception:
+            est, titulo = "", ""
+        listo = " · exportado" if exportado_de(ruta) else ""
+        out.append((f"{titulo or nombre}   ·   {est or 'trabajo'} · {hace_cuanto(p.stat().st_mtime)}{listo}", ruta))
+    return out
+
+
+NAV = (("editor", "Editor"), ("largo", "Video largo"), ("aprendido", "Lo aprendido"), ("registro", "Registro"))
 
 
 def construir():
     extra = {"theme": tema(), "css": TEMA_CSS, "js": TEMA_JS} if _TEMA_EN_BLOCKS else {}
     with gr.Blocks(title="Editor vertical · El Chapucero", fill_width=True, **extra) as demo:
         trabajo = gr.State("")
-        with gr.Row(equal_height=True):
-            gr.HTML('<div id="cabecera"><span class="marca">EDITOR <b>VERTICAL</b></span>'
-                    '<span class="sub">El Chapucero · 16:9 → 9:16</span></div>')
-            btn_cerrar = gr.Button("⏻ Cerrar", variant="stop", scale=0, min_width=120, elem_id="btn_cerrar")
-        # Cerrar: detiene todo lo que esté trabajando, apaga la plataforma y deja la pestaña en blanco
-        btn_cerrar.click(None, None, None, js=JS_CERRAR)
+        with gr.Row(elem_id="marco", equal_height=False):
+            # ======================== menú lateral ========================
+            with gr.Column(elem_id="nav", scale=0, min_width=232):
+                gr.HTML('<div class="marca"><i><span></span></i>Editor Vertical</div>')
+                botones_nav = [gr.Button(txt, elem_classes=["nav"] + (["activo"] if k == "editor" else []), size="sm")
+                               for k, txt in NAV]
+                gr.HTML(f'<div class="relleno"></div><div class="carpeta">Carpeta<b>{CARPETA_VIDEOS}</b></div>')
+                btn_cerrar = gr.Button("⏻  Cerrar", elem_id="btn_cerrar", size="sm")
+            # Cerrar: detiene todo lo que esté trabajando, apaga la plataforma y deja la pestaña en blanco
+            btn_cerrar.click(None, None, None, js=JS_CERRAR)
 
-        with gr.Tabs():
-            # ======================== Editor ========================
-            with gr.Tab("Editor"):
-                with gr.Row(equal_height=False):
-                    with gr.Column(scale=3):
-                        gr.Markdown(f"**Procesar un video nuevo** · carpeta `{CARPETA_VIDEOS}`")
-                        with gr.Row():
-                            ruta_video = gr.Dropdown(label="Nombre del video", choices=opciones_videos(), value=None,
-                                                     allow_custom_value=True, filterable=True, scale=5)
-                            btn_refrescar = gr.Button("↻", scale=0, min_width=52)
-                        titulo_nuevo = gr.Textbox(label="Título (no hace falta en «Solo subtítulos»; en «Tiktoks Yair»: arriba – abajo)",
-                                                  placeholder="Tiktoks Yair: TIEMBLA SALINAS – VAN CONTRA GRANJAS DE BOTS")
-                        estilo_edicion = gr.Radio(list(ESTILOS), value="Clips Chapuceros", label="Estilo de edición")
-                        with gr.Row():
-                            usar_gpu = gr.Checkbox(label="Solo tarjeta gráfica (cuidar el procesador)", value=GPU_INICIAL)
-                            btn_procesar = gr.Button("Analizar video", variant="primary")
-                    with gr.Column(scale=2):
-                        gr.Markdown("**Abrir un trabajo**")
-                        ruta_trabajo = gr.Dropdown(label="Carpeta _trabajo", choices=opciones_trabajos(), value=None,
-                                                   allow_custom_value=True, filterable=True)
-                        btn_cargar = gr.Button("Abrir", variant="primary")
-                        actual = gr.Markdown(elem_id="trabajo_actual")
-                with gr.Row(equal_height=True):
-                    progreso = gr.HTML()
-                    btn_cancelar = gr.Button("⛔ Cancelar todo", variant="stop", scale=0, min_width=170)
-                with gr.Tabs():
-                    with gr.Tab("Edición"):
-                        editor_edi = gr.HTML(iframe_edi(None))
-                    with gr.Tab("Subtítulos"):
-                        editor_subs = gr.HTML(iframe_subs(None))
-                    with gr.Tab("Exportar"):
-                        gr.Markdown("Cuando termines de revisar **Edición** y **Subtítulos**, arma aquí el video final "
-                                    "(MP4 1080×1920). Mientras revisas no hace falta: las vistas previas ya muestran cómo queda. "
-                                    f"Queda en la carpeta `{CARPETA_RENDERS}`.")
-                        btn_render = gr.Button("Exportar video final", variant="primary")
-                        video = gr.Video(label="Video final", height=620, interactive=False)
+            # ======================== contenido ========================
+            with gr.Column(elem_id="contenido", scale=1):
+                with gr.Row(elem_id="progreso_caja", equal_height=True):
+                    progreso = gr.HTML(elem_id="progreso")
+                    btn_cancelar = gr.Button("Cancelar todo", elem_id="btn_cancelar", scale=0, min_width=130)
+                with gr.Tabs(elem_id="secciones", selected="editor") as secciones:
+                    # ---------- Editor ----------
+                    with gr.Tab("Editor", id="editor"):
+                        with gr.Column(elem_id="inicio", elem_classes=["seccion"]) as col_inicio:
+                            gr.HTML('<div class="titulo-sec"><h1>Nuevo video</h1>'
+                                    '<p>Elige el video, ponle título y la plataforma lo arma en vertical.</p></div>')
+                            with gr.Row(equal_height=False):
+                                with gr.Column(scale=3):
+                                    with gr.Row(equal_height=True):
+                                        ruta_video = gr.Dropdown(label="Video", choices=opciones_videos(), value=None,
+                                                                 allow_custom_value=True, filterable=True, scale=5)
+                                        btn_refrescar = gr.Button("↻", scale=0, min_width=48)
+                                    titulo_nuevo = gr.Textbox(label="Título",
+                                                              placeholder="En «Tiktoks Yair»: arriba – abajo (en «Solo subtítulos» no hace falta)")
+                                    estilo_edicion = gr.Radio(list(ESTILOS), value="Clips Chapuceros", label="Estilo de edición",
+                                                              elem_id="estilo")
+                                    with gr.Row(elem_id="fila_procesar", equal_height=True):
+                                        usar_gpu = gr.Checkbox(label="Solo tarjeta gráfica · no usa el procesador", value=GPU_INICIAL)
+                                        btn_procesar = gr.Button("Analizar video  →", variant="primary", elem_id="btn_procesar",
+                                                                 scale=0, min_width=200)
+                                with gr.Column(scale=2):
+                                    gr.HTML('<div class="etiqueta">Trabajos recientes</div>')
+                                    recientes = gr.Radio(choices=opciones_recientes(), value=None, show_label=False,
+                                                         elem_id="recientes")
+                                    with gr.Accordion("Abrir otro trabajo", open=False, elem_id="otro_trabajo"):
+                                        ruta_trabajo = gr.Dropdown(label="Carpeta _trabajo", choices=opciones_trabajos(), value=None,
+                                                                   allow_custom_value=True, filterable=True)
+                                        btn_cargar = gr.Button("Abrir", variant="secondary")
+                        with gr.Column(visible=False, elem_id="area") as col_area:
+                            with gr.Row(elem_id="cabeza_trabajo", equal_height=True):
+                                btn_volver = gr.Button("←", elem_id="btn_volver", scale=0, min_width=40)
+                                actual = gr.Markdown(elem_id="trabajo_actual")
+                                btn_exportar = gr.Button("Exportar", variant="primary", elem_id="btn_exportar", scale=0, min_width=120)
+                            with gr.Tabs(elem_id="pasos", selected="edicion") as pasos:
+                                with gr.Tab("Edición", id="edicion"):
+                                    editor_edi = gr.HTML(iframe_edi(None))
+                                with gr.Tab("Subtítulos", id="subtitulos"):
+                                    editor_subs = gr.HTML(iframe_subs(None))
+                                with gr.Tab("Exportar", id="exportar"):
+                                    with gr.Column(elem_classes=["seccion"]):
+                                        gr.Markdown("Arma el video final (MP4 1080×1920) cuando termines de revisar **Edición** y "
+                                                    "**Subtítulos**. Mientras revisas no hace falta: las vistas previas ya muestran "
+                                                    f"cómo queda. Queda en la carpeta `{CARPETA_RENDERS}`.")
+                                        btn_render = gr.Button("Exportar video final", variant="primary", scale=0)
+                                        video = gr.Video(label="Video final", height=620, interactive=False)
 
-            # ======================== Video largo ========================
-            with gr.Tab("Video largo"):
-                gr.HTML('<iframe src="/frag/editor" style="width:100%;height:1750px;border:0;border-radius:12px;'
-                        'background:#0b0b0d"></iframe>')
+                    # ---------- Video largo ----------
+                    with gr.Tab("Video largo", id="largo"):
+                        gr.HTML('<iframe src="/frag/editor" style="width:100%;height:1750px;border:0;'
+                                'background:#0B0B0D"></iframe>')
 
-            # ======================== Lo aprendido ========================
-            with gr.Tab("Lo aprendido"):
-                gr.HTML('<iframe src="/apr/editor" style="width:100%;height:1300px;border:0;border-radius:12px;'
-                        'background:#0b0b0d"></iframe>')
+                    # ---------- Lo aprendido ----------
+                    with gr.Tab("Lo aprendido", id="aprendido"):
+                        gr.HTML('<iframe src="/apr/editor" style="width:100%;height:1300px;border:0;'
+                                'background:#0B0B0D"></iframe>')
 
-            # ======================== Registro ========================
-            with gr.Tab("Registro de la plataforma"):
-                gr.Markdown("Lo que va haciendo la plataforma paso a paso (se actualiza solo). "
-                            f"También se guarda en `{ARCHIVO_REGISTRO.name}` dentro de la carpeta del editor.")
-                caja_registro = gr.Textbox(value=texto_registro, show_label=False, lines=24, max_lines=24,
-                                           interactive=False, autoscroll=True, elem_id="caja_registro")
-                with gr.Row():
-                    btn_reg_act = gr.Button("Actualizar", scale=1)
-                    btn_reg_limpiar = gr.Button("Limpiar", scale=1)
+                    # ---------- Registro ----------
+                    with gr.Tab("Registro", id="registro"):
+                        with gr.Column(elem_classes=["seccion"]):
+                            gr.HTML('<div class="titulo-sec"><h1>Registro</h1><p>Lo que va haciendo la plataforma paso a paso '
+                                    f'(se actualiza solo). También se guarda en {ARCHIVO_REGISTRO.name} dentro de la carpeta '
+                                    'del editor.</p></div>')
+                            caja_registro = gr.Textbox(value=texto_registro, show_label=False, lines=28, max_lines=28,
+                                                       interactive=False, autoscroll=True, elem_id="caja_registro")
+                            with gr.Row():
+                                btn_reg_act = gr.Button("Actualizar", scale=0, min_width=130)
+                                btn_reg_limpiar = gr.Button("Limpiar", scale=0, min_width=130)
+
+        # menú lateral: cambia de sección y marca el botón activo
+        def ir_a(clave):
+            return [gr.Tabs(selected=clave)] + [gr.Button(elem_classes=["nav"] + (["activo"] if k == clave else []))
+                                                for k, _ in NAV]
+        for (k, _), b in zip(NAV, botones_nav):
+            b.click(lambda k=k: ir_a(k), None, [secciones] + botones_nav, queue=False)
+
         btn_reg_act.click(texto_registro, None, caja_registro)
         btn_reg_limpiar.click(limpiar_registro, None, caja_registro)
         if hasattr(gr, "Timer"):
@@ -2768,9 +2921,10 @@ def construir():
 
         # ======================== lógica ========================
         def refrescar_listas():
-            return gr.update(choices=opciones_videos()), gr.update(choices=opciones_trabajos())
+            return (gr.update(choices=opciones_videos()), gr.update(choices=opciones_trabajos()),
+                    gr.update(choices=opciones_recientes(), value=None))
 
-        btn_refrescar.click(refrescar_listas, None, [ruta_video, ruta_trabajo])
+        btn_refrescar.click(refrescar_listas, None, [ruta_video, ruta_trabajo, recientes])
 
         def al_elegir_video(nombre):
             """Si el video ya tiene su carpeta _trabajo, se propone abrirla y se llena el título."""
@@ -2788,23 +2942,39 @@ def construir():
         def nombre_trabajo(t):
             plan, _ = cargar(t)
             final = video_salida(t)
-            return (f"Trabajando en **{Path(plan['video']).name}** · {plan.get('titulo', '')}" +
-                    ("  ·  ya tiene video final exportado" if final else ""))
+            nombres = {Path(v).name: k for k, v in ESTILOS.items()}
+            est = nombres.get(Path(str(plan.get("plantilla", ""))).name, "")
+            return (f"**{plan.get('titulo') or Path(plan['video']).stem}**  \n"
+                    f"<span style='color:#9A9AA3;font-size:12.5px'>{Path(plan['video']).name}"
+                    f"{' · ' + est if est else ''}{' · exportado' if final else ''}</span>")
 
         def todo_ui(t):
             """Valores para refrescar la interfaz con el trabajo t."""
-            return t, iframe_edi(t), iframe_subs(t), video_salida(t), nombre_trabajo(t)
+            return (t, iframe_edi(t), iframe_subs(t), video_salida(t), nombre_trabajo(t),
+                    gr.Column(visible=False), gr.Column(visible=True))
 
-        salidas_ui = [trabajo, editor_edi, editor_subs, video, actual]
+        salidas_ui = [trabajo, editor_edi, editor_subs, video, actual, col_inicio, col_area]
 
         def accion_cargar(ruta):
             t = limpiar_ruta(ruta)
             if not t or not (Path(t) / "plan.json").exists():
                 gr.Warning("Esa carpeta no tiene plan.json")
-                return ("", iframe_edi(None), iframe_subs(None), None, "", "")
+                return ("", iframe_edi(None), iframe_subs(None), None, "", gr.update(), gr.update(), "")
             return (*todo_ui(t), "")
 
         btn_cargar.click(accion_cargar, ruta_trabajo, salidas_ui + [progreso])
+
+        def abrir_reciente(ruta):
+            if not ruta:
+                return (*(gr.update(),) * (len(salidas_ui) + 1), gr.update())
+            return (*accion_cargar(ruta), gr.update(value=None))
+
+        recientes.input(abrir_reciente, recientes, salidas_ui + [progreso, recientes])
+
+        def volver():
+            return gr.Column(visible=True), gr.Column(visible=False), gr.update(choices=opciones_recientes(), value=None)
+
+        btn_volver.click(volver, None, [col_inicio, col_area, recientes], queue=False)
 
         def accion_procesar(ruta, tit, gpu, est):
             nada = (gr.update(),) * len(salidas_ui)
@@ -2843,7 +3013,7 @@ def construir():
 
         ev_procesar = btn_procesar.click(accion_procesar, [ruta_video, titulo_nuevo, usar_gpu, estilo_edicion],
                                          salidas_ui + [progreso])
-        ev_procesar.then(refrescar_listas, None, [ruta_video, ruta_trabajo])
+        ev_procesar.then(refrescar_listas, None, [ruta_video, ruta_trabajo, recientes])
 
         def accion_render(t, gpu):
             if not t:
@@ -2884,6 +3054,9 @@ def construir():
                     yield gr.update(), html, gr.update()
 
         ev_render = btn_render.click(accion_render, [trabajo, usar_gpu], [video, progreso, actual])
+        # «Exportar» de arriba: lleva a la pestaña Exportar y arma el video final
+        ev_exportar = btn_exportar.click(lambda: gr.Tabs(selected="exportar"), None, pasos, queue=False).then(
+            accion_render, [trabajo, usar_gpu], [video, progreso, actual])
 
         def accion_cancelar():
             n, cola = cancelar_todo()
@@ -2892,7 +3065,7 @@ def construir():
             return barra(1.0, f"⛔ Cancelado: se detuvo lo que estaba trabajando ({n} proceso(s)"
                               + (f", {cola} en cola" if cola else "") + ").", "error")
 
-        btn_cancelar.click(accion_cancelar, None, progreso, cancels=[ev_procesar, ev_render], queue=False)
+        btn_cancelar.click(accion_cancelar, None, progreso, cancels=[ev_procesar, ev_render, ev_exportar], queue=False)
     return demo
 
 

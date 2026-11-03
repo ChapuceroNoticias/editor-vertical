@@ -5,10 +5,16 @@ Con el instalador (`Instalar.bat`, ver `LEEME.txt` junto a la carpeta `app`): in
 Ollama y crea el acceso directo **Editor Vertical** y las carpetas **VideosEdit** y **Renders** en el escritorio.
 
 ## Interfaz
-Doble clic en **Editor Vertical** (escritorio). Se abre en el navegador (http://127.0.0.1:7860), en negro y rojo. Arriba están las pestañas **Editor**,
-**Video largo**, **Lo aprendido** y **Registro de la plataforma** (lo que va haciendo, paso a paso), y el botón
-**⏻ Cerrar**: detiene todo lo que esté trabajando (análisis, exportación, vistas previas, video largo) y apaga la
-plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
+Doble clic en **Editor Vertical** (escritorio). Se abre en el navegador (http://127.0.0.1:7860) con el estilo «Grafito»
+(oscuro, letra Geist; el rojo solo en la acción principal). A la izquierda está el menú: **Editor**, **Video largo**,
+**Lo aprendido** y **Registro** (lo que va haciendo, paso a paso), y abajo **⏻ Cerrar**: detiene todo lo que esté
+trabajando (análisis, exportación, vistas previas, video largo) y apaga la plataforma; para volver a usarla, abre
+«Editor Vertical» desde el escritorio.
+En **Editor**: «Nuevo video» (video, título, estilo de edición en tarjetas, **Analizar video**) y a la derecha los
+**trabajos recientes** (clic = abrirlo; «Abrir otro trabajo» para los demás). Con un trabajo abierto, arriba quedan
+**←** (volver), el título, **Exportar** y los pasos **Edición · Subtítulos · Exportar**. En Edición, las herramientas
+van en el panel de la derecha por pestañas (Pantalla, Imagen, Stickers, Encuadre, Más); se cambia sola a la del bloque
+o sticker que eliges.
 
 - **Videos:** pon los videos en la carpeta **VideosEdit** del escritorio. Al exportar, el video final queda en la
   carpeta **Renders** del escritorio con el **título** del cuadro «Título» como nombre (si ya hay otro igual, se le

@@ -2173,7 +2173,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-03e v1.2.8"
+VERSION = "2026-11-03f v1.3.0"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).

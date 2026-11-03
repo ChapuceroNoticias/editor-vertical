@@ -9,7 +9,7 @@
     --fondo: #0b0b0d; --panel: #15151a; --panel2: #1c1c22; --texto: #ececf1; --suave: #9a9aa6; --borde: #2a2a32;
     --acento: #d91e2b; --acento2: #ff4553; --ok: #22c55e; --pend: #f59e0b; --rojo: #ff4553;
     --c-completa: #e11d48; --c-dividida: #0ea5e9; --c-nacho: #52525b; --c-916: #a855f7; --c-cerca: #f59e0b; --c-lejos: #b45309;
-    --c-imagen: #22c55e; --c-quitar: #3f3f46; --c-manual: #22c55e; --c-pantallaman: #38bdf8; --c-titulo: #e5e7eb; --c-difuminar: #d946ef; --c-sticker: #fb7185;
+    --c-imagen: #22c55e; --c-quitar: #3f3f46; --c-manual: #22c55e; --c-pantallaman: #38bdf8; --c-titulo: #e5e7eb; --c-difuminar: #d946ef; --c-sticker: #F2A33A;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fondo); color: var(--texto); }
@@ -110,23 +110,74 @@
   .modal .cab { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--borde); }
   .modal iframe { flex: 1; border: 0; background: #fff; }
 </style>
+<link rel="stylesheet" href="/app/grafito.css">
+<style>
+  /* ---------- Grafito: disposición de Edición ---------- */
+  .barra { background: var(--fondo); border-bottom: 1px solid var(--linea); padding: 10px 14px; gap: 8px; }
+  .barra .campo_titulo { flex: 1 1 340px; gap: 10px; font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--tenue); }
+  .barra .campo_titulo input { height: 34px; padding: 0 12px; font-size: 14px; letter-spacing: 0; text-transform: none; flex: 1; }
+  .btn.ico { width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--texto2); font-weight: 600; }
+  .btn.fant { background: transparent; border-color: transparent; color: var(--texto2); }
+  .btn.fant:hover:not(:disabled) { background: var(--panel2); border-color: var(--borde); }
+  .btn.clara { background: var(--texto); border-color: var(--texto); color: #0B0B0D; font-weight: 600; }
+  .btn.clara:hover:not(:disabled) { background: #fff; border-color: #fff; }
+  .btn.marcado { border-color: var(--pend); color: var(--pend); }
+  .mesa { display: flex; align-items: flex-start; min-height: calc(100vh - 56px); }
+  .principal { flex: 1 1 auto; min-width: 0; padding-bottom: 14px; }
+  .zona { padding: 14px; gap: 14px; }
+  #previa { width: 270px; border-color: var(--linea); }
+  .lado .rotulo { font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--tenue); order: -1; align-self: flex-start; }
+  .controles { padding: 0 14px; gap: 6px; }
+  .tiempo { font-family: var(--mono); font-weight: 500; font-size: 14px; margin-left: 6px; }
+  .tiempo small { color: var(--tenue); }
+  .linea { padding: 10px 14px 0; }
+  #linea { border-radius: 12px; background: var(--panel); border-color: var(--borde); }
+  .desliza { background: transparent; border-color: var(--linea); }
+  .segbar, .difbar, .leyenda { padding-left: 14px; padding-right: 14px; }
+  .segbar b, .difbar b { font-weight: 600; }
+  .leyenda { color: var(--tenue); gap: 6px 14px; font-size: 11.5px; }
+  .leyenda .ayuda { flex-basis: 100%; }
+  .inspector .difbar { padding: 0; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .inspector .difbar b, .inspector .difbar > span { flex-basis: 100%; }
+  .inspector .difbar b { color: var(--texto); font-size: 14px; }
+  .inspector .difbar .btn { font-size: 12.5px; }
+  .volumenes input[type=range] { accent-color: var(--texto); }
+  .btn.prim { background: var(--texto); border-color: var(--texto); color: #0B0B0D; }
+  .btn.prim:hover:not(:disabled) { background: #fff; border-color: #fff; }
+  /* panel derecho con pestañas: una herramienta a la vez */
+  .inspector { display: block; flex: 0 0 380px; max-width: 380px; padding: 0; border-left: 1px solid var(--linea);
+    position: sticky; top: 0; max-height: 100vh; overflow-y: auto; align-self: flex-start; min-height: calc(100vh - 56px); }
+  .pestanas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-bottom: 1px solid var(--linea); position: sticky; top: 0;
+    background: var(--fondo); z-index: 2; }
+  .pestanas button { height: 44px; border: 0; background: none; color: var(--suave); font-size: 13px; font-weight: 500; cursor: pointer; position: relative; padding: 0 4px; }
+  .pestanas button:hover { color: var(--texto); }
+  .pestanas button.activa { color: #fff; box-shadow: inset 0 -2px 0 var(--acento); }
+  .inspector .card { background: transparent; border: 0; border-radius: 0; padding: 18px; gap: 14px; display: none; }
+  .inspector .card.visible { display: flex; }
+  @media (max-width: 1100px) {
+    .mesa { flex-direction: column; }
+    .inspector { position: static; max-width: none; width: 100%; flex-basis: auto; border-left: 0; border-top: 1px solid var(--linea); min-height: 0; max-height: none; }
+  }
+</style>
 </head>
 <body>
 <div class="barra">
-  <label>Título <input type="text" id="titulo" placeholder="Título del video"></label>
+  <label class="campo_titulo"><span>Título</span><input type="text" id="titulo" placeholder="Título del video"></label>
   <button class="btn" id="b_titulo">Guardar título</button>
   <span id="estado"></span>
-  <button class="btn" id="b_guardar_todo" title="Guarda todo lo que quedó pendiente (título, tiempos escritos, imagen, encuadre). Los bloques que arrastras en la línea de tiempo, los tramos quitados y las imágenes agregadas se guardan solos al hacerlos. (Ctrl+S)">💾 Guardar</button>
-  <button class="btn" id="b_render" title="Arma una vista previa ligera (más chica y rápida) con la edición actual (imágenes, pantalla dividida, encuadres, cortes) para que la pestaña Subtítulos tenga el acomodo nuevo. No hace el video final: ese se arma en Exportar. Se puede detener con «Cancelar todo».">🔄 Renderizar de nuevo</button>
-  <button class="btn" id="b_deshacer" title="Regresa el último cambio guardado (Ctrl+Z)">↶ Deshacer</button>
-  <button class="btn" id="b_rehacer" title="Vuelve a hacer lo que deshiciste (Ctrl+Y)">↷ Rehacer</button>
-  <button class="btn" id="b_atajos" title="Atajos de teclado">⌨ Atajos</button>
-  <span id="version" style="color:var(--suave);font-size:11px"></span>
+  <button class="btn ico" id="b_deshacer" title="Regresa el último cambio guardado (Ctrl+Z)" aria-label="Deshacer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+  <button class="btn ico" id="b_rehacer" title="Vuelve a hacer lo que deshiciste (Ctrl+Y)" aria-label="Rehacer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+  <button class="btn ico" id="b_atajos" title="Atajos de teclado" aria-label="Atajos de teclado">?</button>
+  <button class="btn" id="b_render" title="Arma una vista previa ligera (más chica y rápida) con la edición actual (imágenes, pantalla dividida, encuadres, cortes) para que la pestaña Subtítulos tenga el acomodo nuevo. No hace el video final: ese se arma en Exportar. Se puede detener con «Cancelar todo».">Renderizar vista previa</button>
+  <button class="btn" id="b_guardar_todo" title="Guarda todo lo que quedó pendiente (título, tiempos escritos, imagen, encuadre). Los bloques que arrastras en la línea de tiempo, los tramos quitados y las imágenes agregadas se guardan solos al hacerlos. (Ctrl+S)">Guardar</button>
+  <span id="version" class="mono" style="color:var(--tenue);font-size:11px"></span>
 </div>
 
 <div id="contenido"><div class="vacio">Cargando…</div></div>
 
 <template id="plantilla">
+ <div class="mesa">
+ <div class="principal">
   <div class="zona">
     <div class="escenario" id="escenario">
       <video id="video" preload="auto" playsinline></video>
@@ -134,22 +185,22 @@
     </div>
     <div class="lado">
       <canvas id="previa" width="500" height="888"></canvas>
-      <span class="rotulo">Así se verá · vista previa en vivo</span>
+      <span class="rotulo">Así se verá</span>
     </div>
   </div>
   <div class="controles">
-    <button class="btn" id="b_play">▶ Reproducir</button>
-    <button class="btn" id="b_m1" title="1 segundo atrás (Shift + ←)">−1 s</button>
-    <button class="btn" id="b_mf" title="Un cuadro atrás (←)">◀ cuadro</button>
-    <button class="btn" id="b_pf" title="Un cuadro adelante (→)">cuadro ▶</button>
-    <button class="btn" id="b_p1" title="1 segundo adelante (Shift + →)">+1 s</button>
+    <button class="btn clara" id="b_play">▶ Reproducir</button>
+    <button class="btn fant" id="b_m1" title="1 segundo atrás (Shift + ←)">−1 s</button>
+    <button class="btn fant" id="b_mf" title="Un cuadro atrás (←)">◀ cuadro</button>
+    <button class="btn fant" id="b_pf" title="Un cuadro adelante (→)">cuadro ▶</button>
+    <button class="btn fant" id="b_p1" title="1 segundo adelante (Shift + →)">+1 s</button>
     <span class="tiempo" id="tiempo">00:00:00</span>
     <span id="fluida" style="color:var(--suave);font-size:12px"></span>
     <span class="sp" style="flex:1"></span>
     <span class="volumenes" id="volumenes">
-      <label id="vol_fondo_caja" title="Volumen de la música de fondo (fijo: ya no baja sola cuando hablan). 100% = como viene en la plantilla. Se usa en la vista previa y en el video final.">🎵 Fondo
+      <label id="vol_fondo_caja" title="Volumen de la música de fondo (fijo: ya no baja sola cuando hablan). 100% = como viene en la plantilla. Se usa en la vista previa y en el video final.">Fondo
         <input type="range" id="vol_fondo" min="0" max="200" step="5" value="100"> <b id="vol_fondo_txt">100%</b></label>
-      <label title="Volumen del audio del video (la voz). 100% = como viene. Se usa en la vista previa y en el video final.">🔊 Video
+      <label title="Volumen del audio del video (la voz). 100% = como viene. Se usa en la vista previa y en el video final.">Voz
         <input type="range" id="vol_voz" min="0" max="200" step="5" value="100"> <b id="vol_voz_txt">100%</b></label>
     </span>
   </div>
@@ -158,12 +209,12 @@
   <div class="segbar" id="segbar">
     <b>Segmento del video:</b>
     <span id="seg_info" class="sub">Clic en un bloque gris (o Shift + arrastrar en «Pantalla») para seleccionar un pedazo del video.</span>
-    <button class="btn" id="seg_cortar" title="Quita ese pedazo del video y lo guarda para pegarlo en otro lugar (Ctrl+X)">✂ Cortar</button>
-    <button class="btn" id="seg_copiar" title="Lo guarda para pegarlo en otro lugar sin quitarlo (Ctrl+C)">⧉ Copiar</button>
-    <button class="btn" id="seg_pegar" title="Pega el pedazo copiado donde está el cursor; lo que sigue se recorre (Ctrl+V)">📋 Pegar en el cursor</button>
-    <button class="btn" id="seg_duplicar" title="Lo repite justo después (Ctrl+D)">⧉⧉ Duplicar</button>
-    <button class="btn" id="seg_quitar" title="Quita ese pedazo del video sin guardarlo (como «Quitar tramo»; se puede restaurar) (Supr)">🗑 Quitar</button>
-    <span class="sub">· Arrástralo para moverlo; con <b>Ctrl</b> presionado al soltar deja una <b>copia</b> ahí · Ctrl+C y luego clic donde lo quieras y Ctrl+V</span>
+    <button class="btn" id="seg_cortar" title="Quita ese pedazo del video y lo guarda para pegarlo en otro lugar (Ctrl+X)">Cortar</button>
+    <button class="btn" id="seg_copiar" title="Lo guarda para pegarlo en otro lugar sin quitarlo (Ctrl+C)">Copiar</button>
+    <button class="btn" id="seg_pegar" title="Pega el pedazo copiado donde está el cursor; lo que sigue se recorre (Ctrl+V)">Pegar en el cursor</button>
+    <button class="btn" id="seg_duplicar" title="Lo repite justo después (Ctrl+D)">Duplicar</button>
+    <button class="btn" id="seg_quitar" title="Quita ese pedazo del video sin guardarlo (como «Quitar tramo»; se puede restaurar) (Supr)">Quitar</button>
+    <span class="sub">· Arrástralo para moverlo (con <b>Ctrl</b> al soltar deja una copia)</span>
   </div>
   <div class="leyenda">
     <span><i style="background:var(--c-completa)"></i>Pantalla completa</span>
@@ -176,30 +227,15 @@
     <span><i style="background:var(--c-titulo)"></i>Título (motivacional: estira su orilla)</span>
     <span><i style="background:var(--c-difuminar)"></i>Difuminar subtítulos del video</span>
     <span><i style="background:var(--c-sticker)"></i>Sticker</span>
-    <span>Clic en un bloque: seleccionarlo (⌨ Ctrl+C/V/X, Supr, Ctrl+B, [ ]) · arrástralo o estira sus orillas
-      (🧲 se pegan a cortes, pausas y otros bloques; con <b>Alt</b> libres) · <b>Ctrl + rueda</b>: acercar la línea ·
-      <b>Doble clic</b>: llevar ahí el cursor</span>
+    <span class="ayuda">Clic: seleccionar · arrastra o estira las orillas (con <b>Alt</b>, sin imán) · <b>Ctrl + rueda</b>: acercar · <b>Doble clic</b>: llevar el cursor</span>
   </div>
 
-  <div class="difbar" id="difbar">
-    <b>Subtítulos que trae el video de Nacho:</b>
-    <span id="dif_info"></span>
-    <button class="btn" id="dif_aqui" title="Pone una franja difuminada en este momento (abajo de lo que proyecta Nacho). Luego mueve o estira el recuadro morado sobre el video y su bloque en la línea de tiempo.">＋ Difuminar aquí</button>
-    <button class="btn" id="dif_quitar" title="Quita la franja difuminada que hay en este momento">Quitar el de aquí</button>
-    <button class="btn" id="dif_buscar" title="Vuelve a buscar con el lector de texto los subtítulos del video que pone Nacho (los que pusiste a mano se conservan)">🔍 Buscar de nuevo</button>
-  </div>
-  <div class="difbar" id="transbar" style="display:none">
-    <b>Transiciones de cambio de cámara:</b>
-    <span id="trans_info"></span>
-    <button class="btn" id="trans_aqui" title="Pone la cortinilla limpia empezando en este momento (si la plataforma no encontró la de Nacho)">＋ Transición aquí</button>
-    <button class="btn" id="trans_quitar" title="Quita la cortinilla que hay en este momento">Quitar la de aquí</button>
-    <button class="btn" id="trans_buscar" title="Vuelve a buscar en el video las transiciones de cambio de cámara de Nacho">🔍 Buscar de nuevo</button>
-    <button class="btn" id="trans_ir" title="Ir a la siguiente transición">Ir a la siguiente ▶</button>
-  </div>
+ </div>
 
-  <div class="inspector">
+  <aside class="inspector" id="panel">
+    <nav class="pestanas" id="pestanas" aria-label="Herramientas"></nav>
     <!-- Pantalla -->
-    <div class="card">
+    <div class="card" data-tab="Pantalla">
       <h3>Pantalla en este momento</h3>
       <div class="sub" id="p_tipo">—</div>
       <div class="ops" id="p_ops"></div>
@@ -212,7 +248,7 @@
     </div>
 
     <!-- Imagen -->
-    <div class="card">
+    <div class="card" data-tab="Imagen">
       <h3>Imagen</h3>
       <div id="i_hay">
         <div class="sub" id="i_desc"></div>
@@ -268,7 +304,7 @@
     </div>
 
     <!-- Stickers -->
-    <div class="card" id="stk_card">
+    <div class="card" id="stk_card" data-tab="Stickers">
       <h3>Stickers</h3>
       <div class="sub">Clic en uno para ponerlo aquí (2.5 s). En la vista previa: <b>arrástralo</b> para moverlo,
         la esquina <b>◢</b> lo agranda parejo, las agarraderas de los lados lo <b>estiran</b> solo a lo ancho o solo a lo alto,
@@ -294,7 +330,7 @@
     </div>
 
     <!-- Encuadre -->
-    <div class="card">
+    <div class="card" data-tab="Encuadre">
       <h3>Encuadre</h3>
       <div class="sub">Arrastra un recuadro sobre el video original, sus esquinas (o <b>Ctrl + rueda</b>) para acercar, doble clic
         para centrar. <b style="color:#facc15">Amarillo/verde</b> = Nacho o el video de la pantalla.
@@ -333,7 +369,7 @@
     </div>
 
     <!-- Cortes -->
-    <div class="card">
+    <div class="card" data-tab="Más">
       <h3>Quitar tramos del video</h3>
       <div class="sub">Quita imagen y audio entre dos tiempos (por ejemplo, un error o una parte que sobra).</div>
       <div class="fila">
@@ -342,8 +378,25 @@
         <button class="btn prim" id="c_quitar">Quitar tramo</button>
       </div>
       <div class="lista" id="c_lista"></div>
-    </div>
+      <div class="separador"></div>
+  <div class="difbar" id="difbar">
+    <b>Subtítulos que trae el video de Nacho:</b>
+    <span id="dif_info"></span>
+    <button class="btn" id="dif_aqui" title="Pone una franja difuminada en este momento (abajo de lo que proyecta Nacho). Luego mueve o estira el recuadro morado sobre el video y su bloque en la línea de tiempo.">＋ Difuminar aquí</button>
+    <button class="btn" id="dif_quitar" title="Quita la franja difuminada que hay en este momento">Quitar el de aquí</button>
+    <button class="btn" id="dif_buscar" title="Vuelve a buscar con el lector de texto los subtítulos del video que pone Nacho (los que pusiste a mano se conservan)">Buscar de nuevo</button>
   </div>
+  <div class="difbar" id="transbar" style="display:none">
+    <b>Transiciones de cambio de cámara:</b>
+    <span id="trans_info"></span>
+    <button class="btn" id="trans_aqui" title="Pone la cortinilla limpia empezando en este momento (si la plataforma no encontró la de Nacho)">＋ Transición aquí</button>
+    <button class="btn" id="trans_quitar" title="Quita la cortinilla que hay en este momento">Quitar la de aquí</button>
+    <button class="btn" id="trans_buscar" title="Vuelve a buscar en el video las transiciones de cambio de cámara de Nacho">Buscar de nuevo</button>
+    <button class="btn" id="trans_ir" title="Ir a la siguiente transición">Ir a la siguiente ▶</button>
+  </div>
+    </div>
+  </aside>
+ </div>
 </template>
 
 <div class="modal" id="m_atajos">
@@ -731,7 +784,7 @@ function dibujarEscenario(t, e, v, vp, pe) {
   ctx.clearRect(0, 0, capa.width, capa.height);
   if (!v && !vp) {
     ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(0, 0, capa.width, capa.height);
-    ctx.fillStyle = "#fff"; ctx.font = `${15 * d}px system-ui`; ctx.textAlign = "center";
+    ctx.fillStyle = "#fff"; ctx.font = `${15 * d}px Geist, system-ui`; ctx.textAlign = "center";
     ctx.fillText(e.tipo === "contenida" ? "Aquí se ve el recuadro completo de Nacho (no se recorta)"
       : "Aquí se ve una imagen a pantalla completa", capa.width / 2, capa.height / 2);
     return;
@@ -756,7 +809,7 @@ function dibujarEscenario(t, e, v, vp, pe) {
     ctx.fillStyle = ctx.strokeStyle;
     const k = 12 * d;
     for (const [px, py] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) ctx.fillRect(px - k / 2, py - k / 2, k, k);
-    ctx.font = `600 ${12 * d}px system-ui`; ctx.textAlign = "left";
+    ctx.font = `600 ${12 * d}px Geist, system-ui`; ctx.textAlign = "left";
     const tw = ctx.measureText(nombre).width + 10 * d;
     ctx.fillRect(x, Math.max(0, y - 18 * d), tw, 18 * d);
     ctx.fillStyle = "#000"; ctx.fillText(nombre, x + 5 * d, Math.max(0, y - 18 * d) + 13 * d);
@@ -782,7 +835,7 @@ function dibujarDifuminar(t, s, d) {   // franja difuminada (morada): se mueve y
     ctx.fillStyle = "#d946ef";
     const k = 12 * d;
     for (const [px, py] of [[rx, ry], [rx + rw, ry], [rx, ry + rh], [rx + rw, ry + rh]]) ctx.fillRect(px - k / 2, py - k / 2, k, k);
-    ctx.font = `600 ${12 * d}px system-ui`; ctx.textAlign = "left";
+    ctx.font = `600 ${12 * d}px Geist, system-ui`; ctx.textAlign = "left";
     const nombre = "Difuminar" + (x.auto ? " (automático)" : "");
     const tw = ctx.measureText(nombre).width + 10 * d;
     ctx.fillRect(rx, Math.max(0, ry - 18 * d), tw, 18 * d);
@@ -932,7 +985,7 @@ function dibujarLinea(te) {
     lctx.fillStyle = "#3a3a46";
     for (let t = Math.floor(vista[0] / menor) * menor; t <= vista[1]; t += menor) lctx.fillRect(xDe(t), (REGLA - 6) * d, d, 6 * d);
   }
-  lctx.font = `${10.5 * d}px system-ui`; lctx.textAlign = "left";
+  lctx.font = `${10.5 * d}px "Geist Mono", monospace`; lctx.textAlign = "left";
   for (let t = t0; t <= vista[1]; t += paso) {
     const x = xDe(t);
     lctx.fillStyle = "#6b6b78"; lctx.fillRect(x, (REGLA - 12) * d, d, 12 * d);
@@ -940,7 +993,7 @@ function dibujarLinea(te) {
   }
   lctx.fillStyle = "#2a2a32"; lctx.fillRect(0, REGLA * d, W, d);
   for (const [c, [y, h]] of Object.entries(CARRILES)) {
-    lctx.fillStyle = "rgba(255,255,255,.04)"; lctx.fillRect(0, y * d, W, h * d);
+    lctx.fillStyle = "rgba(255,255,255,.025)"; lctx.fillRect(0, y * d, W, h * d);
   }
   for (const it of itemsLinea()) {
     let { a, b } = it;
@@ -949,33 +1002,44 @@ function dibujarLinea(te) {
     if (b < vista[0] || a > vista[1]) continue;
     const [y, h] = it.yh || CARRILES[it.carril];
     const x0 = xDe(a), x1 = xDe(b);
-    lctx.fillStyle = colorOp(it.op);
-    lctx.globalAlpha = it.mov ? 1 : 0.75;
-    lctx.fillRect(x0, y * d, Math.max(2, x1 - x0 - 1), h * d);
-    lctx.globalAlpha = 1;
+    const contorno = it.op === "manual" || it.op === "pantallaman" || it.op === "difuminar";   // ajustes: solo contorno
+    const r = Math.min(5 * d, (x1 - x0) / 2, h * d / 2), bw = Math.max(2, x1 - x0 - 2 * d);
+    lctx.beginPath();
+    if (lctx.roundRect) lctx.roundRect(x0 + d, y * d + (contorno ? 0.75 * d : 0), bw, h * d - (contorno ? 1.5 * d : 0), r); else lctx.rect(x0 + d, y * d, bw, h * d);
+    if (contorno) {
+      lctx.fillStyle = colorOp(it.op) + "22"; lctx.fill();
+      lctx.setLineDash([4 * d, 3 * d]); lctx.strokeStyle = colorOp(it.op); lctx.lineWidth = 1.5 * d; lctx.stroke(); lctx.setLineDash([]);
+    } else {
+      lctx.fillStyle = colorOp(it.op);
+      lctx.globalAlpha = it.mov ? 1 : 0.75;
+      lctx.fill();
+      lctx.globalAlpha = 1;
+    }
     if (it.tipo === "st" && x1 - x0 > 50 * d && h >= 9) {
-      lctx.fillStyle = "#111"; lctx.font = `600 ${Math.min(10, h - 3) * d}px system-ui`; lctx.textAlign = "left";
+      lctx.fillStyle = "#111"; lctx.font = `600 ${Math.min(10, h - 3) * d}px Geist, system-ui`; lctx.textAlign = "left";
       lctx.fillText(nombreSticker(it.ref.tipo), x0 + 6 * d, (y + h - Math.max(2, (h - Math.min(10, h - 3)) / 2) - 1) * d, x1 - x0 - 10 * d);
     }
     if (it.tipo === "ti" && x1 - x0 > 40 * d) {
-      lctx.fillStyle = "#111"; lctx.font = `700 ${10 * d}px system-ui`; lctx.textAlign = "left";
+      lctx.fillStyle = "#111"; lctx.font = `700 ${10 * d}px Geist, system-ui`; lctx.textAlign = "left";
       lctx.fillText("TÍTULO", x0 + 6 * d, (y + h - 7) * d);
     }
-    if (it.mov && x1 - x0 > 14 * d) {   // agarraderas en las orillas
-      lctx.fillStyle = "rgba(0,0,0,.35)";
-      lctx.fillRect(x0, y * d, 3 * d, h * d); lctx.fillRect(x1 - 4 * d, y * d, 3 * d, h * d);
+    if (it.mov && !contorno && x1 - x0 > 14 * d) {   // agarraderas en las orillas
+      lctx.fillStyle = "rgba(0,0,0,.28)";
+      lctx.fillRect(x0 + 3 * d, (y + h * 0.3) * d, 2 * d, h * 0.4 * d); lctx.fillRect(x1 - 6 * d, (y + h * 0.3) * d, 2 * d, h * 0.4 * d);
     }
     const esSel = sel && !arr && it.tipo === sel.tipo && itemSel() && itemSel().ref === it.ref;
     if (esSel) {
-      lctx.strokeStyle = "#fff"; lctx.lineWidth = 3 * d; lctx.strokeRect(x0 + d, (y + 1) * d, x1 - x0 - 2 * d, (h - 2) * d);
+      lctx.strokeStyle = "#fff"; lctx.lineWidth = 2 * d; lctx.beginPath();
+      if (lctx.roundRect) lctx.roundRect(x0 - d, (y - 1.5) * d, x1 - x0 + 2 * d, (h + 3) * d, r + 2 * d); else lctx.rect(x0, y * d, x1 - x0, h * d);
+      lctx.stroke();
     }
     if (arr) {
       lctx.strokeStyle = "#fff"; lctx.lineWidth = 2 * d; lctx.strokeRect(x0, y * d, x1 - x0, h * d);
-      lctx.fillStyle = "#fff"; lctx.font = `600 ${10 * d}px system-ui`; lctx.textAlign = "left";
+      lctx.fillStyle = "#fff"; lctx.font = `600 ${10 * d}px Geist, system-ui`; lctx.textAlign = "left";
       lctx.fillText(`${mmss(a)} – ${mmss(b)}`, Math.max(2, x0), (y - 1) * d + (y < 10 ? h * d + 10 * d : 0));
     }
   }
-  lctx.fillStyle = "rgba(255,255,255,.55)"; lctx.font = `${10 * d}px system-ui`; lctx.textAlign = "left";
+  lctx.fillStyle = "rgba(255,255,255,.55)"; lctx.font = `${10 * d}px Geist, system-ui`; lctx.textAlign = "left";
   for (const [c, [y, h]] of Object.entries(CARRILES)) lctx.fillText(nombres[c], 4 * d, (y + h - 3) * d);
   if (tramoE) {
     lctx.strokeStyle = "#f97316"; lctx.lineWidth = 2 * d;
@@ -984,7 +1048,7 @@ function dibujarLinea(te) {
   if (arrLinea && arrLinea.guia) {   // dónde se pegó y por qué
     const gx = xDe(arrLinea.guia.t);
     lctx.fillStyle = "#facc15"; lctx.fillRect(gx - d, 0, 2 * d, H);
-    lctx.font = `600 ${10 * d}px system-ui`; lctx.textAlign = gx > W - 140 * d ? "right" : "left";
+    lctx.font = `600 ${10 * d}px Geist, system-ui`; lctx.textAlign = gx > W - 140 * d ? "right" : "left";
     lctx.fillText("🧲 " + arrLinea.guia.q, gx + (gx > W - 140 * d ? -4 : 4) * d, H - 16 * d);
   }
   dibujarSeg();
@@ -1010,7 +1074,7 @@ function etiquetaRegla(t, paso) {   // «1:05» o, con mucho zoom, «1:05.2»
 }
 function pastilla(txt, x, y, fondo, color) {   // etiqueta con fondo junto a una línea (se voltea en la orilla derecha)
   const d = devicePixelRatio, W = linea.width;
-  lctx.font = `600 ${10.5 * d}px system-ui`;
+  lctx.font = `600 ${10.5 * d}px "Geist Mono", monospace`;
   const w = lctx.measureText(txt).width + 10 * d, h = 15 * d;
   const izq = x + 6 * d + w > W ? x - 6 * d - w : x + 6 * d;
   lctx.fillStyle = fondo; lctx.beginPath();
@@ -1064,6 +1128,8 @@ function itemSel() {
 function seleccionar(it, aviso = true) {
   sel = it ? { tipo: it.tipo, clave: claveDe(it), a: it.a, b: it.b } : null;
   if (it && it.tipo === "st") stSel = it.ref;
+  const tab = it && { st: "Stickers", m: "Imagen", p: "Pantalla", e: "Pantalla", en: "Encuadre", ep: "Encuadre" }[it.tipo];
+  if (tab && window.irPestana) irPestana(tab);
   if (it && aviso) estado(`Seleccionado: ${NOMBRE_TIPO[it.tipo] || "bloque"} ${mmss(it.a)} – ${mmss(it.b)} (Ctrl+C, Supr, Ctrl+B…)`, "");
 }
 function avisar(txt, cls = "err") { estado(txt, cls); }
@@ -1666,15 +1732,15 @@ function dibujarSelSticker(cx, t, W, H) {   // recuadro del seleccionado con sus
   cx.save(); cx.translate(g.cx, g.cy); cx.rotate(g.rot);
   cx.strokeStyle = "#fff"; cx.lineWidth = 1.5 * d; cx.setLineDash([5 * d, 4 * d]);
   cx.strokeRect(-a, -b, g.w, g.h); cx.setLineDash([]);
-  cx.fillStyle = "#fb7185"; cx.strokeStyle = "#fff";
+  cx.fillStyle = "#F2A33A"; cx.strokeStyle = "#fff";
   // esquina: agrandar parejo
   cx.beginPath(); cx.moveTo(a, b - 12 * d); cx.lineTo(a, b); cx.lineTo(a - 12 * d, b); cx.closePath(); cx.fill(); cx.stroke();
   // lados: solo ancho (derecha) o solo alto (abajo)
-  cx.fillStyle = "#fff"; cx.strokeStyle = "#fb7185";
+  cx.fillStyle = "#fff"; cx.strokeStyle = "#F2A33A";
   cx.beginPath(); cx.roundRect(a - 3.5 * d, -9 * d, 7 * d, 18 * d, 3 * d); cx.fill(); cx.stroke();
   cx.beginPath(); cx.roundRect(-9 * d, b - 3.5 * d, 18 * d, 7 * d, 3 * d); cx.fill(); cx.stroke();
   // girar
-  cx.fillStyle = "#fb7185"; cx.strokeStyle = "#fff";
+  cx.fillStyle = "#F2A33A"; cx.strokeStyle = "#fff";
   cx.beginPath(); cx.moveTo(0, -b); cx.lineTo(0, -b - 14 * d); cx.stroke();
   cx.beginPath(); cx.arc(0, -b - 18 * d, 5 * d, 0, Math.PI * 2); cx.fill(); cx.stroke();
   cx.restore();
@@ -1799,6 +1865,7 @@ function iniciarStickers() {
     previa.setPointerCapture(ev.pointerId);
     stSel = o.s; sel = null;
     const it = itemsLinea().find(x => x.ref === o.s); if (it) seleccionar(it, false);
+    if (window.irPestana) irPestana("Stickers");
     stArr = { modo: o.modo, p0: p, x0: o.s.x, y0: o.s.y, tam0: o.s.tam, rot0: o.s.rot || 0, movido: false };
     ev.preventDefault();
   });
@@ -1872,7 +1939,7 @@ async function vigilarBusquedaDif() {
     b.disabled = true; b.textContent = "⏳ Buscando…";
     timerDif = setTimeout(vigilarBusquedaDif, 2500); return;
   }
-  b.disabled = false; b.textContent = "🔍 Buscar de nuevo";
+  b.disabled = false; b.textContent = "Buscar de nuevo";
   if (d.estado === "listo") { await recargar(); estado(`Búsqueda lista: ${(E.difuminar || []).length} franja(s) difuminada(s).`, "ok"); }
   else if (d.estado === "error") estado("No se pudo buscar (¿falta el lector de texto RapidOCR? mira el Registro).", "err");
 }
@@ -1941,8 +2008,8 @@ function pintarBotonRender() {
   b.style.display = X.estilo === "solo_subtitulos" ? "none" : "";
   if (renderActivo) return;
   b.disabled = false;
-  b.classList.toggle("prim", !!X.previa_vieja);
-  b.textContent = X.previa_vieja ? "🔄 Renderizar de nuevo (hay cambios)" : "🔄 Renderizar de nuevo";
+  b.classList.toggle("marcado", !!X.previa_vieja);
+  b.textContent = X.previa_vieja ? "Renderizar vista previa · hay cambios" : "Renderizar vista previa";
 }
 async function vigilarRender() {
   clearTimeout(timerRender);
@@ -1951,9 +2018,9 @@ async function vigilarRender() {
   catch (err) { timerRender = setTimeout(vigilarRender, 3000); return; }
   const b = $("b_render");
   if (d.estado === "trabajando") {
-    renderActivo = true; b.disabled = true; b.classList.remove("prim");
+    renderActivo = true; b.disabled = true; b.classList.remove("marcado");
     const pct = Math.round((d.progreso || 0) * 100);
-    b.textContent = `⏳ Vista previa… ${pct}%`;
+    b.textContent = `Vista previa… ${pct}%`;
     estado(`Armando la vista previa ligera con la edición actual: ${pct}%. Puedes seguir revisando; «Cancelar todo» la detiene.`, "pend");
     timerRender = setTimeout(vigilarRender, 2000);
     return;
@@ -1985,8 +2052,8 @@ async function renderizarDeNuevo() {
 setInterval(() => {   // el botón se marca en rojo cuando hay algo sin guardar
   const b = $("b_guardar_todo"); if (!b) return;
   const hay = pendientes().length > 0;
-  b.classList.toggle("prim", hay);
-  b.textContent = hay ? "💾 Guardar cambios" : "💾 Guardar";
+  b.classList.toggle("clara", hay);
+  b.textContent = hay ? "Guardar cambios" : "Guardar";
 }, 400);
 
 // ---------- guardar en el servidor ----------
@@ -2083,6 +2150,27 @@ function iniciarAudio() {
 }
 
 // ---------- inicio ----------
+// ---------- panel derecho: una herramienta a la vez (la pestaña elegida se recuerda) ----------
+function armarPestanas() {
+  const nav = $("pestanas"), cards = [...document.querySelectorAll("#panel > .card")];
+  let elegida = null;
+  try { elegida = localStorage.getItem("edi_pestana"); } catch (e) {}
+  if (!cards.some(c => c.dataset.tab === elegida)) elegida = cards[0].dataset.tab;
+  nav.innerHTML = "";
+  const poner = (nombre) => {
+    cards.forEach(c => c.classList.toggle("visible", c.dataset.tab === nombre));
+    nav.querySelectorAll("button").forEach(b => b.classList.toggle("activa", b.dataset.tab === nombre));
+    try { localStorage.setItem("edi_pestana", nombre); } catch (e) {}
+  };
+  for (const c of cards) {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.tab = c.dataset.tab; b.textContent = c.dataset.tab;
+    b.onclick = () => poner(c.dataset.tab);
+    nav.appendChild(b);
+  }
+  poner(elegida);
+  window.irPestana = poner;
+}
 async function iniciar() {
   if (!T) { $("contenido").innerHTML = `<div class="vacio">Carga o procesa un video para editarlo.</div>`; return; }
   try { await recargarDatosIniciales(); }
@@ -2090,6 +2178,7 @@ async function iniciar() {
   if (!E.soportado) { $("contenido").innerHTML = `<div class="vacio">${E.motivo}</div>`; return; }
   $("contenido").innerHTML = "";
   $("contenido").appendChild($("plantilla").content.cloneNode(true));
+  armarPestanas();
   video = $("video"); capa = $("capa"); ctx = capa.getContext("2d");
   previa = $("previa"); pctx = previa.getContext("2d");
   linea = $("linea"); lctx = linea.getContext("2d");

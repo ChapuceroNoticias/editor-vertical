@@ -1,0 +1,63 @@
+/* ============================================================================
+   Estilo «Grafito» del Editor Vertical: oscuro, plano y callado; el rojo de la marca solo para la acción
+   principal. Se carga DESPUÉS del estilo propio de cada pestaña (sus variables y clases quedan encima).
+   ============================================================================ */
+@font-face { font-family: "Geist"; src: url("/app/fuentes/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Geist Mono"; src: url("/app/fuentes/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+
+:root {
+  --fondo: #0B0B0D; --panel: #141417; --panel2: #1D1D22; --linea: #1D1D22; --borde: #2A2A30; --borde2: #3A3A42;
+  --texto: #EDEDF0; --texto2: #C9C9CF; --suave: #9A9AA3; --tenue: #6E6E78;
+  --acento: #E5252A; --acento2: #F23B40; --ok: #3DD68C; --pend: #F2A33A; --rojo: #FF6B6F; --azul: #3B82F6;
+  --activo: #1D1D22;
+  /* línea de tiempo */
+  --c-completa: #D9484E; --c-dividida: #3B82F6; --c-nacho: #3A3A42; --c-916: #8B5CF6; --c-cerca: #F2A33A; --c-lejos: #B45309;
+  --c-imagen: #2FB873; --c-quitar: #26262C; --c-manual: #C9C9CF; --c-pantallaman: #60A5FA; --c-titulo: #E5E7EB;
+  --c-difuminar: #C084FC; --c-sticker: #F2A33A;
+  --mono: "Geist Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+html, body { background: var(--fondo); color: var(--texto); }
+body { font-family: var(--sans); font-size: 13.5px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font-family: inherit; }
+
+/* botones */
+.btn, .tabs button { border: 1px solid var(--borde); background: var(--panel2); color: var(--texto); border-radius: 8px;
+  font-weight: 500; font-size: 13px; padding: 7px 12px; transition: border-color .12s, background .12s; }
+.btn:hover:not(:disabled) { border-color: #4A4A54; background: #232329; }
+.btn.prim { background: var(--acento); border-color: var(--acento); color: #fff; font-weight: 600; }
+.btn.prim:hover:not(:disabled) { background: var(--acento2); border-color: var(--acento2); }
+.btn.peligro { color: var(--rojo); border-color: #4A2326; background: transparent; }
+.btn.peligro:hover:not(:disabled) { background: rgba(229, 37, 42, .1); border-color: #6A2A2E; }
+.btn:focus-visible, .op:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid #8AB4FF; outline-offset: 1px; }
+
+/* campos */
+input[type=text], input[type=search], input[type=number], select, textarea {
+  background: var(--fondo); border: 1px solid var(--borde); color: var(--texto); border-radius: 7px; }
+input[type=text]:hover, input[type=search]:hover, select:hover, textarea:hover { border-color: var(--borde2); }
+input.t, .t, .tiempo, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+input[type=range] { accent-color: var(--texto); }
+::placeholder { color: var(--tenue); }
+
+/* opciones (selector de una) */
+.op { border: 1px solid var(--borde); background: transparent; color: var(--texto2); border-radius: 8px; font-weight: 500; }
+.op:hover { border-color: var(--borde2); color: var(--texto); }
+.op.activo { border-color: var(--texto); background: var(--panel2); color: #fff; }
+
+/* tarjetas y textos */
+.card { background: var(--panel); border-color: var(--borde); border-radius: 12px; }
+.card h3 { font-size: 15px; font-weight: 600; letter-spacing: 0; }
+.card h3::before { display: none !important; }
+.sub, .card .sub { color: var(--suave); }
+.separador { border-top-color: var(--linea); }
+
+/* avisos */
+#estado.ok { color: var(--ok); } #estado.pend { color: var(--pend); } #estado.err { color: var(--rojo); }
+
+/* barras de desplazamiento finas */
+* { scrollbar-width: thin; scrollbar-color: #3A3A42 transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #3A3A42; border-radius: 6px; border: 2px solid var(--fondo); }
+::-webkit-scrollbar-track { background: transparent; }
