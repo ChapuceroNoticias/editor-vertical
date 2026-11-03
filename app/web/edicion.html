@@ -230,6 +230,7 @@
         <div class="fila">
           <input type="file" id="i_archivos" accept="image/*" multiple style="display:none">
           <button class="btn" id="i_subir" title="Elige una o varias imágenes de tu computadora; se agregan a este momento">📁 Subir desde la PC…</button>
+          <button class="btn" id="i_captura" title="Toma lo que Nacho tiene en pantalla en este punto y lo agrega como otra foto de esta imagen">📸 Captura</button>
           <label style="flex-direction:row;align-items:center"><input type="checkbox" id="i_reemplazar"> reemplazar las que tiene</label>
         </div>
       </div>
@@ -245,6 +246,7 @@
         <div class="fila">
           <input type="file" id="n_archivos" accept="image/*" multiple style="display:none">
           <button class="btn prim" id="n_subir" title="Elige una o varias imágenes de tu PC: se crea el momento aquí con esas fotos">📁 Subir imagen desde la PC…</button>
+          <button class="btn" id="n_captura" title="Toma lo que Nacho tiene en pantalla (nota, tuit…) justo en este punto del video y lo pone aquí como imagen">📸 Captura de la pantalla de Nacho</button>
         </div>
         <div class="sub" style="margin-top:4px"><b>Opción 2 · Buscar en internet</b></div>
         <div class="fila">
@@ -1975,6 +1977,19 @@ async function iniciar() {
     enviar("/edi/momento", { t: T, accion: "agregar", inicio: a, fin: b, estilo: nuevoEstilo, busqueda: busq });
   };
   $("n_subir").onclick = () => $("n_archivos").click();
+  // 📸 captura de lo que proyecta Nacho en este punto (recortada del video horizontal original)
+  const capturar = (i) => {
+    const t = ahoraO();
+    const p = E.armado.proyeccion.find(p => p.inicio <= t && t < p.fin);
+    const pe = pvEn(t);
+    const caja = p && p.caja && p.caja[2] > 1 ? p.caja : (pe ? pe.region : null);
+    const [a, b] = tramoNuevo();
+    if (!video.paused) video.pause();
+    estado("Tomando la captura…", "pend");
+    return enviar("/edi/captura", { t: T, tiempo: t, caja, i, inicio: a, fin: b, estilo: nuevoEstilo });
+  };
+  $("n_captura").onclick = () => capturar(-1);
+  $("i_captura").onclick = () => capturar(momSel);
   $("n_archivos").onchange = async () => {
     const fs = $("n_archivos").files;
     if (!fs.length) return;

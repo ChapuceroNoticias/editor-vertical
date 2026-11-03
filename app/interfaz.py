@@ -1415,6 +1415,55 @@ def guardar_subidas(t, i, archivos, reemplazar):
     return {"ok": True, "i": i, "mensaje": f"Ahora tiene {len(moms[i]['imagenes'])} imagen(es)."}
 
 
+def captura_pantalla(t, d):
+    """📸 Captura de lo que proyecta Nacho (nota, tuit…) en el punto donde va la reproducción, recortada del video
+    horizontal en calidad completa. Se agrega al momento con imagen de ese punto, o crea uno nuevo."""
+    plan, _ = cargar(t)
+    tiempo = max(0.0, min(float(d["tiempo"]), float(plan["info"]["duracion"]) - 0.05))
+    W, H = int(plan["info"]["ancho"]), int(plan["info"]["alto"])
+    caja = d.get("caja")
+    if not caja:   # lo que la plataforma detectó como contenido de la pantalla en ese punto, o la pantalla de la plantilla
+        p = next((p for p in plan.get("proyeccion", []) if p["inicio"] <= tiempo < p["fin"] and p.get("caja")
+                  and float(p["caja"][2]) > 40), None)
+        if p:
+            caja = p["caja"]
+        else:
+            pl_px = json.loads(json.dumps(plantilla(plan)))
+            try:
+                ed.escalar_cajas(pl_px, W, H)
+            except Exception:
+                pass
+            caja = caja_proyeccion(pl_px, plan)
+    x, y, w, h = [float(v) for v in caja]
+    x, y = max(0, int(x)), max(0, int(y))
+    w, h = int(min(w, W - x)), int(min(h, H - y))
+    w, h = w - w % 2, h - h % 2
+    if w < 40 or h < 40:
+        raise ValueError("No encontré la pantalla de Nacho en este punto")
+    destino = Path(t) / "imagenes"
+    destino.mkdir(exist_ok=True)
+    tmp = destino / f"captura_{time.strftime('%H%M%S')}_{int(time.time() * 1000) % 1000:03d}.png"
+    r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{tiempo:.3f}", "-i", str(plan["video"]),
+                        "-frames:v", "1", "-vf", f"crop={w}:{h}:{x}:{y}", str(tmp)], capture_output=True, text=True)
+    if r.returncode != 0 or not tmp.exists():
+        raise ValueError("No se pudo tomar la captura: " + (r.stderr or "")[-200:])
+    datos = tmp.read_bytes()
+    tmp.unlink(missing_ok=True)
+    i = d.get("i")
+    nuevo = i is None or int(i) < 0
+    if nuevo:
+        i = accion_momento_http(t, {"accion": "agregar", "inicio": d["inicio"], "fin": d["fin"],
+                                    "estilo": d.get("estilo") or "dividida", "busqueda": ""})["i"]
+    try:
+        guardar_subidas(t, int(i), [("captura.png", datos)], False)
+    except Exception:
+        if nuevo:
+            accion_momento_http(t, {"accion": "eliminar", "i": int(i)})
+        raise
+    return {"ok": True, "i": int(i), "mensaje": "📸 Captura agregada como imagen. Muévela o estírala en la línea de tiempo."
+            if nuevo else "📸 Captura agregada a las fotos de esta imagen."}
+
+
 def guardar_titulo(t, titulo):
     plan, _ = cargar(t)
     respaldar(t)
@@ -2170,6 +2219,11 @@ def crear_app():
         t = validar(form.get("t"))
         archivos = [(f.filename, await f.read()) for f in form.getlist("archivos") if hasattr(f, "read")]
         return _ok(lambda: guardar_subidas(t, int(form.get("i")), archivos, form.get("reemplazar") == "1"))
+
+    @app.post("/edi/captura")
+    def edi_captura(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        return _ok(lambda: captura_pantalla(t, d))
 
     @app.post("/edi/titulo")
     def edi_titulo(d: dict = Body(...)):

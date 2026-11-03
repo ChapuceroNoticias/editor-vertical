@@ -47,6 +47,9 @@ plataforma; para volver a usarla, abre «Editor Vertical» desde el escritorio.
     fotos, buscar en internet, **📁 Subir desde la PC** (más fotos al momento), eliminar el momento. Si no hay imagen,
     aparecen las dos formas de poner una desde ese punto: **Opción 1 · 📁 Subir imagen desde la PC** (eliges una o
     varias fotos de tu computadora y se crea el momento con ellas) y **Opción 2 · 🔍 Buscar y agregar** (en internet).
+    **📸 Captura de la pantalla de Nacho**: toma lo que Nacho proyecta (nota, tuit…) justo donde va el video, recortado
+    del video horizontal en calidad completa, y lo pone como imagen con movimiento. Si ya hay imagen en ese punto,
+    **📸 Captura** la agrega como otra foto de ese momento.
   - *Encuadre:* sobre el video original hay dos recuadros. **Amarillo/verde = Nacho** (arrástralo, esquinas o Ctrl + rueda
     para acercar, doble clic para centrar; Fijo o Seguir la toma; se guarda solo al soltar, para todo ese tramo;
     para otros tiempos escribe desde/hasta y «Aplicar tiempos» o estira su bloque en la línea de tiempo).
