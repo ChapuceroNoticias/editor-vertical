@@ -832,6 +832,10 @@ def datos_encuadre(t):
             "meta_stickers": ed.meta_stickers(),
             **estado_proxy(t, plan),
             "cortes": [{"inicio": c["inicio"], "fin": c["fin"]} for c in ed.unir_cortes(plan.get("cortes", []))],
+            # cada corte tal cual (pausas que quitó el automático y tramos quitados a mano), para verlos y ajustarlos
+            "cortes_detalle": [{"inicio": c["inicio"], "fin": c["fin"], "manual": bool(c.get("manual")),
+                                "hasta_final": bool(c.get("hasta_final"))}
+                               for c in sorted(plan.get("cortes", []), key=lambda c: c["inicio"])],
             "titulo": bool(plan.get("titulo")) and (estilo == "motivacional" or bool(pl.get("titulo", {}).get("barra")))}
 
 
@@ -1522,18 +1526,90 @@ def guardar_titulo(t, titulo, en_video=None):
     guardar_plan(t, plan)
 
 
-def quitar_tramo(t, a, b):
-    """Quita del video un tramo (a, b en segundos del video ORIGINAL)."""
+def quitar_tramo(t, a, b, al_final=False):
+    """Quita del video un tramo (a, b en segundos del video ORIGINAL). al_final / un «hasta» en el último cuadro:
+    se quita todo lo que sigue (no se cuela el último cuadro)."""
     plan, _ = cargar(t)
-    if b - a < 0.05:
+    if b - a < 0.02:
         raise ValueError("El tramo es muy corto")
     fps = plan["info"]["fps"]
+    dur = float(plan["info"]["duracion"])
     a2 = round(int(float(a) * fps + 0.999) / fps, 4)
     b2 = round(int(float(b) * fps + 0.999) / fps, 4)
+    corte = {"inicio": a2, "fin": b2, "manual": True}
+    if al_final or b2 >= dur - 1.5 / fps:
+        corte.update(fin=round(dur, 4), hasta_final=True)
     respaldar(t)
-    plan.setdefault("cortes", []).append({"inicio": a2, "fin": b2, "manual": True})
+    plan.setdefault("cortes", []).append(corte)
     plan["cortes"].sort(key=lambda c: c["inicio"])
     guardar_plan(t, plan)
+
+
+def ajustar_corte(t, inicio0, fin0, inicio=None, fin=None, recuperar=False):
+    """Cambia un corte (pausa quitada por el automático o tramo quitado a mano), encontrado por sus tiempos de antes
+    (segundos del video ORIGINAL). recuperar=True o si queda de menos de 2 centésimas: se quita el corte (vuelve todo)."""
+    plan, _ = cargar(t)
+    cs = plan.get("cortes", [])
+    k = next((n for n, c in enumerate(cs) if abs(c["inicio"] - inicio0) < 0.003 and abs(c["fin"] - fin0) < 0.003), None)
+    if k is None:
+        raise ValueError("Ese corte ya no existe (recarga la pestaña)")
+    respaldar(t)
+    if recuperar:
+        cs.pop(k)
+        guardar_plan(t, plan)
+        return {"ok": True, "mensaje": "Corte recuperado: ese pedazo vuelve al video."}
+    dur = float(plan["info"]["duracion"])
+    otros = sorted([c for n, c in enumerate(cs) if n != k], key=lambda c: c["inicio"])
+    antes = max([c["fin"] for c in otros if c["fin"] <= inicio0 + 1e-6] or [0.0])
+    despues = min([c["inicio"] for c in otros if c["inicio"] >= fin0 - 1e-6] or [dur])
+    a = max(antes, min(float(inicio), dur))
+    b = min(despues, max(float(fin), 0.0))
+    if b - a < 0.02:
+        cs.pop(k)
+        guardar_plan(t, plan)
+        return {"ok": True, "mensaje": "Corte recuperado: ese pedazo vuelve al video."}
+    cs[k]["inicio"], cs[k]["fin"] = round(a, 4), round(b, 4)
+    if cs[k].get("hasta_final") and b < dur - 0.01:
+        cs[k].pop("hasta_final", None)
+    guardar_plan(t, plan)
+    return {"ok": True, "mensaje": f"Corte ajustado: ahora quita {b - a:.2f} s."}
+
+
+_ONDA_LOCK = threading.Lock()
+
+
+def onda_audio(t):
+    """Onda del audio del video (picos cada 10 ms, 0-255) para la línea de tiempo. Se calcula una vez por video."""
+    plan, _ = cargar(t)
+    v = Path(plan["video"])
+    st = v.stat()
+    firma = f"{v.name}-{st.st_size}-{int(st.st_mtime)}"
+    cache = Path(t) / "onda.json"
+    try:
+        d = ed.cargar_json(cache)
+        if d.get("firma") == firma:
+            return d
+    except Exception:
+        pass
+    with _ONDA_LOCK:
+        sr, pps = 8000, 100
+        r = subprocess.run(["ffmpeg", "-v", "error", "-i", str(v), "-map", "0:a:0", "-ac", "1", "-ar", str(sr),
+                            "-f", "s16le", "-"], capture_output=True)
+        a = np.frombuffer(r.stdout, np.int16).astype(np.float32) if r.returncode == 0 else np.zeros(0, np.float32)
+        n = sr // pps
+        k = len(a) // n
+        if k:
+            pk = np.abs(a[:k * n].reshape(k, n)).max(axis=1)
+            ref = max(1.0, float(np.percentile(pk, 99.5)))
+            picos = np.clip(np.sqrt(pk / ref) * 255, 0, 255).astype(int).tolist()   # raíz: se ven también las partes bajas
+        else:
+            picos = []
+        d = {"firma": firma, "pps": pps, "picos": picos}
+        try:
+            ed.guardar_json(cache, d)
+        except OSError:
+            pass
+        return d
 
 
 def restaurar_tramo(t, i):
@@ -2337,8 +2413,18 @@ def crear_app():
     @app.post("/edi/cortar")
     def edi_cortar(d: dict = Body(...)):
         t = validar(d.get("t"))
-        _ok(lambda: quitar_tramo(t, float(d["inicio"]), float(d["fin"])))
+        _ok(lambda: quitar_tramo(t, float(d["inicio"]), float(d["fin"]), bool(d.get("al_final"))))
         return {"ok": True}
+
+    @app.get("/edi/onda")
+    def edi_onda(t: str):
+        return JSONResponse(onda_audio(validar(t)), headers={"Cache-Control": "no-store"})
+
+    @app.post("/edi/corte")
+    def edi_corte(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        return _ok(lambda: ajustar_corte(t, float(d["inicio0"]), float(d["fin0"]), d.get("inicio"), d.get("fin"),
+                                         bool(d.get("recuperar"))))
 
     @app.post("/edi/restaurar")
     def edi_restaurar(d: dict = Body(...)):

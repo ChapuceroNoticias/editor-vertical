@@ -52,7 +52,7 @@
   .desliza.oculta { visibility: hidden; }
   #desliza_p { position: absolute; top: 1px; bottom: 1px; min-width: 24px; background: #4b4b57; border-radius: 6px; cursor: grab; }
   #desliza_p:hover, #desliza_p.arrastrando { background: #6b6b78; }
-  #linea { width: 100%; height: 192px; display: block; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde);
+  #linea { width: 100%; height: 238px; display: block; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde);
     cursor: pointer; }
   .leyenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--suave); padding: 6px 12px 0; }
   .difbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px 0; font-size: 12.5px; color: var(--suave); }
@@ -147,9 +147,10 @@
   /* panel derecho con pestañas: una herramienta a la vez */
   .inspector { display: block; flex: 0 0 380px; max-width: 380px; padding: 0; border-left: 1px solid var(--linea);
     position: sticky; top: 0; max-height: 100vh; overflow-y: auto; align-self: flex-start; min-height: calc(100vh - 56px); }
-  .pestanas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-bottom: 1px solid var(--linea); position: sticky; top: 0;
+  #corte_onda { width: 100%; height: 100px; border-radius: 8px; background: var(--fondo); border: 1px solid var(--borde); cursor: ew-resize; touch-action: none; }
+  .pestanas { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-bottom: 1px solid var(--linea); position: sticky; top: 0;
     background: var(--fondo); z-index: 2; }
-  .pestanas button { height: 44px; border: 0; background: none; color: var(--suave); font-size: 13px; font-weight: 500; cursor: pointer; position: relative; padding: 0 4px; }
+  .pestanas button { height: 44px; border: 0; background: none; color: var(--suave); font-size: 12.5px; font-weight: 500; cursor: pointer; position: relative; padding: 0 4px; }
   .pestanas button:hover { color: var(--texto); }
   .pestanas button.activa { color: #fff; box-shadow: inset 0 -2px 0 var(--acento); }
   .inspector .card { background: transparent; border: 0; border-radius: 0; padding: 18px; gap: 14px; display: none; }
@@ -368,6 +369,29 @@
       <div class="lista" id="e_lista"></div>
     </div>
 
+    <!-- Cortes del automático y a mano -->
+    <div class="card" data-tab="Cortes" id="corte_card">
+      <h3>Cortes</h3>
+      <div class="sub" id="corte_ayuda">Cada marca en el carril <b>Audio</b> es un corte: las pausas que quitó el automático
+        (gris) y los tramos que quitaste a mano (rojo). Haz clic en una para ver lo que se quitó y recuperar
+        fracciones de segundo si se comió una palabra.</div>
+      <div id="corte_sel" style="display:none;flex-direction:column;gap:10px">
+        <div class="sub" id="corte_info"></div>
+        <canvas id="corte_onda" width="688" height="200" title="Arrastra las orillas rojas: hacia afuera quita más, hacia adentro recupera"></canvas>
+        <div class="sub mono" id="corte_tiempos"></div>
+        <div class="fila">
+          <button class="btn" id="corte_ant" title="Corte anterior">‹ Anterior</button>
+          <button class="btn" id="corte_sig" title="Corte siguiente">Siguiente ›</button>
+          <button class="btn" id="corte_oir_queda" title="Escucha cómo queda la unión (1.5 s antes y después)">▶ Cómo queda</button>
+          <button class="btn" id="corte_oir_quitado" title="Escucha solo lo que se quitó">▶ Lo quitado</button>
+        </div>
+        <div class="fila">
+          <button class="btn" id="corte_menos" title="Recupera 5 centésimas en cada orilla">Recuperar 0.05 s por lado</button>
+          <button class="btn peligro" id="corte_recuperar" title="Quita este corte: vuelve todo el pedazo (Supr)">Recuperar todo</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Cortes -->
     <div class="card" data-tab="Más">
       <h3>Quitar tramos del video</h3>
@@ -375,6 +399,7 @@
       <div class="fila">
         <label>Desde<input type="text" class="t" id="c_ini"></label><button class="btn" id="c_ini_aqui">aquí</button>
         <label>Hasta<input type="text" class="t" id="c_fin"></label><button class="btn" id="c_fin_aqui">aquí</button>
+        <button class="btn" id="c_fin_final" title="Hasta el final del video (quita también el último cuadro)">el final</button>
         <button class="btn prim" id="c_quitar">Quitar tramo</button>
       </div>
       <div class="lista" id="c_lista"></div>
@@ -870,7 +895,7 @@ function dibujarDifuminar(t, s, d) {   // franja difuminada (morada): se mueve y
 // ---------- línea de tiempo (tiempo del video editado) ----------
 function colorOp(op) { return getComputedStyle(document.documentElement).getPropertyValue("--c-" + op).trim() || "#666"; }
 const REGLA = 26;   // alto de la regla de tiempo (arriba de los carriles)
-const CARRILES = { p: [REGLA + 6, 24], m: [REGLA + 34, 24], en: [REGLA + 62, 14], ep: [REGLA + 80, 14], df: [REGLA + 98, 14], st: [REGLA + 116, 39] };
+const CARRILES = { p: [REGLA + 6, 24], m: [REGLA + 34, 24], en: [REGLA + 62, 14], ep: [REGLA + 80, 14], df: [REGLA + 98, 14], st: [REGLA + 116, 39], au: [REGLA + 160, 40] };
 let ratonX = null;   // tiempo bajo el ratón (línea guía), o null
 function itemsLinea() {
   const it = [];
@@ -994,7 +1019,7 @@ function dibujarLinea(te) {
   pintarDeslizador();
   const W = linea.width, H = linea.height, d = devicePixelRatio;
   lctx.clearRect(0, 0, W, H);
-  const nombres = { p: "Pantalla", m: "Imágenes", en: "Encuadre Nacho", ep: "Encuadre pantalla", df: "Difuminar subtítulos", st: "Stickers" };
+  const nombres = { p: "Pantalla", m: "Imágenes", en: "Encuadre Nacho", ep: "Encuadre pantalla", df: "Difuminar subtítulos", st: "Stickers", au: "Audio" };
   // regla: marcas grandes con su tiempo y chicas entre ellas; bandas alternas para ubicarse a simple vista
   const seg = vista[1] - vista[0], pxs = W / Math.max(0.001, seg);
   const pasos = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
@@ -1063,6 +1088,8 @@ function dibujarLinea(te) {
       lctx.fillText(`${mmss(a)} – ${mmss(b)}`, Math.max(2, x0), (y - 1) * d + (y < 10 ? h * d + 10 * d : 0));
     }
   }
+  dibujarOnda();
+  dibujarMarcasCortes();
   lctx.fillStyle = "rgba(255,255,255,.55)"; lctx.font = `${10 * d}px Geist, system-ui`; lctx.textAlign = "left";
   for (const [c, [y, h]] of Object.entries(CARRILES)) lctx.fillText(nombres[c], 4 * d, (y + h - 3) * d);
   if (tramoE) {
@@ -1280,6 +1307,7 @@ function atajos(ev) {
         `Pantalla «${OPS[porta.datos.pantalla]}» aplicada a ese pedazo.`);
     }
   }
+  if (!it && corteSel && (k === "delete" || k === "backspace")) { hecho(); return recuperarCorte(); }
   const itSt = !it && stSel ? itemsLinea().find(x => x.ref === stSel) : null;
   if (itSt && (k === "delete" || k === "backspace")) { hecho(); return borrar(itSt); }
   if (itSt && ctrl && k === "c") { hecho(); ultimoPorta = "bloque"; return copiar(itSt); }
@@ -1459,7 +1487,8 @@ function pintarListas() {
 function saltarPausas() {
   if (fuenteProxy || video.paused || video.seeking) return;   // la copia ligera ya no tiene pausas
   const t = video.currentTime, c = E.cortes.find(c => c.inicio <= t && t < c.fin - 0.02);
-  if (c) video.currentTime = c.fin;
+  if (c && c.fin >= E.video.duracion - 0.05) { video.pause(); video.currentTime = Math.max(0, c.inicio - 0.02); }   // hasta el final: se detiene
+  else if (c) video.currentTime = c.fin;
 }
 function bucle() {
   saltarPausas();
@@ -1636,7 +1665,7 @@ function leerTramo(ida, idb) {
   const a = seg($(ida).value), b = seg($(idb).value);
   if (a == null || b == null || isNaN(a) || isNaN(b)) return null;
   const ia = aOriginal(a), ib = Math.min(E.video.duracion, aOriginal(b));
-  return ib - ia >= 0.05 ? [ia, ib] : null;
+  return ib - ia >= 0.02 ? [ia, ib] : null;
 }
 async function guardarEncuadre(lista, msg) {
   await enviar("/enc/guardar", { t: T, ajustes: lista }, msg);
@@ -1663,6 +1692,197 @@ async function aplicarEncuadre() {   // aplica los tiempos escritos (al cambio p
   lista.push({ ...base, inicio: tr[0], fin: tr[1] });
   edit = null; tramoE = null; escribirTramoE();
   await guardarEncuadre(lista, "Encuadre guardado.");
+}
+
+// ---------- carril Audio: onda del sonido y marcas de los cortes ----------
+let ONDA = null, ondaFirma = null, ondaCache = null;
+let corteSel = null;      // corte elegido: objeto de E.cortes_detalle
+let corteEdit = null;     // orillas mientras se arrastran en el editor fino
+let corteRaton = null;    // corte bajo el ratón (para mostrar su duración)
+async function cargarOnda() {
+  const clave = E && E.video ? E.video.archivo : null;
+  if (!clave || clave === ondaFirma) return;
+  ondaFirma = clave;
+  try {
+    const d = await (await fetch(`/edi/onda?t=${encodeURIComponent(T)}`)).json();
+    ONDA = { pps: d.pps, picos: Uint8Array.from(d.picos || []) };
+    ondaCache = null;
+    pintarCorteSel();
+  } catch (err) { ondaFirma = null; }
+}
+function picoEntre(t0, t1) {   // pico de la onda entre dos tiempos del ORIGINAL (0..1)
+  if (!ONDA || !ONDA.picos.length) return 0;
+  const n = ONDA.picos.length, i0 = Math.max(0, Math.floor(t0 * ONDA.pps)), i1 = Math.min(n, Math.max(i0 + 1, Math.ceil(t1 * ONDA.pps)));
+  let m = 0;
+  for (let i = i0; i < i1; i++) if (ONDA.picos[i] > m) m = ONDA.picos[i];
+  return m / 255;
+}
+function dibujarOnda() {
+  const [y, h] = CARRILES.au, d = devicePixelRatio, W = linea.width;
+  if (!ONDA) return;
+  const clave = `${vista[0]}|${vista[1]}|${W}|${(E.cortes || []).length}|${(E.cortes || []).map(c => c.inicio + c.fin).reduce((a, b) => a + b, 0)}`;
+  if (!ondaCache || ondaCache.clave !== clave) {
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = Math.round(h * d);
+    const g = cv.getContext("2d"), mitad = cv.height / 2, paso = Math.max(1, Math.round(d)), dt = (vista[1] - vista[0]) * paso / W;
+    g.fillStyle = "rgba(160, 178, 205, .55)";
+    for (let x = 0; x < W; x += paso) {
+      const te = vista[0] + x / W * (vista[1] - vista[0]);
+      const t0 = aOriginal(te);
+      const v = picoEntre(t0, t0 + dt);
+      const a = Math.max(1, v * (mitad - 2 * d));
+      g.fillRect(x, mitad - a, paso, 2 * a);
+    }
+    ondaCache = { clave, cv };
+  }
+  lctx.drawImage(ondaCache.cv, 0, y * d);
+}
+function cortesVisibles() { return (E.cortes_detalle || []).filter(c => c.fin - c.inicio > 0.005); }
+function xCorte(c) { return xDe(aEditado(c.inicio)); }
+function dibujarMarcasCortes() {
+  const [y, h] = CARRILES.au, d = devicePixelRatio, W = linea.width;
+  for (const c of cortesVisibles()) {
+    const x = xCorte(c);
+    if (x < -10 * d || x > W + 10 * d) continue;
+    const sel = corteSel && Math.abs(corteSel.inicio - c.inicio) < 0.002;
+    const color = sel ? "#ffffff" : (c.manual ? "#FF6B6F" : "#C9C9CF");
+    lctx.fillStyle = color; lctx.globalAlpha = sel ? 1 : 0.85;
+    lctx.fillRect(x - (sel ? 1 : 0.5) * d, y * d, (sel ? 2 : 1) * d, h * d);
+    lctx.beginPath(); lctx.moveTo(x - 5 * d, y * d); lctx.lineTo(x + 5 * d, y * d); lctx.lineTo(x, (y + 7) * d); lctx.closePath(); lctx.fill();
+    lctx.globalAlpha = 1;
+  }
+  if (corteRaton) {
+    const x = xCorte(corteRaton);
+    pastilla(`${corteRaton.manual ? "Quitado a mano" : "Pausa quitada"} ${(corteRaton.fin - corteRaton.inicio).toFixed(2)} s`, x, (y - 16) * d, "rgba(0,0,0,.85)", "#fff");
+  }
+}
+function marcaCorteEn(ev) {   // la marca de corte bajo el puntero (en el carril Audio), o null
+  const r = linea.getBoundingClientRect(), d = devicePixelRatio;
+  const y = ev.clientY - r.top, [cy, ch] = CARRILES.au;
+  if (y < cy - 2 || y > cy + ch + 2) return null;
+  const x = (ev.clientX - r.left) * d;
+  let mejor = null;
+  for (const c of cortesVisibles()) {
+    const dx = Math.abs(xCorte(c) - x);
+    if (dx <= 6 * d && (!mejor || dx < mejor.dx)) mejor = { c, dx };
+  }
+  return mejor ? mejor.c : null;
+}
+function elegirCorte(c, ir) {
+  corteSel = c; corteEdit = null;
+  seleccionar(null, false);
+  if (window.irPestana) irPestana("Cortes");
+  if (ir) irE(Math.max(0, aEditado(c.inicio) - 0.01));
+  pintarCorteSel();
+}
+function reelegirCorte() {
+  if (!corteSel) return;
+  const lista = cortesVisibles();
+  corteSel = lista.find(c => Math.abs(c.inicio - corteSel.inicio) < 0.003 && Math.abs(c.fin - corteSel.fin) < 0.003)
+    || lista.find(c => Math.abs(c.inicio - corteSel.inicio) < 0.3) || null;
+  corteEdit = null;
+  pintarCorteSel();
+}
+function ventanaCorte(c) {   // lo que se ve en el editor fino: 1.2 s antes y después del corte (tiempo original)
+  return [Math.max(0, c.inicio - 1.2), Math.min(E.video.duracion, c.fin + 1.2)];
+}
+function pintarCorteSel() {
+  const caja = $("corte_sel"); if (!caja) return;
+  caja.style.display = corteSel ? "flex" : "none";
+  if (!corteSel) return;
+  const c = corteSel, e = corteEdit || c, lista = cortesVisibles(), k = lista.indexOf(c);
+  $("corte_info").innerHTML = `${c.manual ? "Tramo quitado a mano" : "Pausa quitada por el automático"} · corte ${k + 1} de ${lista.length} · en ${mmss(aEditado(c.inicio))} del video editado`;
+  $("corte_tiempos").textContent = `Quita ${(e.fin - e.inicio).toFixed(2)} s (del original ${mmss(e.inicio)} a ${mmss(e.fin)})` + (corteEdit ? " · suelta para guardar" : "");
+  $("corte_ant").disabled = k <= 0; $("corte_sig").disabled = k < 0 || k >= lista.length - 1;
+  const cv = $("corte_onda"), g = cv.getContext("2d"), W = cv.width, H = cv.height;
+  const [v0, v1] = ventanaCorte(c), xT = (t) => (t - v0) / (v1 - v0) * W;
+  g.clearRect(0, 0, W, H);
+  // lo que se quita (rayado rojo)
+  const xa = xT(e.inicio), xb = xT(e.fin);
+  g.fillStyle = "rgba(229, 37, 42, .16)"; g.fillRect(xa, 0, xb - xa, H);
+  g.save(); g.beginPath(); g.rect(xa, 0, xb - xa, H); g.clip();
+  g.strokeStyle = "rgba(229, 37, 42, .35)"; g.lineWidth = 2;
+  for (let x = xa - H; x < xb; x += 14) { g.beginPath(); g.moveTo(x, H); g.lineTo(x + H, 0); g.stroke(); }
+  g.restore();
+  // otros cortes dentro de la ventana (gris)
+  for (const o of lista) {
+    if (o === c || o.fin < v0 || o.inicio > v1) continue;
+    g.fillStyle = "rgba(255,255,255,.08)"; g.fillRect(xT(o.inicio), 0, xT(o.fin) - xT(o.inicio), H);
+  }
+  // onda
+  const dt = (v1 - v0) / W;
+  for (let x = 0; x < W; x += 2) {
+    const t = v0 + x * dt, v = picoEntre(t, t + 2 * dt), a = Math.max(1, v * (H / 2 - 6));
+    g.fillStyle = t >= e.inicio && t < e.fin ? "rgba(255, 140, 143, .9)" : "rgba(200, 212, 230, .85)";
+    g.fillRect(x, H / 2 - a, 2, 2 * a);
+  }
+  // orillas que se arrastran
+  for (const x of [xa, xb]) {
+    g.fillStyle = "#E5252A"; g.fillRect(x - 2, 0, 4, H);
+    g.fillStyle = "#fff"; g.fillRect(x - 5, H / 2 - 14, 10, 28);
+    g.fillStyle = "#E5252A"; g.fillRect(x - 1, H / 2 - 9, 2, 18);
+  }
+}
+async function guardarCorte(inicio, fin, recuperar = false) {
+  const c = corteSel; if (!c) return;
+  const d = await enviar("/edi/corte", { t: T, inicio0: c.inicio, fin0: c.fin, inicio, fin, recuperar }, "Corte ajustado.");
+  if (d && d.ok) {
+    corteSel = recuperar || fin - inicio < 0.02 ? null : { ...c, inicio, fin };
+    reelegirCorte();
+  }
+}
+function recuperarCorte() { if (corteSel) guardarCorte(corteSel.inicio, corteSel.fin, true); }
+let oyente = null, timerOir = null;
+function oirTramo(a, b) {   // escucha un pedazo del ORIGINAL (aunque esté quitado)
+  if (!oyente) oyente = new Audio(`/enc/video?t=${encodeURIComponent(T)}&a=${encodeURIComponent(E.video.archivo || "")}`);
+  clearTimeout(timerOir); video.pause();
+  oyente.currentTime = a; oyente.play().catch(() => {});
+  timerOir = setTimeout(() => oyente.pause(), Math.max(100, (b - a) * 1000));
+}
+function iniciarCortes() {
+  const cv = $("corte_onda");
+  let arr = null;
+  const tEn = (ev) => { const r = cv.getBoundingClientRect(), [v0, v1] = ventanaCorte(corteSel); return v0 + (ev.clientX - r.left) / r.width * (v1 - v0); };
+  cv.addEventListener("pointerdown", (ev) => {
+    if (!corteSel) return;
+    const t = tEn(ev), e = corteEdit || corteSel, [v0, v1] = ventanaCorte(corteSel), tol = (v1 - v0) * 0.03;
+    const lado = Math.abs(t - e.inicio) <= Math.abs(t - e.fin) ? "inicio" : "fin";
+    if (Math.abs(t - e[lado]) > tol * 2) return;
+    cv.setPointerCapture(ev.pointerId);
+    arr = lado; corteEdit = { inicio: e.inicio, fin: e.fin };
+  });
+  cv.addEventListener("pointermove", (ev) => {
+    if (!arr || !corteSel) return;
+    const fps = E.video.fps || 30;
+    let t = Math.round(tEn(ev) * fps) / fps;   // al cuadro
+    if (arr === "inicio") corteEdit.inicio = Math.min(t, corteEdit.fin);
+    else corteEdit.fin = Math.max(t, corteEdit.inicio);
+    pintarCorteSel();
+  });
+  const soltar = () => {
+    if (!arr) return;
+    arr = null;
+    const e = corteEdit; corteEdit = null;
+    if (e && (Math.abs(e.inicio - corteSel.inicio) > 0.002 || Math.abs(e.fin - corteSel.fin) > 0.002)) guardarCorte(e.inicio, e.fin);
+    else pintarCorteSel();
+  };
+  cv.addEventListener("pointerup", soltar);
+  cv.addEventListener("pointercancel", soltar);
+  $("corte_ant").onclick = () => { const l = cortesVisibles(), k = l.indexOf(corteSel); if (k > 0) elegirCorte(l[k - 1], true); };
+  $("corte_sig").onclick = () => { const l = cortesVisibles(), k = l.indexOf(corteSel); if (k >= 0 && k < l.length - 1) elegirCorte(l[k + 1], true); };
+  $("corte_oir_queda").onclick = () => {
+    if (!corteSel) return;
+    const te = aEditado(corteSel.inicio);
+    if (oyente) oyente.pause();
+    irE(Math.max(0, te - 1.5)); video.play();
+    clearTimeout(timerOir); timerOir = setTimeout(() => video.pause(), 3000);
+  };
+  $("corte_oir_quitado").onclick = () => { if (corteSel) oirTramo(corteSel.inicio, corteSel.fin); };
+  $("corte_menos").onclick = () => {
+    if (!corteSel) return;
+    const a = corteSel.inicio + 0.05, b = corteSel.fin - 0.05;
+    guardarCorte(a, Math.max(a, b));
+  };
+  $("corte_recuperar").onclick = recuperarCorte;
 }
 
 // ---------- stickers animados ----------
@@ -2099,6 +2319,8 @@ async function recargar() {
   version = Date.now();
   tramoP = undefined; cambioP = null; momSel = -2; momSucio = false;
   E._grupos = null;
+  cargarOnda();
+  reelegirCorte();
   if (E.titulo) { tituloImg = new Image(); tituloImg.src = `/enc/titulo?${q}&v=${version}`; } else tituloImg = null;
   if (document.activeElement !== $("titulo")) $("titulo").value = X.titulo || "";
   pintarListas();
@@ -2234,6 +2456,9 @@ async function iniciar() {
   const mover = (d) => { video.pause(); irE(Math.min(durE(), Math.max(0, ahoraE() + d))); };
   $("b_play").onclick = () => video.paused ? video.play() : video.pause();
   iniciarStickers();
+  iniciarCortes();
+  cargarOnda();
+  linea.addEventListener("pointerleave", () => { corteRaton = null; });
   $("b_m1").onclick = () => mover(-1); $("b_p1").onclick = () => mover(1);
   $("b_mf").onclick = () => mover(-1 / fps); $("b_pf").onclick = () => mover(1 / fps);
   document.addEventListener("keydown", atajos);
@@ -2242,6 +2467,8 @@ async function iniciar() {
   const tLinea = (ev) => { const r = linea.getBoundingClientRect(); return vista[0] + (ev.clientX - r.left) / r.width * (vista[1] - vista[0]); };
   linea.addEventListener("pointerdown", (ev) => {
     linea.setPointerCapture(ev.pointerId); video.pause();
+    const mc = marcaCorteEn(ev);
+    if (mc) { elegirCorte(mc, true); return; }
     if (X.estilo !== "solo_subtitulos" && enCarrilP(ev)) {
       const t = tLinea(ev);
       if (ev.shiftKey) {   // Shift + arrastrar: seleccionar un pedazo del video
@@ -2265,6 +2492,8 @@ async function iniciar() {
     presionado = { x0: ev.clientX, movido: false };   // el tiempo solo se mueve si arrastras (clic sostenido)
   });
   linea.addEventListener("pointermove", (ev) => {
+    corteRaton = marcaCorteEn(ev);
+    linea.style.cursor = corteRaton ? "pointer" : "";
     if (creaSeg) {
       const t = aCuadro(Math.min(durE(), Math.max(0, tLinea(ev))));
       segSel = [Math.min(creaSeg.t0, t), Math.max(creaSeg.t0, t)]; pintarSegbar(); return;
@@ -2516,10 +2745,13 @@ async function iniciar() {
   // cortes
   $("c_ini_aqui").onclick = () => { $("c_ini").value = mmss(ahoraE()); };
   $("c_fin_aqui").onclick = () => { $("c_fin").value = mmss(ahoraE()); };
+  $("c_fin_final").onclick = () => { $("c_fin").value = mmss(durE()); };
   $("c_quitar").onclick = () => {
     const tr = leerTramo("c_ini", "c_fin");
     if (!tr) return estado("Escribe desde y hasta (hasta mayor que desde).", "err");
-    enviar("/edi/cortar", { t: T, inicio: tr[0], fin: tr[1] }, "Tramo quitado.").then(() => { $("c_ini").value = ""; $("c_fin").value = ""; });
+    const finE = seg($("c_fin").value), al_final = finE != null && finE >= durE() - 0.06;   // hasta el último cuadro
+    enviar("/edi/cortar", { t: T, inicio: tr[0], fin: tr[1], al_final }, al_final ? "Quitado hasta el final del video." : "Tramo quitado.")
+      .then(() => { $("c_ini").value = ""; $("c_fin").value = ""; });
   };
   pintarListas();
   medir();

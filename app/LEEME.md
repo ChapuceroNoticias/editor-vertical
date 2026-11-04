@@ -13,8 +13,13 @@ trabajando (análisis, exportación, vistas previas, video largo) y apaga la pla
 En **Editor**: «Nuevo video» (video, título, estilo de edición en tarjetas, **Analizar video**) y a la derecha los
 **trabajos recientes** (clic = abrirlo; «Abrir otro trabajo» para los demás). Con un trabajo abierto, arriba quedan
 **←** (volver), el título, **Exportar** y los pasos **Edición · Subtítulos · Exportar**. En Edición, las herramientas
-van en el panel de la derecha por pestañas (Pantalla, Imagen, Stickers, Encuadre, Más); se cambia sola a la del bloque
+van en el panel de la derecha por pestañas (Pantalla, Imagen, Stickers, Encuadre, Cortes, Más); se cambia sola a la del bloque
 o sticker que eliges.
+La línea de tiempo tiene abajo el carril **Audio** con la onda del sonido y una marca por cada corte (gris: pausas que
+quitó el automático; rojo: tramos quitados a mano). Clic en una marca = pestaña **Cortes**: se ve la onda de lo que
+se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adentro) o quitar más (hacia afuera),
+«▶ Cómo queda» / «▶ Lo quitado» para escuchar, «Recuperar 0.05 s por lado», «Recuperar todo» (Supr) y
+‹ Anterior / Siguiente › para recorrerlos.
 
 - **Videos:** pon los videos en la carpeta **VideosEdit** del escritorio. Al exportar, el video final queda en la
   carpeta **Renders** del escritorio con el **título** del cuadro «Título» como nombre (si ya hay otro igual, se le

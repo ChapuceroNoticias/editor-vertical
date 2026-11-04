@@ -1339,12 +1339,15 @@ def render(args, trabajo, plan, pl):
     cap = cv2.VideoCapture(plan["video"])
     idx, ci, n_out = 0, 0, 0
     total = info["cuadros"] or 1
+    fin_v = ed.fin_del_video(plan)
     while True:
         ok, frame = cap.read()
         if not ok:
             break
         t = idx / fps
         idx += 1
+        if t >= fin_v - 1e-6:   # tramo quitado hasta el final (o cuadros de más al final del archivo)
+            break
         if idx % max(1, int(fps)) == 0:
             ed.Progreso.paso(idx / total, "Armando el video")
         while ci < len(cortes) and t >= cortes[ci]["fin"] - 1e-6:

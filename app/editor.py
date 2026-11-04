@@ -2256,6 +2256,16 @@ def unir_cortes(cortes):
     return out
 
 
+def fin_del_video(plan):
+    """Hasta dónde llega el video armado: el final medido o, si hay un tramo quitado que llega hasta el final, su
+    inicio. Los cuadros de después no salen (antes se colaba el último cuadro si el conteo del video se quedaba corto)."""
+    fin = float(plan["info"]["duracion"])
+    for c in plan.get("cortes") or []:
+        if c.get("hasta_final") or c["fin"] >= fin - 0.002:
+            fin = min(fin, float(c["inicio"]))
+    return fin
+
+
 def a_editado(t, cortes):
     """Tiempo del video original -> tiempo en el video ya editado (sin las pausas quitadas)."""
     quitado = 0.0
@@ -2299,7 +2309,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-04c v1.4.2"
+VERSION = "2026-11-04e v1.5.0"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3666,8 +3676,11 @@ def vista_previa_rapida(trabajo, plan=None):
     cort_cam = Cortinilla(pl.get("transicion_camara") or {}, w, h) if trans_cam else None
     idx, ci = 0, 0
     total = info.get("cuadros") or 1
+    fin_v = fin_del_video(plan)
     while True:
         t = idx / fps
+        if t >= fin_v - 1e-6:   # tramo quitado hasta el final (o cuadros de más al final del archivo)
+            break
         while ci < len(cortes) and t >= cortes[ci]["fin"] - 1e-6:
             ci += 1
         en_corte = ci < len(cortes) and cortes[ci]["inicio"] - 1e-6 <= t < cortes[ci]["fin"] - 1e-6
@@ -3939,8 +3952,11 @@ def crear_proxy(trabajo):
     cap = cv2.VideoCapture(plan["video"])
     idx, ci = 0, 0
     total = info.get("cuadros") or 1
+    fin_v = fin_del_video(plan)
     while True:
         t = idx / fps
+        if t >= fin_v - 1e-6:   # tramo quitado hasta el final (o cuadros de más al final del archivo)
+            break
         while ci < len(cortes) and t >= cortes[ci]["fin"] - 1e-6:
             ci += 1
         if ci < len(cortes) and cortes[ci]["inicio"] - 1e-6 <= t < cortes[ci]["fin"] - 1e-6:
@@ -4200,6 +4216,7 @@ def cmd_render(args):
         log(f"{len(trans_cam)} transiciones de cambio de cámara con la cortinilla limpia")
 
     stickers = Stickers(plan.get("stickers"), W, H, trabajo) if plan.get("stickers") else None
+    fin_v = fin_del_video(plan)
     idx, ti, ci, n_out = 0, 0, 0, 0
     total = info["cuadros"] or 1
     lienzo = np.zeros((H, W, 3), np.uint8)
@@ -4209,6 +4226,8 @@ def cmd_render(args):
             break
         t = idx / fps
         idx += 1
+        if t >= fin_v - 1e-6:   # tramo quitado hasta el final (o cuadros de más al final del archivo)
+            break
         if idx % max(1, int(fps)) == 0:
             Progreso.paso(idx / total, "Armando el video")
         # pausas recortadas
