@@ -1,0 +1,121 @@
+{
+ "nombre": "Tiktoks Gaby",
+ "estilo": "motivacional",
+ "variante": "gaby",
+ "descripcion": "Video de fondo en movimiento (assets/fondo_gaby.mp4), la persona en una franja al centro con encuadre fijo (sin cambios de cámara), título amarillo arriba en Raleway Black Italic que entra renglón por renglón, y subtítulos palabra por palabra con la palabra activa en un cuadro rosa. Sin imágenes. Con la música de fondo.",
+ "salida": {
+  "ancho": 1080,
+  "alto": 1920,
+  "crf": 20,
+  "audio_kbps": 125
+ },
+ "fondo": {
+  "_nota": "Video de fondo (se repite si el clip dura más). Se ve arriba (detrás del título) y abajo de la franja.",
+  "video": "assets/fondo_gaby.mp4"
+ },
+ "encuadre": {
+  "_nota": "Encuadre fijo: 'lejos' = toda la altura del video original, centrado en la cara (desplazamiento_x = cuánto se corre hacia donde mira, en anchos de cara). cara_al_centro: si hay varias caras, sigue la del centro (la conductora) aunque otra sea más grande. Se corrige a mano en Edición › Encuadre.",
+  "inicial": "lejos",
+  "alto_lejos": 1.0,
+  "zoom_cerca": 1.15,
+  "ancla": "abajo",
+  "desplazamiento_x": 0.0,
+  "cara_al_centro": true,
+  "nitidez": 0.3
+ },
+ "titulo": {
+  "_nota": "Todo el video arriba, en amarillo con contorno negro. Se acomoda en 2 renglones (achica la letra para que quepa a lo ancho; 3 renglones solo si no cabe). Al inicio cada renglón entra de borroso a nítido (animacion).",
+  "tipo": "gaby",
+  "fuente": "assets/Raleway-BlackItalic.ttf",
+  "tam": 138,
+  "tam_min": 64,
+  "max_lineas": 3,
+  "ancho": 1020,
+  "centro_y": 178,
+  "margen_arriba": 40,
+  "interlineado": 1.04,
+  "color": "#FAE24A",
+  "contorno": 10,
+  "color_contorno": "#000000",
+  "mayusculas": true,
+  "animacion": {
+   "por_linea_seg": 0.45,
+   "desfase_seg": 0.3,
+   "desenfoque": 18
+  }
+ },
+ "subtitulos": {
+  "_nota": "Palabra por palabra (como Clips Chapuceros y Tiktoks Yair) pero la palabra activa va en un cuadro rosa.",
+  "fuente": "assets/AkuKamu.otf",
+  "tam": 76,
+  "tam_min": 58,
+  "max_lineas": 2,
+  "color": "#FFFFFF",
+  "contorno": 8,
+  "color_contorno": "#000000",
+  "color_resalte": "#FF00A8",
+  "max_palabras": 5,
+  "espacio": 0.09,
+  "pausa_corte_seg": 0.45,
+  "mayusculas": true,
+  "puntuar_con_ia": true
+ },
+ "layouts": {
+  "persona": {
+   "persona": {
+    "_nota": "La franja de la persona (x, y, ancho, alto) en el video vertical; arriba y abajo se ve el fondo.",
+    "area": [
+     0,
+     371,
+     1080,
+     1156
+    ]
+   },
+   "subtitulos": {
+    "area": [
+     90,
+     1400,
+     900,
+     200
+    ]
+   }
+  }
+ },
+ "momentos": {
+  "_nota": "Este estilo no lleva imágenes.",
+  "cada_seg": 0
+ },
+ "transicion": {
+  "duracion_seg": 0.12,
+  "angulo": 40
+ },
+ "cortes": {
+  "_nota": "Como Tiktoks Yair: se recortan también pausas cortas.",
+  "activar": true,
+  "umbral_rel_db": 12,
+  "pausa_min_seg": 0.35,
+  "dejar_antes_seg": 0.1,
+  "dejar_coma_seg": 0.15,
+  "dejar_frase_seg": 0.22,
+  "dejar_oracion_seg": 0.4,
+  "dejar_oracion_larga_seg": 0.6,
+  "dejar_dramatico_seg": 0.95,
+  "dramaticas_cada_seg": 45,
+  "inicio_dejar_seg": 0.08,
+  "final_dejar_seg": 0.5
+ },
+ "audio": {
+  "musica": "assets/musica_fondo.mp3",
+  "volumen_musica": 0.9,
+  "nivelar_voz": true,
+  "_nota": "Música de fondo a volumen fijo. En la pestaña Edición se sube o baja (Fondo / Video)."
+ },
+ "toma_fija": {
+  "activar": true,
+  "margen_x": 0.35,
+  "margen_y": 0.8,
+  "margen_tam": 1.35,
+  "min_seg": 1.5,
+  "adelantar_corte": 1.5
+ }
+}

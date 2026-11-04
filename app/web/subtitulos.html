@@ -627,10 +627,34 @@ function dibujarAbajo(e, t, s) {
   else if (e.ex[1] >= 0 && pm) deVideo(...pm, ix, iy, iw, ih);
   else if (e.ex[1] >= 0) dibujarPantallaAbajo(e.ex[1], t, ix, iy, iw, ih);
 }
+// ---------- video de fondo del estilo («Tiktoks Gaby»), al ritmo del video editado ----------
+let fondoVid = null;
+function dibujarFondoVideo(cx, t, W, H) {
+  if (!E || !E.armado || !E.armado.fondo) return;
+  if (!fondoVid) {
+    fondoVid = document.createElement("video");
+    fondoVid.src = `/enc/fondo?t=${encodeURIComponent(T)}`;
+    fondoVid.muted = true; fondoVid.loop = true; fondoVid.playsInline = true; fondoVid.preload = "auto";
+  }
+  const d = fondoVid.duration;
+  if (d > 0) {
+    const obj = aEditado(t) % d;
+    if (video.paused) {
+      if (!fondoVid.paused) fondoVid.pause();
+      if (Math.abs(fondoVid.currentTime - obj) > 0.05 && !fondoVid.seeking) fondoVid.currentTime = obj;
+    } else {
+      if (fondoVid.paused) fondoVid.play().catch(() => {});
+      if (Math.abs(fondoVid.currentTime - obj) > 0.4 && !fondoVid.seeking) fondoVid.currentTime = obj;
+    }
+  }
+  if (fondoVid.readyState >= 2) cx.drawImage(fondoVid, 0, 0, W, H);
+  else { cx.fillStyle = "#0B2533"; cx.fillRect(0, 0, W, H); }
+}
 function componer() {
   const W = arm.width, H = arm.height, s = W / E.salida[0];
   const t = tO(), e = muestra(t);
   actx.fillStyle = "#000"; actx.fillRect(0, 0, W, H);
+  dibujarFondoVideo(actx, t, W, H);   // «Tiktoks Gaby»: video de fondo detrás de la franja
   const area = (a) => (a || [0, 0, E.salida[0], E.salida[1]]).map(v => v * s);
   if (e.tipo === "persona" || e.tipo === "video") {
     const [ax, ay, aw, ah] = e.tipo === "video" ? area(null) : area(E.areas.persona);
@@ -958,10 +982,21 @@ async function cargar() {
     $("nota").textContent = "Aún no hay video renderizado.";
     $("nota").className = "nota alerta";
   }
-  try {
-    const f = new FontFace("SubFuente", `url(/sub/fuente?t=${encodeURIComponent(T)})`);
-    await f.load(); document.fonts.add(f); fuenteLista = true;
-  } catch (e) { fuenteLista = true; }
+  await cargarFuente();
+}
+// La letra de los subtítulos (la de la plantilla). La dirección va entre comillas y con ( ) ' codificados: una
+// carpeta como «204 NACHO DIA (4 NOV)_trabajo» rompía el url(...) y se dibujaba con otra letra.
+async function cargarFuente() {
+  const q = encodeURIComponent(T).replace(/[()'!*]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+  for (let intento = 0; intento < 3; intento++) {
+    try {
+      const f = new FontFace("SubFuente", `url("/sub/fuente?t=${q}")`);
+      await f.load(); document.fonts.add(f); fuenteLista = true;
+      return;
+    } catch (e) { await new Promise(r => setTimeout(r, 800)); }
+  }
+  fuenteLista = true;   // se ven igual, pero se avisa: así no se confunde con un cambio de letra
+  estado("⚠ No se pudo cargar la letra de los subtítulos en la vista previa (el video exportado sí la usa). Recarga la pestaña.", "err");
 }
 
 $("guardar").onclick = async () => {

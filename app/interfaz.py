@@ -110,6 +110,7 @@ ESTILOS = {
     "Clips Chapuceros": "plantillas/chapucero_vertical.json",
     "Tiktoks Motivacionales": "plantillas/tiktok_motivacional.json",
     "Tiktoks Yair": "plantillas/tiktok_yair.json",
+    "Tiktoks Gaby": "plantillas/tiktok_gaby.json",
     "Clips Fuera": "plantillas/clips_fuera.json",
     "Solo subtítulos (Chapucero)": "plantillas/solo_subtitulos_chapucero.json",
 }
@@ -686,7 +687,7 @@ def num_momento(etiqueta):
 
 def area_de(plan, estilo):
     pl = plantilla(plan)
-    if estilo == "completa" or "layouts" not in pl:
+    if estilo == "completa" or "dividida" not in pl.get("layouts", {}):
         return pl["salida"]["ancho"], pl["salida"]["alto"]
     a = pl["layouts"]["dividida"]["inferior"]["area"]
     return a[2], a[3]
@@ -809,7 +810,8 @@ def datos_encuadre(t):
         areas = {"persona": [0, 0, W, H], "video": [0, 0, W, H]}
         if "layouts" in pl:
             areas["persona"] = pl["layouts"]["persona"]["persona"]["area"]
-            areas["dividida"] = pl["layouts"]["dividida"]["persona"]["area"]
+            if "dividida" in pl["layouts"]:   # «Tiktoks Gaby» no tiene pantalla dividida
+                areas["dividida"] = pl["layouts"]["dividida"]["persona"]["area"]
         _CACHE_ENC.clear()
         _CACHE_ENC[clave] = {"paso": paso, "muestras": muestras, "extra": extra, "pvwin": pvwin,
                              "salida": [W, H], "areas": areas,
@@ -1223,6 +1225,8 @@ def datos_armado(plan, pl):
         # transiciones de cambio de cámara de Nacho (tiempo original) y la cortinilla limpia que las tapa
         "transiciones": [[t_["inicio"], t_["fin"]] for t_ in plan.get("transiciones_camara") or []],
         "cortinilla": info_cortinilla(pl),
+        # «Tiktoks Gaby»: video de fondo en movimiento detrás de la franja de la persona
+        "fondo": bool((pl.get("fondo") or {}).get("video")),
     }
 
 
@@ -1278,7 +1282,8 @@ def datos_edicion(t):
         or (Path(t) / "plan.json").stat().st_mtime > vp.stat().st_mtime + 1)
     return {"titulo": plan.get("titulo", ""), "momentos": momentos, "cortes_manuales": manuales, "version": ed.VERSION,
             "previa_vieja": previa_vieja, "render": estado_render_edicion(t),
-            "titulo_fin": plan.get("titulo_fin") if estilo_de(plan) == "motivacional" and plan.get("titulo") else None,
+            "titulo_fin": plan.get("titulo_fin") if estilo_de(plan) == "motivacional" and plan.get("titulo")
+            and not ed.estilo_motivacional().es_gaby(plantilla(plan)) else None,   # «Tiktoks Gaby»: el título va todo el video
             "pausas": pausas,
             "audio": datos_audio(plan),
             "portapapeles": montaje.portapapeles(t),
@@ -2158,6 +2163,15 @@ def crear_app():
         ok, buf = cv2.imencode(".png", capa)
         return Response(buf.tobytes(), media_type="image/png", headers={"Cache-Control": "no-store"})
 
+    @app.get("/enc/fondo")
+    def enc_fondo(t: str):
+        """Video de fondo del estilo («Tiktoks Gaby») para la vista previa en vivo."""
+        plan, _ = cargar(validar(t))
+        f = (plantilla(plan).get("fondo") or {}).get("video")
+        if not f or not ed.ruta(f).exists():
+            raise HTTPException(404, "Sin video de fondo")
+        return FileResponse(ed.ruta(f), media_type="video/mp4", headers={"Cache-Control": "max-age=86400"})
+
     @app.get("/enc/franja")
     def enc_franja(t: str):
         plan, _ = cargar(validar(t))
@@ -2723,7 +2737,7 @@ footer { display: none !important; }
   min-height: 44px; font-size: 15px !important; padding: 10px 14px !important; }
 #inicio .wrap-inner, #inicio .secondary-wrap { background: #141417 !important; border-radius: 10px !important; }
 /* estilos de edición como tarjetas */
-#estilo .wrap { display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px !important; }
+#estilo .wrap { display: grid !important; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px !important; }
 #estilo .wrap label { position: relative; display: flex !important; flex-direction: column; align-items: flex-start !important; gap: 10px !important; padding: 12px !important;
   border-radius: 10px !important; border: 1px solid #2A2A30 !important; background: transparent !important; color: #C9C9CF !important;
   font: 500 13px "Geist", sans-serif !important; min-height: 104px; cursor: pointer; box-shadow: none !important; }
@@ -2734,8 +2748,9 @@ footer { display: none !important; }
 #estilo .wrap label:nth-child(1)::before { background: linear-gradient(#4A4A54 0 52%, #3B82F6 52% 60%, #2A2A30 60%); }
 #estilo .wrap label:nth-child(2)::before { background: linear-gradient(#4A4A54 0 74%, #fff 74% 80%, #4A4A54 80%); background-size: 22px 100%; background-repeat: no-repeat; background-position: center; background-color: #4A4A54; }
 #estilo .wrap label:nth-child(3)::before { background: linear-gradient(#4A4A54 0 12%, #F2A33A 12% 20%, #4A4A54 20% 25%, #fff 25% 31%, #4A4A54 31%); }
-#estilo .wrap label:nth-child(4)::before { background: linear-gradient(#4A4A54 0 50%, #3A3A42 50%); }
-#estilo .wrap label:nth-child(5)::before { background: linear-gradient(#4A4A54 0 47%, #fff 47% 53%, #4A4A54 53%); background-size: 22px 100%; background-repeat: no-repeat; background-position: center; background-color: #4A4A54; }
+#estilo .wrap label:nth-child(4)::before { background: linear-gradient(#1F3A4A 0 10%, #FAE24A 10% 15%, #1F3A4A 15% 20%, #4A4A54 20% 78%, #1F3A4A 78%); }
+#estilo .wrap label:nth-child(5)::before { background: linear-gradient(#4A4A54 0 50%, #3A3A42 50%); }
+#estilo .wrap label:nth-child(6)::before { background: linear-gradient(#4A4A54 0 47%, #fff 47% 53%, #4A4A54 53%); background-size: 22px 100%; background-repeat: no-repeat; background-position: center; background-color: #4A4A54; }
 /* botones */
 button.primary, button.lg.primary { background: #E5252A !important; border: 0 !important; font-weight: 600 !important; border-radius: 10px !important; }
 button.primary:hover { background: #F23B40 !important; }

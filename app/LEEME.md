@@ -188,6 +188,11 @@ o sticker que eliges.
     cuando se calla para verlo, va a pantalla completa centrado en quien habla o en lo que se mueve. La voz de Nacho
     se reconoce comparándola con las partes donde sale solo (requiere `scikit-learn`, incluido en requirements.txt).
     Plantilla: `plantillas\clips_fuera.json`.
+  - *Tiktoks Gaby*: video de fondo en movimiento (`assets/fondo_gaby.mp4`, se repite si el clip dura más), la
+    persona en una franja al centro con encuadre fijo (sin cambios de cámara; si hay varias caras sigue la del
+    centro), título amarillo arriba en Raleway Black Italic todo el video (al inicio cada renglón entra de borroso a
+    nítido) y subtítulos palabra por palabra con la palabra activa en un cuadro **rosa**. Pausas acortadas, música de
+    fondo y sin imágenes. El encuadre se corrige en Edición › Encuadre como en los demás.
   - *Solo subtítulos (Chapucero)*: para un clip YA editado (vertical u horizontal). No recorta ni
     cambia nada: transcribe, corrige nombres y puntuación con el modelo local y le pone los subtítulos con el estilo
     elegido. El título no hace falta. Sale como `NOMBRE_subtitulado.mp4` en su carpeta `_trabajo`.

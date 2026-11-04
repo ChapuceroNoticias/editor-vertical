@@ -243,22 +243,31 @@ class DetectorCara:
             log("YuNet no disponible, uso Haar (menos preciso)")
             self.haar = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
-    def mayor(self, img):
-        """Devuelve [x, y, w, h] de la cara más grande o None."""
+    def mayor(self, img, centro=False):
+        """Devuelve [x, y, w, h] de la cara más grande o None. centro=True: la que está más al centro gana aunque
+        haya otra más grande a un lado (p. ej. la conductora al centro y una foto de otra persona atrás)."""
         if img is None or img.size == 0:
             return None
+        W = img.shape[1]
+
+        def peso(r):
+            area = float(r[2] * r[3])
+            if not centro:
+                return area
+            d = min(1.0, abs(float(r[0] + r[2] / 2) - W / 2) / (W / 2))
+            return area * (1 - d) ** 3
         if self.yunet is not None:
             self.yunet.setInputSize((img.shape[1], img.shape[0]))
             _, caras = self.yunet.detect(img)
             if caras is None or len(caras) == 0:
                 return None
-            c = max(caras, key=lambda r: r[2] * r[3])
+            c = max(caras, key=peso)
             return [float(c[0]), float(c[1]), float(c[2]), float(c[3])]
         g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         caras = self.haar.detectMultiScale(g, 1.1, 5, minSize=(60, 60))
         if len(caras) == 0:
             return None
-        c = max(caras, key=lambda r: r[2] * r[3])
+        c = max(caras, key=peso)
         return [float(v) for v in c]
 
 
@@ -1519,12 +1528,16 @@ def transcribir(video, modelo, dispositivo):
         raise SystemExit("No pude extraer el audio con ffmpeg: " + r.stderr.decode(errors="ignore")[-300:])
     audio = np.frombuffer(r.stdout, np.float32)
 
+    prompt = ("Transcripción en español con puntuación: puntos, comas, ¿preguntas? y ¡exclamaciones!" + (
+        " Nombres: " + ", ".join(_APRENDIDO["nombres"][:40]) + "." if _APRENDIDO.get("nombres") else ""))
+
     def correr(disp):
         tipo = "float16" if disp == "cuda" else "int8"
         if disp == "cuda" and os.environ.get("WHISPER_COMPUTE"):
             tipo = os.environ["WHISPER_COMPUTE"]   # tarjetas con poca memoria: int8_float16 (lo pone el instalador)
         log(f"Transcribiendo con whisper '{modelo}' en {disp} ({tipo})...")
         wm = WhisperModel(modelo, device=disp, compute_type=tipo, cpu_threads=int(HILOS_CPU) if SOLO_GPU else 0)
+        modelo_listo[0] = wm
         # condition_on_previous_text=False y hallucination_silence_threshold evitan que repita frases ya dichas
         segmentos, _ = wm.transcribe(audio, language="es", word_timestamps=True, vad_filter=True,
                                      condition_on_previous_text=False, hallucination_silence_threshold=2.0,
@@ -1543,6 +1556,7 @@ def transcribir(video, modelo, dispositivo):
                     out.append({"p": texto, "i": round(p.start, 3), "f": round(p.end, 3)})
         return out
 
+    modelo_listo = [None]
     try:
         palabras = correr(dispositivo)
     except RuntimeError as e:
@@ -1554,10 +1568,122 @@ def transcribir(video, modelo, dispositivo):
         log(f"La GPU falló ({e}). Sigo en CPU (más lento). Para usar la GPU: "
             "pip install nvidia-cublas-cu12 nvidia-cudnn-cu12==9.*")
         palabras = correr("cpu")
+    try:   # segunda pasada: lo que se escucha pero no quedó transcrito, y las frases inventadas por whisper
+        palabras = repasar_huecos(audio, palabras, modelo_listo[0], prompt)
+    except Exception as e:
+        log(f"No pude repasar los huecos de la transcripción ({e})")
     palabras = limpiar_transcripcion(palabras)
     aplicar_diccionario(palabras, _APRENDIDO.get("diccionario"))
     log(f"{len(palabras)} palabras transcritas")
     return palabras
+
+
+# Frases que whisper inventa cuando hay música o un silencio (sobre todo al inicio): no las dijo nadie
+ALUCINACIONES = ("suscríbete", "suscribete", "suscribirte", "gracias por ver", "subtítulos realizados por",
+                 "subtitulos realizados por", "subtitulado por", "amara.org", "dale like", "activa la campanita",
+                 "nos vemos en el próximo video", "gracias por su atención")
+
+
+def es_alucinacion(texto):
+    t = texto.lower()
+    return any(a in t for a in ALUCINACIONES)
+
+
+def tramos_con_voz(audio, sr=16000, ventana=0.05):
+    """Por cada ventana de 50 ms, ¿hay sonido fuerte? (umbral relativo al volumen del video)."""
+    n = int(sr * ventana)
+    k = len(audio) // n
+    if k < 4:
+        return np.zeros(0, bool), ventana
+    rms = np.sqrt(np.mean(audio[:k * n].reshape(k, n) ** 2, axis=1) + 1e-12)
+    db = 20 * np.log10(rms)
+    umbral = max(-48.0, float(np.percentile(db, 95)) - 26.0)
+    return db > umbral, ventana
+
+
+def quitar_inventadas(ws):
+    """Quita las frases cortas inventadas («¡Suscríbete al canal!»); en una frase larga, solo la palabra."""
+    out, k = [], 0
+    while k < len(ws):
+        m = k
+        while m + 1 < len(ws) and ws[m + 1]["i"] - ws[m]["f"] < 0.6:
+            m += 1
+        grupo = ws[k:m + 1]
+        if es_alucinacion(" ".join(w["p"] for w in grupo)):
+            if len(grupo) > 6:
+                out += [w for w in grupo if not es_alucinacion(w["p"])]
+        else:
+            out += grupo
+        k = m + 1
+    return out
+
+
+def repasar_huecos(audio, palabras, wm, prompt, sr=16000):
+    """Segunda pasada de whisper (sin filtro de voz) en: 1) huecos de más de 1.5 s sin palabras donde sí hay sonido;
+    2) frases típicas inventadas («¡Suscríbete al canal!»...). Lo nuevo reemplaza lo inventado y llena los huecos.
+    Así no se salta partes que se escuchan bien (pasaba con música de fondo o al inicio del clip)."""
+    if wm is None or not len(audio):
+        return palabras
+    total = len(audio) / sr
+    ws = sorted(palabras, key=lambda p: p["i"])
+    voz, paso = tramos_con_voz(audio, sr)
+    if not len(voz):
+        return ws
+
+    def con_voz(a, b):
+        i0, i1 = int(a / paso), max(int(a / paso) + 1, int(b / paso))
+        return float(voz[i0:i1].mean()) if i1 > i0 else 0.0
+
+    zonas = []   # (a, b, inventada)
+    k = 0
+    while k < len(ws):   # frases (palabras seguidas, pausas < 0.6 s) inventadas
+        m = k
+        while m + 1 < len(ws) and ws[m + 1]["i"] - ws[m]["f"] < 0.6:
+            m += 1
+        if es_alucinacion(" ".join(w["p"] for w in ws[k:m + 1])):
+            zonas.append((max(0.0, ws[k]["i"] - 1.0), min(total, ws[m]["f"] + 1.0), True))
+        k = m + 1
+    bordes = [0.0] + [x for w in ws for x in (w["i"], w["f"])] + [total]
+    for a, b in zip(bordes[0::2], bordes[1::2]):   # huecos sin palabras donde sí hay sonido
+        if b - a >= 1.5 and con_voz(a, b) >= 0.3:
+            zonas.append((max(0.0, a - 0.15), min(total, b + 0.15), False))
+    if not zonas:
+        return ws
+    zonas.sort()
+    juntas = []
+    for a, b, inv in zonas:
+        if juntas and a <= juntas[-1][1]:
+            juntas[-1] = (juntas[-1][0], max(juntas[-1][1], b), juntas[-1][2] or inv)
+        else:
+            juntas.append((a, b, inv))
+    pedazos = []   # whisper oye 30 s de una vez: las zonas largas van en pedazos
+    for a, b, inv in juntas:
+        while b - a > 28:
+            pedazos.append((a, a + 28, inv))
+            a += 27
+        pedazos.append((a, b, inv))
+    log(f"Repasando {len(pedazos)} tramo(s) con voz sin transcribir o con frases inventadas")
+    agregadas = 0
+    for a, b, inv in pedazos:
+        seg, _ = wm.transcribe(audio[int(a * sr):int(b * sr)], language="es", word_timestamps=True, vad_filter=False,
+                               condition_on_previous_text=False, initial_prompt=prompt)
+        nuevas = []
+        for s_ in seg:
+            for p in s_.words or []:
+                t = p.word.strip()
+                if t:
+                    nuevas.append({"p": t, "i": round(a + p.start, 3), "f": round(a + p.end, 3)})
+        nuevas = quitar_inventadas([w for w in nuevas if w["f"] > a + 0.05 and w["i"] < b - 0.05])
+        if inv:   # lo de la zona era inventado: se queda solo lo que se oyó ahora
+            ws = [w for w in ws if not (a <= w["i"] < b)]
+        if not nuevas:
+            continue
+        ini, fin = min(w["i"] for w in nuevas), max(w["f"] for w in nuevas)
+        ws = [w for w in ws if w["f"] <= ini or w["i"] >= fin] + nuevas   # en la zona se queda lo nuevo
+        ws.sort(key=lambda p: p["i"])
+        agregadas += len(nuevas)
+    log(f"Segunda pasada: {agregadas} palabra(s) nuevas")
+    return ws
 
 
 def limpiar_transcripcion(palabras):
@@ -2173,7 +2299,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-03j v1.3.4"
+VERSION = "2026-11-04c v1.4.2"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).

@@ -42,8 +42,9 @@ def fin_oracion(palabra):
 # ----------------------------------------------------------------------------
 # Rostro
 # ----------------------------------------------------------------------------
-def pista_rostro(video, info, cada=0.5):
-    """Posición de la cara cada 'cada' segundos, muy suavizada (el encuadre casi no se mueve)."""
+def pista_rostro(video, info, cada=0.5, centro=False):
+    """Posición de la cara cada 'cada' segundos, muy suavizada (el encuadre casi no se mueve).
+    centro=True: prefiere la cara más al centro («Tiktoks Gaby»: la conductora va al centro)."""
     det = ed.DetectorCara()
     cap = cv2.VideoCapture(str(video))
     fps = info["fps"]
@@ -56,7 +57,7 @@ def pista_rostro(video, info, cada=0.5):
             if not ok:
                 break
             esc = 960 / fr.shape[1]
-            c = det.mayor(cv2.resize(fr, None, fx=esc, fy=esc))
+            c = det.mayor(cv2.resize(fr, None, fx=esc, fy=esc), centro)
             if c and c[3] > 0.08 * fr.shape[0] * esc:
                 x, y, w, h = [v / esc for v in c]
                 puntos.append([idx / fps, x + w / 2, y + h / 2, w, h])
@@ -622,6 +623,122 @@ def es_yair(pl):
     return (pl.get("titulo") or {}).get("tipo") == "dos_cuadros"
 
 
+# ----------------------------------------------------------------------------
+# «Tiktoks Gaby»: video de fondo en movimiento, la persona en una franja al centro (encuadre fijo, sin cambios de
+# cámara), título amarillo arriba (Raleway Black Italic) que entra renglón por renglón y subtítulos palabra por
+# palabra con la palabra activa en un cuadro rosa. Sin imágenes.
+# ----------------------------------------------------------------------------
+def es_gaby(pl):
+    return (pl.get("titulo") or {}).get("tipo") == "gaby"
+
+
+def franja_gaby(pl):
+    """Dónde va la persona (x, y, ancho, alto) en el video vertical."""
+    return [int(v) for v in ((pl.get("layouts") or {}).get("persona") or {}).get("persona", {}).get("area", [0, 371, 1080, 1156])]
+
+
+def lineas_titulo_gaby(cfg, titulo, W, H):
+    """Cada renglón del título como superposición (bgr, alpha, caja) ya en su lugar, para animarlos por separado."""
+    if not titulo:
+        return []
+    texto = titulo.upper() if cfg.get("mayusculas", True) else titulo
+    fuente = str(ed.ruta(cfg["fuente"]))
+    ancho = cfg.get("ancho", 1010)
+    contorno = cfg.get("contorno", 7)
+    lineas = None
+    # primero en 2 renglones achicando la letra si hace falta; solo si no cabe, en 3
+    for max_l in sorted({min(2, cfg.get("max_lineas", 3)), cfg.get("max_lineas", 3)}):
+        tam = cfg.get("tam", 124)
+        while tam >= cfg.get("tam_min", 64):
+            f = ImageFont.truetype(fuente, tam)
+            ls, _ = repartir_lineas(texto.split(), f, ancho - 2 * contorno, max_l)
+            if ls:
+                lineas = ls
+                break
+            tam -= 4
+        if lineas:
+            break
+    if not lineas:
+        tam, lineas = cfg.get("tam_min", 64), [texto]
+    f = ImageFont.truetype(fuente, tam)
+    paso = tam * cfg.get("interlineado", 1.04)
+    cap = f.getbbox("H")[3] - f.getbbox("H")[1]
+    alto_txt = paso * (len(lineas) - 1) + cap
+    centro = max(cfg.get("centro_y", 178), alto_txt / 2 + cfg.get("margen_arriba", 40))
+    base0 = centro - alto_txt / 2 + cap
+    out = []
+    for k, ln in enumerate(lineas):
+        capa = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(capa)
+        d.text((W / 2, base0 + k * paso), ln, font=f, anchor="ms", fill=ed.hex_rgb(cfg.get("color", "#FAE24A")),
+               stroke_width=contorno, stroke_fill=ed.hex_rgb(cfg.get("color_contorno", "#000000")))
+        sup = ed.a_superposicion(capa)
+        if sup is not None:
+            out.append(sup)
+    return out
+
+
+def titulo_gaby_en(lineas, te, cfg):
+    """Los renglones del título en el segundo te del video: cada uno entra de borroso y transparente a nítido."""
+    an = cfg.get("animacion") or {}
+    dur, desfase, blur = an.get("por_linea_seg", 0.45), an.get("desfase_seg", 0.3), an.get("desenfoque", 18)
+    out = []
+    for k, (bgr, alpha, caja) in enumerate(lineas):
+        p = (te - k * desfase) / max(0.01, dur)
+        if p <= 0:
+            continue
+        if p >= 1:
+            out.append((bgr, alpha, caja))
+            continue
+        e = 1 - (1 - p) ** 2
+        r = int(round(blur * (1 - e)))
+        if r >= 1:   # desenfoque que se va quitando (con margen para que no se corte)
+            m = r * 2
+            b2 = cv2.copyMakeBorder(bgr, m, m, m, m, cv2.BORDER_CONSTANT, value=0)
+            a2 = cv2.copyMakeBorder(alpha[:, :, 0], m, m, m, m, cv2.BORDER_CONSTANT, value=0)
+            k_ = 2 * r + 1
+            pre = cv2.GaussianBlur(b2 * a2[:, :, None], (k_, k_), 0)
+            a2 = cv2.GaussianBlur(a2, (k_, k_), 0)
+            b2 = pre / np.maximum(a2[:, :, None], 1e-4)
+            x0, y0, x1, y1 = caja
+            out.append((b2.astype(np.float32), (a2 * e)[:, :, None].astype(np.float32), (x0 - m, y0 - m, x1 + m, y1 + m)))
+        else:
+            out.append((bgr, alpha * e, caja))
+    return out
+
+
+class FondoVideo:
+    """Video de fondo en movimiento (se repite si el clip es más largo), del tamaño de la salida."""
+
+    def __init__(self, ruta_v, W, H):
+        self.cap = cv2.VideoCapture(str(ruta_v))
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30
+        self.n = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        self.W, self.H = W, H
+        self.k = -1
+        self.img = np.zeros((H, W, 3), np.uint8)
+
+    def cuadro(self, te):
+        if self.n <= 0:
+            return self.img.copy()
+        obj = int(te * self.fps) % self.n
+        if obj < self.k or obj > self.k + 90:   # vuelta al inicio o salto grande
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, obj)
+            self.k = obj - 1
+        ok = True
+        while self.k < obj and ok:
+            ok = self.cap.grab()
+            self.k += 1
+        if ok:
+            ok, fr = self.cap.retrieve()
+            if ok:
+                self.img = cv2.resize(fr, (self.W, self.H), interpolation=cv2.INTER_LINEAR)
+        return self.img.copy()
+
+    def cerrar(self):
+        self.cap.release()
+
+
 def partes_titulo(titulo):
     """«TIEMBLA SALINAS – VAN CONTRA GRANJAS DE BOTS» -> ("TIEMBLA SALINAS", "VAN CONTRA GRANJAS DE BOTS").
     Sirve el guion largo (–, —) o el corto (-) con espacios. Sin guion, todo va en el cuadro de arriba."""
@@ -773,6 +890,8 @@ def capa_titulo(cfg, titulo, W, H):
         return None
     if cfg.get("tipo") == "dos_cuadros":   # «Tiktoks Yair»: los dos cuadros juntos (ya en su lugar)
         return _unir_capas(capa_titulo_yair(cfg, titulo, W, H), W, H)
+    if cfg.get("tipo") == "gaby":   # «Tiktoks Gaby»: todos los renglones, ya completos
+        return _unir_capas(lineas_titulo_gaby(cfg, titulo, W, H), W, H)
     texto = titulo.upper() if cfg.get("mayusculas", True) else titulo
     fuente = str(ed.ruta(cfg["fuente"]))
     x0, x1 = cfg["caja_x"]
@@ -963,7 +1082,7 @@ def analizar(args, video, pl, pl_path, trabajo):
             [[0.0, info["ancho"] / 2, info["alto"] * 0.35, info["alto"] * 0.25, info["alto"] * 0.33]]
     else:
         ed.Progreso.paso(0.0, "Buscando la cara")
-        pista = pista_rostro(video, info)
+        pista = pista_rostro(video, info, centro=bool(pl.get("encuadre", {}).get("cara_al_centro")))
 
     if args.transcripcion:
         palabras = ed.limpiar_transcripcion(ed.cargar_json(args.transcripcion))
@@ -989,13 +1108,20 @@ def analizar(args, video, pl, pl_path, trabajo):
     cfg_c = pl.get("cortes", {})
     dram = elegir_dramaticas(palabras, ia, contexto, info["duracion"], cfg_c) if palabras else []
     cortes = [] if args.sin_cortes else calcular_cortes(video, info, palabras, cfg_c, dram)
-    encuadres = plan_encuadres(cortes, info["duracion"], pl.get("encuadre", {}), palabras,
-                               silencios_cortos(video, pl["encuadre"]) if pl.get("encuadre", {}).get("max_sin_cambio_seg")
-                               else None)
-    t_titulo = fin_titulo_voz(palabras, args.titulo, cortes, pl["titulo"]) or fin_titulo(cortes, info["duracion"], pl["titulo"])
+    gaby = es_gaby(pl)
+    if gaby:   # «Tiktoks Gaby»: encuadre fijo (sin cambios de cámara) y el título se queda todo el video
+        encuadres = [{"inicio": 0.0, "fin": round(info["duracion"] + 1, 4), "zoom": pl.get("encuadre", {}).get("inicial", "lejos")}]
+        t_titulo = round(info["duracion"] + 1, 4)
+    else:
+        encuadres = plan_encuadres(cortes, info["duracion"], pl.get("encuadre", {}), palabras,
+                                   silencios_cortos(video, pl["encuadre"]) if pl.get("encuadre", {}).get("max_sin_cambio_seg")
+                                   else None)
+        t_titulo = fin_titulo_voz(palabras, args.titulo, cortes, pl["titulo"]) or fin_titulo(cortes, info["duracion"], pl["titulo"])
 
-    cfg_m = pl["momentos"]
-    if args.imagenes or args.sin_web or not ed.IMAGENES_AUTOMATICAS:
+    cfg_m = pl.get("momentos") or {}
+    if gaby:
+        momentos = []   # «Tiktoks Gaby» no lleva imágenes
+    elif args.imagenes or args.sin_web or not ed.IMAGENES_AUTOMATICAS:
         momentos = []   # sin imágenes automáticas: se agregan a mano en la pestaña Edición
         if not ed.IMAGENES_AUTOMATICAS:
             ed.log("Sin imágenes automáticas: agrégalas a mano en la pestaña Edición si hacen falta")
@@ -1057,7 +1183,8 @@ def escena_en(plan, pl, t):
         if e["inicio"] - 1e-6 <= t < e["fin"]:
             z = e["zoom"]
             break
-    if t < plan.get("titulo_fin", 3.0) and plan.get("titulo"):
+    gaby = es_gaby(pl)
+    if t < plan.get("titulo_fin", 3.0) and plan.get("titulo") and not gaby:
         z = "titulo"
     pista = plan.get("cara") or [[0.0, info["ancho"] / 2, info["alto"] * 0.35, info["alto"] * 0.25, info["alto"] * 0.33]]
     pista = plan.get("_pista_fija") or pista_fija_moti(plan, pl, pista)
@@ -1066,8 +1193,9 @@ def escena_en(plan, pl, t):
         auto = recorte_entrada(cara_en(pista, 0.0), info["ancho"], info["alto"], W, H, pl)
         return {"tipo": "dividida", "region": [0.0, 0.0, float(info["ancho"]), float(info["alto"])],
                 "aspect": W / alto_p, "auto": [float(v) for v in auto], "mom": -1, "pv": -1}
-    auto = recorte(cara_en(pista, t), z, info["ancho"], info["alto"], W, H, pl.get("encuadre", {}))
-    return {"tipo": "persona", "region": [0.0, 0.0, float(info["ancho"]), float(info["alto"])], "aspect": W / H,
+    Hp = franja_gaby(pl)[3] if gaby else H   # «Tiktoks Gaby»: la persona va en la franja del centro
+    auto = recorte(cara_en(pista, t), z, info["ancho"], info["alto"], W, Hp, pl.get("encuadre", {}))
+    return {"tipo": "persona", "region": [0.0, 0.0, float(info["ancho"]), float(info["alto"])], "aspect": W / Hp,
             "auto": [float(v) for v in auto], "mom": -1, "pv": -1}
 
 
@@ -1107,9 +1235,14 @@ def render(args, trabajo, plan, pl):
     t_titulo = plan.get("titulo_fin", 3.0)
     yair = es_yair(pl)
     tit_yair = capa_titulo_yair(pl["titulo"], plan.get("titulo", ""), W, H) if yair else (None, None)
+    gaby = es_gaby(pl)
+    if gaby:
+        fx_g, fy_g, fw_g, fh_g = franja_gaby(pl)
+        lineas_g = lineas_titulo_gaby(pl["titulo"], plan.get("titulo", ""), W, H)
+        fondo_g = FondoVideo(ed.ruta((pl.get("fondo") or {}).get("video", "assets/fondo_gaby.mp4")), W, H)
     palabras = ed.cargar_json(trabajo / "transcripcion.json") if (trabajo / "transcripcion.json").exists() else []
     grupos = ed.sin_cortados(ed.grupos_subtitulos(trabajo, palabras, pl["subtitulos"]), cortes)
-    if titulo is not None:
+    if titulo is not None and not gaby:   # en «Tiktoks Gaby» el título y los subtítulos van juntos
         grupos = partir_en_titulo(grupos, t_titulo)
     por_frase = pl["subtitulos"].get("modo") == "frases"
     if por_frase:
@@ -1145,15 +1278,17 @@ def render(args, trabajo, plan, pl):
             if e["inicio"] - 1e-6 <= t < e["fin"]:
                 z = e["zoom"]
                 break
-        if t < t_titulo and titulo is not None:
+        if t < t_titulo and titulo is not None and not gaby:
             z = "titulo"
-        x0, y0, cw, ch = recorte(cara_en(pista, t), z, frame.shape[1], frame.shape[0], W, H, cfg_e)
+        Hp = fh_g if gaby else H   # «Tiktoks Gaby»: solo la franja del centro
+        Wp = fw_g if gaby else W
+        x0, y0, cw, ch = recorte(cara_en(pista, t), z, frame.shape[1], frame.shape[0], Wp, Hp, cfg_e)
         if manual:
-            x0, y0, cw, ch = ed.ventana_manual(manual, t, [0, 0, frame.shape[1], frame.shape[0]], W / H,
+            x0, y0, cw, ch = ed.ventana_manual(manual, t, [0, 0, frame.shape[1], frame.shape[0]], Wp / Hp,
                                                (x0, y0, cw, ch))
-        s = W / cw
+        s = Wp / cw
         M = np.float32([[s, 0, -x0 * s], [0, s, -y0 * s]])
-        img = cv2.warpAffine(frame, M, (W, H), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+        img = cv2.warpAffine(frame, M, (Wp, Hp), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
         return ed.enfocar(img, cfg_e.get("nitidez", 0.3))
 
     cfg_ent = pl.get("entrada") or {}
@@ -1220,6 +1355,30 @@ def render(args, trabajo, plan, pl):
         n_out += 1
         if paso > 1 and (n_out - 1) % paso:
             continue   # vista previa ligera: solo se arma uno de cada «paso» cuadros
+
+        if gaby:
+            # fondo en movimiento, la persona en la franja, stickers, título que entra renglón por renglón y subtítulos
+            lienzo = fondo_g.cuadro(te)
+            lienzo[fy_g:fy_g + fh_g, fx_g:fx_g + fw_g] = persona(frame, t)
+            limpio = None
+            if stickers is not None and not previa and stickers.activos(t):
+                limpio = lienzo.copy()
+                stickers.pegar(lienzo, t)
+            for sup in titulo_gaby_en(lineas_g, te, pl["titulo"]):
+                ed.pegar(lienzo, sup)
+                if limpio is not None:
+                    ed.pegar(limpio, sup)
+            vista.escribir(limpio if limpio is not None else lienzo, te, "persona")
+            act = subs.activo(t) if not previa else None
+            if act is not None:
+                sx, sy, sw, sh = area_subs
+                sy += ed.desplazamiento_subs(subs.grupos[act[0]], H)
+                ed.pegar(lienzo, subs.imagen(act[0], act[1], sw, sh), sx, sy)
+            try:
+                ff.stdin.write((cv2.resize(lienzo, tam, interpolation=cv2.INTER_AREA) if previa else lienzo).tobytes())
+            except (BrokenPipeError, OSError):
+                break
+            continue
 
         mom = None
         for m in momentos:

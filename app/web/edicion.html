@@ -719,9 +719,33 @@ function dibujarAbajo(e, t, s) {
     else dibujarPantallaAbajo(e.ex[1], t, ix, iy, iw, ih);
   }
 }
+// ---------- video de fondo del estilo («Tiktoks Gaby»), al ritmo del video editado ----------
+let fondoVid = null;
+function dibujarFondoVideo(cx, t, W, H) {
+  if (!E || !E.armado || !E.armado.fondo) return;
+  if (!fondoVid) {
+    fondoVid = document.createElement("video");
+    fondoVid.src = `/enc/fondo?t=${encodeURIComponent(T)}`;
+    fondoVid.muted = true; fondoVid.loop = true; fondoVid.playsInline = true; fondoVid.preload = "auto";
+  }
+  const d = fondoVid.duration;
+  if (d > 0) {
+    const obj = aEditado(t) % d;
+    if (video.paused) {
+      if (!fondoVid.paused) fondoVid.pause();
+      if (Math.abs(fondoVid.currentTime - obj) > 0.05 && !fondoVid.seeking) fondoVid.currentTime = obj;
+    } else {
+      if (fondoVid.paused) fondoVid.play().catch(() => {});
+      if (Math.abs(fondoVid.currentTime - obj) > 0.4 && !fondoVid.seeking) fondoVid.currentTime = obj;
+    }
+  }
+  if (fondoVid.readyState >= 2) cx.drawImage(fondoVid, 0, 0, W, H);
+  else { cx.fillStyle = "#0B2533"; cx.fillRect(0, 0, W, H); }
+}
 function componer(t, e, v) {
   const W = previa.width, H = previa.height, s = W / E.salida[0];
   pctx.fillStyle = "#000"; pctx.fillRect(0, 0, W, H);
+  dibujarFondoVideo(pctx, t, W, H);   // «Tiktoks Gaby»: video de fondo detrás de la franja
   const area = (a) => (a || [0, 0, E.salida[0], E.salida[1]]).map(x => x * s);
   if (e.tipo === "persona" || e.tipo === "video") {
     const [ax, ay, aw, ah] = e.tipo === "video" ? area(null) : area(E.areas.persona);
