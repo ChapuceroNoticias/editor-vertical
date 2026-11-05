@@ -1578,38 +1578,56 @@ def ajustar_corte(t, inicio0, fin0, inicio=None, fin=None, recuperar=False):
 _ONDA_LOCK = threading.Lock()
 
 
-def onda_audio(t):
-    """Onda del audio del video (picos cada 10 ms, 0-255) para la línea de tiempo. Se calcula una vez por video."""
-    plan, _ = cargar(t)
-    v = Path(plan["video"])
+def onda_de(video, cache, pps=None):
+    """Onda del audio de un video: un pico (0-255) cada 1/pps s, en base64. Se guarda en 'cache' y se reusa
+    mientras el video no cambie. Videos largos: menos picos por segundo (sigue viéndose bien y pesa poco)."""
+    import base64
+    v = Path(video)
     st = v.stat()
     firma = f"{v.name}-{st.st_size}-{int(st.st_mtime)}"
-    cache = Path(t) / "onda.json"
     try:
         d = ed.cargar_json(cache)
-        if d.get("firma") == firma:
+        if d.get("firma") == firma and d.get("b64") is not None:
             return d
     except Exception:
         pass
     with _ONDA_LOCK:
-        sr, pps = 8000, 100
-        r = subprocess.run(["ffmpeg", "-v", "error", "-i", str(v), "-map", "0:a:0", "-ac", "1", "-ar", str(sr),
-                            "-f", "s16le", "-"], capture_output=True)
-        a = np.frombuffer(r.stdout, np.int16).astype(np.float32) if r.returncode == 0 else np.zeros(0, np.float32)
+        if pps is None:
+            pps = 100 if ed.duracion_video(v) <= 900 else 25
+        sr = 8000
         n = sr // pps
-        k = len(a) // n
-        if k:
-            pk = np.abs(a[:k * n].reshape(k, n)).max(axis=1)
+        pr = subprocess.Popen(["ffmpeg", "-v", "error", "-i", str(v), "-map", "0:a:0?", "-ac", "1", "-ar", str(sr),
+                               "-f", "s16le", "-"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        partes, resto = [], np.zeros(0, np.int16)
+        while True:   # por pedazos: un video de 2 horas no se carga entero en memoria
+            buf = pr.stdout.read(n * 2 * 4000)
+            if not buf:
+                break
+            a = np.concatenate([resto, np.frombuffer(buf[:len(buf) // 2 * 2], np.int16)])
+            k = len(a) // n
+            if k:
+                partes.append(np.abs(a[:k * n].astype(np.int32).reshape(k, n)).max(axis=1))
+            resto = a[k * n:]
+        pr.wait()
+        pk = np.concatenate(partes).astype(np.float32) if partes else np.zeros(0, np.float32)
+        if len(pk):
             ref = max(1.0, float(np.percentile(pk, 99.5)))
-            picos = np.clip(np.sqrt(pk / ref) * 255, 0, 255).astype(int).tolist()   # raíz: se ven también las partes bajas
+            picos = np.clip(np.sqrt(pk / ref) * 255, 0, 255).astype(np.uint8)   # raíz: se ven también las partes bajas
         else:
-            picos = []
-        d = {"firma": firma, "pps": pps, "picos": picos}
+            picos = np.zeros(0, np.uint8)
+        d = {"firma": firma, "pps": pps, "b64": base64.b64encode(picos.tobytes()).decode()}
         try:
+            Path(cache).parent.mkdir(parents=True, exist_ok=True)
             ed.guardar_json(cache, d)
         except OSError:
             pass
         return d
+
+
+def onda_audio(t):
+    """Onda del video del trabajo (pestaña Edición)."""
+    plan, _ = cargar(t)
+    return onda_de(plan["video"], Path(t) / "onda.json", 100)
 
 
 def restaurar_tramo(t, i):
@@ -1648,9 +1666,20 @@ def leer_frag(d):
 
 
 def _escribir_atomico(p, datos):
-    tmp = Path(p).with_suffix(".tmp")
+    """Escribe en un archivo temporal y lo pone en su lugar. Crea la carpeta si no existe (la primera vez que se
+    marca un fragmento de un video) y reintenta si Windows tiene el archivo ocupado un instante."""
+    p = Path(p)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".tmp")
     ed.guardar_json(tmp, datos)
-    os.replace(tmp, p)
+    for intento in range(8):
+        try:
+            os.replace(tmp, p)
+            return
+        except PermissionError:
+            if intento == 7:
+                raise
+            time.sleep(0.15)
 
 
 def escribir_frag(d, datos):
@@ -2474,6 +2503,11 @@ def crear_app():
         if not vid:
             raise HTTPException(404, "No encuentro el video")
         return FileResponse(vid, media_type="video/mp4")
+
+    @app.get("/frag/onda")
+    def frag_onda(v: str):
+        video, d = carpeta_frag(v)
+        return JSONResponse(onda_de(video, d / "onda.json"), headers={"Cache-Control": "no-store"})
 
     @app.post("/frag/guardar")
     def frag_guardar(d: dict = Body(...)):

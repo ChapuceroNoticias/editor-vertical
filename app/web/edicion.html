@@ -1705,7 +1705,7 @@ async function cargarOnda() {
   ondaFirma = clave;
   try {
     const d = await (await fetch(`/edi/onda?t=${encodeURIComponent(T)}`)).json();
-    ONDA = { pps: d.pps, picos: Uint8Array.from(d.picos || []) };
+    ONDA = { pps: d.pps, picos: Uint8Array.from(atob(d.b64 || ""), c => c.charCodeAt(0)) };
     ondaCache = null;
     pintarCorteSel();
   } catch (err) { ondaFirma = null; }

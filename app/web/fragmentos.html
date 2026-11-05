@@ -39,7 +39,7 @@
   /* línea de tiempo */
   .tl-cab { display: flex; gap: 10px; align-items: center; padding: 0 12px 6px; font-size: 13px; color: var(--suave); flex-wrap: wrap; }
   .tl-cab input[type=range] { width: 160px; accent-color: var(--acento); }
-  #tl { margin: 0 12px; height: 168px; overflow-x: auto; overflow-y: hidden; background: #101015; border: 1px solid var(--borde);
+  #tl { margin: 0 12px; height: 214px; overflow-x: auto; overflow-y: hidden; background: #101015; border: 1px solid var(--borde);
     border-radius: 10px; position: relative; user-select: none; }
   #tl::-webkit-scrollbar { height: 12px; } #tl::-webkit-scrollbar-thumb { background: #33333d; border-radius: 6px; }
   #pista { position: relative; height: 100%; min-width: 100%; cursor: crosshair; }
@@ -49,6 +49,8 @@
   .tick.menor { height: 6px; }
   .tick span { position: absolute; bottom: 12px; left: 3px; font-size: 10.5px; color: #b5b5c0; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .banda { position: absolute; top: 26px; bottom: 0; background: rgba(255,255,255,.018); }
+  #onda_fr { position: absolute; top: 152px; height: 56px; pointer-events: none; z-index: 1; }
+  .onda_rot { position: absolute; top: 154px; font-size: 10.5px; color: rgba(255,255,255,.5); pointer-events: none; z-index: 2; }
   .pausa { position: absolute; bottom: 2px; width: 2px; height: 8px; background: #4b5563; border-radius: 1px; }
   .bloque { position: absolute; border-radius: 7px; background: rgba(217,30,43,.42); border: 2px solid #e5484d;
     overflow: hidden; cursor: grab; font-size: 12px; padding: 4px 10px; white-space: nowrap; box-shadow: 0 1px 0 rgba(0,0,0,.4); }
@@ -149,7 +151,7 @@
   <span class="sp"></span>
   <span id="resumen"></span>
 </div>
-<div id="tl"><div id="pista"><div id="regla"></div><div id="tramo_a"></div><div id="entrada"><b>A</b></div><div id="raton"><b></b></div><div id="cabezal"><b></b></div></div></div>
+<div id="tl"><div id="pista"><canvas id="onda_fr"></canvas><span class="onda_rot" id="onda_rot">Audio</span><div id="regla"></div><div id="tramo_a"></div><div id="entrada"><b>A</b></div><div id="raton"><b></b></div><div id="cabezal"><b></b></div></div></div>
 
 <table>
   <thead><tr><th><input type="checkbox" id="todos" title="Marcar todos para exportar"></th><th>#</th><th>Tramo</th><th>Título</th><th>Estilo</th><th>Estado</th><th></th></tr></thead>
@@ -207,6 +209,44 @@ async function abrir() {
   sel = new Set(); entrada = null; $("zoom").value = 0;
   pintarTodo();
   pintarSugerir(D.sugerir);
+  cargarOnda(V);
+}
+
+// ---------------- onda del sonido (carril de abajo) ----------------
+let ONDA = null;
+async function cargarOnda(nombre) {
+  ONDA = null; pintarOnda();
+  $("onda_rot").textContent = "Audio · calculando la onda…";
+  try {
+    const d = await (await fetch("/frag/onda?v=" + encodeURIComponent(nombre))).json();
+    if (nombre !== V) return;   // mientras tanto se eligió otro video
+    ONDA = { pps: d.pps, picos: Uint8Array.from(atob(d.b64 || ""), c => c.charCodeAt(0)) };
+    $("onda_rot").textContent = "Audio";
+  } catch (e) { $("onda_rot").textContent = "Audio · no se pudo leer la onda"; }
+  pintarOnda();
+}
+function pintarOnda() {   // solo lo que se ve (la pista puede medir millones de px con el zoom)
+  const tl = $("tl"), cv = $("onda_fr"), dpr = devicePixelRatio || 1;
+  const W = tl.clientWidth, H = 56;
+  cv.style.left = tl.scrollLeft + "px"; cv.style.width = W + "px";
+  $("onda_rot").style.left = (tl.scrollLeft + 6) + "px";
+  if (cv.width !== Math.round(W * dpr)) cv.width = Math.round(W * dpr);
+  cv.height = Math.round(H * dpr);
+  const g = cv.getContext("2d");
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.fillStyle = "rgba(255,255,255,.025)"; g.fillRect(0, 0, cv.width, cv.height);
+  if (!ONDA || !D) return;
+  const k = pxs(), n = ONDA.picos.length, mitad = cv.height / 2, paso = Math.max(1, Math.round(dpr));
+  g.fillStyle = "rgba(160, 178, 205, .6)";
+  for (let x = 0; x < cv.width; x += paso) {
+    const t0 = (tl.scrollLeft + x / dpr) / k, t1 = t0 + paso / dpr / k;
+    const i0 = Math.max(0, Math.floor(t0 * ONDA.pps)), i1 = Math.min(n, Math.max(i0 + 1, Math.ceil(t1 * ONDA.pps)));
+    if (i0 >= n) break;
+    let m = 0;
+    for (let i = i0; i < i1; i++) if (ONDA.picos[i] > m) m = ONDA.picos[i];
+    const a = Math.max(1, m / 255 * (mitad - 3 * dpr));
+    g.fillRect(x, mitad - a, paso, 2 * a);
+  }
 }
 
 // ---------------- guardado ----------------
@@ -256,6 +296,7 @@ function zoomA(valor, tAncla, xAncla) {   // cambia el zoom dejando tAncla en la
   $("zoom").value = Math.max(0, Math.min(100, valor));
   pintarRegla(); pintarBloques(); cabezal();
   tl.scrollLeft = tAncla * pxs() - xAncla;
+  pintarOnda();
 }
 function pintarRegla() {
   const p = $("pista"), k = pxs(), dur = D.duracion;
@@ -426,6 +467,8 @@ function bucleCabezal() { if (!$("vid").paused) cabezal(); requestAnimationFrame
 requestAnimationFrame(bucleCabezal);
 $("vid").addEventListener("timeupdate", cabezal);
 $("vid").addEventListener("seeked", cabezal);
+$("tl").addEventListener("scroll", () => pintarOnda());
+window.addEventListener("resize", () => pintarOnda());
 $("zoom").addEventListener("input", () => { if (D) zoomA(+$("zoom").value); });
 $("z_mas").onclick = () => D && zoomA(+$("zoom").value + 12);
 $("z_menos").onclick = () => D && zoomA(+$("zoom").value - 12);
@@ -484,7 +527,7 @@ function borrar(ids) {
   F = F.filter(x => !ids.includes(x.id)); ids.forEach(i => sel.delete(i));
   pintarTodo(); guardar();
 }
-function pintarTodo() { if (!D) return; pintarRegla(); pintarBloques(); pintarLista(); cabezal(); }
+function pintarTodo() { if (!D) return; pintarRegla(); pintarBloques(); pintarLista(); cabezal(); pintarOnda(); }
 
 function agregar(a, b) {
   a = iman(a); b = iman(b);

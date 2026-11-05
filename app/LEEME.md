@@ -216,6 +216,7 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
 Para sacar varios clips de un video de 1–2 horas:
 
 1. Elige el video (debe estar en VideosEdit; MP4 o WebM para verlo en el navegador). Se ve en grande arriba.
+   Debajo de la línea de tiempo está la **onda de sonido** (carril «Audio»); se calcula una vez por video y se guarda.
 2. Marca fragmentos mientras lo ves: **A** = entrada, **S** = salida (se crea el fragmento y escribes su título).
    **Espacio** reproduce o pausa, **←/→** 5 s (**Shift** 30 s), **Supr** borra los seleccionados, **Esc** cancela.
 3. **Línea de tiempo:** regla con minutos y segundos, el cursor rojo con su tiempo, la marca **A** con el tramo que
