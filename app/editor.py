@@ -2309,7 +2309,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-05e v1.5.6"
+VERSION = "2026-11-05f v1.5.7"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3512,9 +3512,46 @@ def mezcla_de(plan):
     return {"musica": v("musica"), "voz": v("voz")}
 
 
-def filtro_audio(pl, info, hay_musica, cortes, mezcla=None):
+_GANANCIA_VOZ = {}
+
+
+def ganancia_voz(video, cortes, objetivo_db=-19.0, max_db=20.0):
+    """Ganancia FIJA (dB) para que la voz quede al nivel de las demás plantillas sin el nivelador automático.
+    Se mide el promedio de lo que se oye (sin silencios ni tramos quitados) y se sube o baja todo por igual."""
+    try:
+        st = os.stat(video)
+        clave = (str(video), st.st_size, int(st.st_mtime), tuple((round(c["inicio"], 3), round(c["fin"], 3)) for c in cortes))
+    except OSError:
+        return 0.0
+    if clave in _GANANCIA_VOZ:
+        return _GANANCIA_VOZ[clave]
+    g = 0.0
+    try:
+        crudo = subprocess.run(["ffmpeg", "-v", "error", "-i", str(video), "-vn", "-ac", "1", "-ar", "8000",
+                                "-f", "s16le", "-"], capture_output=True, timeout=600).stdout
+        x = np.frombuffer(crudo, np.int16).astype(np.float32) / 32768.0
+        if x.size:
+            for c in cortes:   # lo quitado no cuenta
+                x[int(c["inicio"] * 8000):int(c["fin"] * 8000)] = 0
+            w = 800   # ventanas de 0.1 s
+            n = x.size // w
+            rms = np.sqrt(np.mean(x[:n * w].reshape(n, w) ** 2, axis=1) + 1e-12)
+            db = 20 * np.log10(rms)
+            voz = db[db > db.max() - 35]   # sin silencios
+            if voz.size:
+                prom = 10 * np.log10(np.mean(10 ** (voz / 10)))
+                g = float(max(-12.0, min(max_db, objetivo_db - prom)))
+    except Exception:
+        g = 0.0
+    _GANANCIA_VOZ[clave] = g
+    return g
+
+
+def filtro_audio(pl, info, hay_musica, cortes, mezcla=None, video=None):
     """Voz (sin pausas, nivelada) + música de fondo en loop a volumen FIJO (ya no baja sola cuando la persona
-    habla): solo dura lo que dura el video. 'mezcla' = volúmenes elegidos en la pestaña Edición."""
+    habla): solo dura lo que dura el video. 'mezcla' = volúmenes elegidos en la pestaña Edición.
+    audio.nivelar_voz: true = nivelador automático (dynaudnorm); "fijo" = una sola ganancia para todo el video
+    (la voz no entra baja ni sube poco a poco después de cada corte); false = tal cual."""
     a = pl.get("audio", {})
     mezcla = mezcla or {"musica": 1.0, "voz": 1.0}
     if mezcla.get("musica", 1.0) <= 0.001:
@@ -3543,11 +3580,17 @@ def filtro_audio(pl, info, hay_musica, cortes, mezcla=None):
             partes += f"{ent}atrim=start={a0:.4f}{fin_txt},asetpts=PTS-STARTPTS[q{k}];"
         partes += "".join(f"[q{k}]" for k in range(n)) + f"concat=n={n}:v=0:a=1[vcort];"
         voz = partes + "[vcort]"
-    voz += ("dynaudnorm=f=150:g=15:p=0.9:m=8," if a.get("nivelar_voz", True) else "") + "aresample=48000"
+    nivelar = a.get("nivelar_voz", True)
+    fijo = nivelar == "fijo"
+    if fijo:
+        g = ganancia_voz(video, cortes) if video else 0.0
+        voz += (f"volume={g:.2f}dB," if abs(g) > 0.05 else "") + "aresample=48000"
+    else:
+        voz += ("dynaudnorm=f=150:g=15:p=0.9:m=8," if nivelar else "") + "aresample=48000"
     if abs(mezcla.get("voz", 1.0) - 1.0) > 0.001:
         voz += f",volume={mezcla['voz']:.3f}"
     if not hay_musica:
-        return voz + ",alimiter=limit=0.95[a]" if mezcla.get("voz", 1.0) > 1.0 else voz + "[a]", "[a]"
+        return voz + ",alimiter=limit=0.95[a]" if (fijo or mezcla.get("voz", 1.0) > 1.0) else voz + "[a]", "[a]"
     vol_m = a.get("volumen_musica", 0.5) * mezcla.get("musica", 1.0)
     f = (f"{voz}[voz];"
          f"[2:a]aresample=48000,volume={vol_m:.3f}[mus];"
@@ -3695,7 +3738,7 @@ def vista_previa_rapida(trabajo, plan=None):
     w, h = W // 2, H // 2
     fps = info["fps"]
     cortes = sorted(plan.get("cortes", []), key=lambda c: c["inicio"])
-    f_audio, map_audio = filtro_audio(pl, info, False, cortes)
+    f_audio, map_audio = filtro_audio(pl, info, False, cortes, video=plan["video"])
     tmp = trabajo / "vista_previa_tmp.mp4"
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}",
            "-r", f"{fps}", "-i", "-", "-i", plan["video"], "-map", "0:v"]
@@ -3973,7 +4016,7 @@ def crear_proxy(trabajo):
     w = 960 if info["ancho"] >= info["alto"] else 540
     h = int(round(w * info["alto"] / info["ancho"] / 2)) * 2
     cortes = sorted(unir_cortes(plan.get("cortes", [])), key=lambda c: c["inicio"])
-    f_audio, map_audio = filtro_audio(pl, info, False, cortes)
+    f_audio, map_audio = filtro_audio(pl, info, False, cortes, video=plan["video"])
     tmp = trabajo / "proxy_tmp.mp4"
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}",
            "-r", f"{fps}", "-i", "-", "-i", plan["video"], "-map", "0:v"]
@@ -4193,7 +4236,7 @@ def cmd_render(args):
 
     musica = ruta(pl.get("audio", {}).get("musica")) if not args.sin_musica else None
     hay_musica = bool(musica and Path(musica).exists())
-    f_audio, map_audio = filtro_audio(pl, info, hay_musica, cortes, mezcla_de(plan))
+    f_audio, map_audio = filtro_audio(pl, info, hay_musica, cortes, mezcla_de(plan), video=plan["video"])
 
     cmd, salida, paso, tam = salida_render(args, trabajo, plan, pl, W, H, fps, hay_musica, musica, f_audio, map_audio,
                                            salida)

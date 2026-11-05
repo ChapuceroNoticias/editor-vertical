@@ -107,8 +107,8 @@
  "audio": {
   "musica": "assets/musica_fondo.mp3",
   "volumen_musica": 0.9,
-  "nivelar_voz": true,
-  "_nota": "Música de fondo a volumen fijo. En la pestaña Edición se sube o baja (Fondo / Video)."
+  "nivelar_voz": "fijo",
+  "_nota": "Música de fondo a volumen fijo. En la pestaña Edición se sube o baja (Fondo / Video). nivelar_voz \"fijo\": el audio base ya viene parejo; se le da una sola ganancia a todo el video (sin el nivelador que entraba bajo y subía poco a poco)."
  },
  "toma_fija": {
   "activar": true,
