@@ -254,6 +254,16 @@ En la pestaña **«Lo aprendido»** ves las reglas propuestas: **Aprobar** o **D
 usan, y solo en los análisis nuevos (no cambian videos ya hechos). «Aprender de todos los trabajos» revisa todas
 las carpetas `_trabajo` que ya tengas. Todo se guarda en la carpeta `aprendizaje\` del programa.
 
+## Pantalla de Nacho libre e imagen arriba (Edición)
+
+- **Pantalla de Nacho, forma libre:** el recuadro azul se mueve por toda la zona que va desde donde termina la cámara
+  de Nacho hasta la orilla derecha, de arriba a abajo (la línea blanca delgada marca esa zona). Las esquinas estiran
+  libre (alto o ancho; con **Shift** conserva la forma). Si el recuadro no tiene la forma de abajo, se ve **completo**
+  y lo que sobra se rellena con la misma imagen agrandada y difuminada. Igual en la vista previa y en el video final.
+- **Imagen arriba (en lugar de Nacho):** en Edición › Imagen, opción «Arriba (en lugar de Nacho)» al agregar o en una
+  imagen que ya está. Va en el lugar de Nacho; abajo sigue la pantalla o la imagen que toque (se pueden encimar una
+  arriba y otra abajo). En la línea de tiempo va en la mitad de arriba del carril «Imágenes», en verde azulado.
+
 ## Exportación rápida (por partes y con la tarjeta gráfica)
 
 - La exportación final se reparte en **3 partes que se arman a la vez** (4 en equipos de 20 hilos o más), cada una en

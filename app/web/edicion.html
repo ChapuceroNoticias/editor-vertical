@@ -9,7 +9,7 @@
     --fondo: #0b0b0d; --panel: #15151a; --panel2: #1c1c22; --texto: #ececf1; --suave: #9a9aa6; --borde: #2a2a32;
     --acento: #d91e2b; --acento2: #ff4553; --ok: #22c55e; --pend: #f59e0b; --rojo: #ff4553;
     --c-completa: #e11d48; --c-dividida: #0ea5e9; --c-nacho: #52525b; --c-916: #a855f7; --c-cerca: #f59e0b; --c-lejos: #b45309;
-    --c-imagen: #22c55e; --c-quitar: #3f3f46; --c-manual: #22c55e; --c-pantallaman: #38bdf8; --c-titulo: #e5e7eb; --c-difuminar: #d946ef; --c-sticker: #F2A33A;
+    --c-imagen: #22c55e; --c-arriba: #14b8a6; --c-quitar: #3f3f46; --c-manual: #22c55e; --c-pantallaman: #38bdf8; --c-titulo: #e5e7eb; --c-difuminar: #d946ef; --c-sticker: #F2A33A;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fondo); color: var(--texto); }
@@ -223,6 +223,7 @@
     <span><i style="background:var(--c-nacho)"></i>Solo Nacho</span>
     <span><i style="background:var(--c-916)"></i>9:16 (vista vertical de todo el video)</span>
     <span><i style="background:var(--c-imagen)"></i>Imagen</span>
+    <span><i style="background:var(--c-arriba)"></i>Imagen arriba (en lugar de Nacho)</span>
     <span><i style="background:var(--c-manual)"></i>Encuadre de Nacho corregido</span>
     <span><i style="background:var(--c-pantallaman)"></i>Pantalla de Nacho acomodada</span>
     <span><i style="background:var(--c-titulo)"></i>Título (motivacional: estira su orilla)</span>
@@ -288,6 +289,7 @@
           <label>Duración (s)<input type="text" class="t" id="n_dur" value="5"></label>
           <div class="ops" id="n_ops">
             <button class="op activo" data-v="dividida">Dividida</button><button class="op" data-v="completa">Pantalla completa</button>
+            <button class="op" data-v="arriba" title="La imagen va arriba, en el lugar de Nacho; abajo sigue la pantalla o la imagen que toque">Arriba (en lugar de Nacho)</button>
           </div>
         </div>
         <div class="sub" style="margin-top:4px"><b>Opción 1 · Desde tu computadora</b></div>
@@ -459,7 +461,7 @@ const TIPOS = ["persona", "dividida", "video", "imagen", "contenida"];
 const NOMBRES_ESC = { persona: "Nacho a pantalla completa", dividida: "Nacho arriba (dividida)",
   video: "Video de la proyección a pantalla completa", imagen: "Imagen o documento", contenida: "Recuadro completo de Nacho" };
 const OPS = { completa: "Pantalla completa", dividida: "Dividida", nacho: "Solo Nacho", "916": "9:16", cerca: "Nacho cerca",
-  lejos: "Nacho lejos", imagen: "Imagen", quitar: "Quitar" };
+  lejos: "Nacho lejos", imagen: "Imagen", arriba: "Arriba (en lugar de Nacho)", quitar: "Quitar" };
 let E = null, P = null, X = null;     // armado, tramos de pantalla, datos de edición
 let video, capa, ctx, previa, pctx, linea, lctx;
 let tituloImg = null, franjaImg = null, version = Date.now();
@@ -556,7 +558,21 @@ function grupos() {
 }
 const grupoEn = (t) => grupos().find(g => g.inicio <= t && t < g.fin) || grupos()[grupos().length - 1];
 const ajusteEn = (t) => E.ajustes.find(a => a.inicio <= t && t < a.fin);
+// recuadro (x, y, w, h) metido dentro de la región: si es más grande se achica, si se sale se recorre
+function rectEnRegion(r, reg) {
+  const [rx, ry, rw, rh] = reg, w = Math.max(16, Math.min(r[2], rw)), h = Math.max(16, Math.min(r[3], rh));
+  return [Math.min(Math.max(r[0], rx), rx + rw - w), Math.min(Math.max(r[1], ry), ry + rh - h), w, h];
+}
 function ventanaManual(a, e, t) {   // igual que ventana_manual() del editor.py (con t: con su movimiento)
+  if (a.modo === "libre") {   // recuadro de forma libre (pantalla de Nacho)
+    let r = a.r.slice();
+    if (a.final && a.final.r && t != null && a.inicio != null) {
+      const f = Math.min(1, Math.max(0, (t - a.inicio) / Math.max(0.05, a.fin - a.inicio)));
+      const p = a.suavizado === "lineal" ? f : 0.5 - 0.5 * Math.cos(Math.PI * f);
+      r = r.map((v, k) => v + (a.final.r[k] - v) * p);
+    }
+    return rectEnRegion(r, a.region || e.region);
+  }
   const [rx, ry, rw, rh] = a.region || e.region, asp = e.aspect, maxW = Math.min(rw, rh * asp);
   const [ax, ay, aw, ah] = e.auto, z = Math.max(0.2, a.zoom || 1);
   let cx, cy, w;
@@ -595,7 +611,22 @@ function pvEn(t) {   // recuadro automático de lo que proyecta Nacho en t (o nu
 }
 const ajustePEn = (t) => (E.ajustes_pantalla || []).find(a => a.inicio <= t && t < a.fin);
 const iniRect = (a, pe) => ventanaManual({ ...a, final: null }, pe);
-const finRect = (a, pe) => a.final ? ventanaManual({ modo: "fijo", ...a.final, region: a.region }, pe) : null;
+const finRect = (a, pe) => !a.final ? null : a.modo === "libre" ? rectEnRegion(a.final.r, a.region || zonaP(pe))
+  : ventanaManual({ modo: "fijo", ...a.final, region: a.region }, pe);
+// dónde puede ir el recuadro de la pantalla: desde la cámara de Nacho hasta la orilla derecha, de arriba a abajo
+// (en «9:16» todo el cuadro)
+function zonaP(pe) {
+  const todo = pe && pe.region[0] <= 0.5 && pe.region[1] <= 0.5 && Math.abs(pe.region[2] - E.video.ancho) < 1 && Math.abs(pe.region[3] - E.video.alto) < 1;
+  return todo || !E.zona_pantalla ? MARCO() : E.zona_pantalla;
+}
+const aLibre = (r, pe) => ({ modo: "libre", r: rectEnRegion(r, zonaP(pe)).map(v => Math.round(v * 10) / 10), region: zonaP(pe) });
+// un recuadro guardado con la forma de antes (fijo) se pasa a forma libre, con su recuadro final si se movía
+function comoLibre(a, pe) {
+  if (a.modo === "libre") return a;
+  const fin = finRect(a, pe), out = { ...aLibre(iniRect(a, pe), pe) };
+  if (fin) { out.final = { r: fin }; out.suavizado = a.suavizado; }
+  return out;
+}
 function ventanaPActual(t, pe) {   // r = lo que se ve en t; ini/fin = recuadros de inicio y final si tiene movimiento
   if (!pe) return null;
   let a = null, cual = "auto";
@@ -612,20 +643,20 @@ function empezarEdicionP(t, pe) {
   if (editP) return;
   const a = ajustePEn(t);
   if (a) { tramoPE = [a.inicio, a.fin]; editP = JSON.parse(JSON.stringify(a)); delete editP.inicio; delete editP.fin; }
-  else { tramoPE = tramoPantalla(t); editP = aParametros(pe.auto, pe, "fijo"); }
+  else { tramoPE = tramoPantalla(t); editP = aLibre(pe.auto, pe); }
 }
-function ponerRectPF(r, pe) { const q = aParametros(r, pe, "fijo"); editP.final = { cx: q.cx, cy: q.cy, zoom: q.zoom }; }
+function ponerRectPF(r, pe) { editP = comoLibre(editP, pe); editP.final = { r: rectEnRegion(r, zonaP(pe)) }; }
 // movimientos rápidos de la pantalla de Nacho (como los de las fotos)
 async function movimientoPantalla(tipo) {
   const t = ahoraO(), pe = pvEn(t);
   if (!pe) return avisar("Aquí Nacho no tiene nada en pantalla.");
   const a = ajustePEn(t);
   const tramo = a ? [a.inicio, a.fin] : tramoPantalla(t);
-  const base = a ? JSON.parse(JSON.stringify(a)) : aParametros(pe.auto, pe, "fijo");
-  const S = iniRect(base, pe), cx = S[0] + S[2] / 2, cy = S[1] + S[3] / 2, w = S[2], asp = pe.aspect;
+  const base = comoLibre(a ? JSON.parse(JSON.stringify(a)) : aLibre(pe.auto, pe), pe);
+  const S = iniRect(base, pe), cx = S[0] + S[2] / 2, cy = S[1] + S[3] / 2, w = S[2], asp = S[2] / S[3];
   const rect = (x, y, ww) => [x - ww / 2, y - ww / asp / 2, ww, ww / asp];
-  const P = (r) => { const q = aParametros(r, pe, "fijo"); return { cx: q.cx, cy: q.cy, zoom: q.zoom }; };
-  const ini = (r) => Object.assign(base, aParametros(r, pe, "fijo"));
+  const P = (r) => ({ r: rectEnRegion(r, zonaP(pe)) });
+  const ini = (r) => Object.assign(base, aLibre(r, pe));
   const w2 = w / 1.25, paso = 0.18 * w2;
   if (tipo === "ninguno") delete base.final;
   else if (tipo === "acercar") base.final = P(rect(cx, cy, w / 1.35));
@@ -697,6 +728,20 @@ function deVideo(x, y, w, h, dx, dy, dw, dh) {
   const k = fuenteProxy ? fuenteProxy.ancho / E.video.ancho : 1;   // la copia ligera es más chica
   try { pctx.drawImage(fuenteDifuminada(), x * k, y * k, w * k, h * k, dx, dy, dw, dh); } catch (err) {}
 }
+// la ventana del video en el recuadro: si tiene otra forma (recuadro libre) se ve COMPLETA, con la misma imagen
+// agrandada y difuminada de fondo (igual que pintar_ventana() del editor.py)
+function deVideoAjustado(r, dx, dy, dw, dh) {
+  const [x, y, w, h] = r;
+  if (Math.abs((w / h) / (dw / dh) - 1) < 0.02) return deVideo(x, y, w, h, dx, dy, dw, dh);
+  pctx.save(); pctx.beginPath(); pctx.rect(dx, dy, dw, dh); pctx.clip();
+  const kc = Math.max(dw / w, dh / h);
+  pctx.filter = `blur(${Math.max(3, dw / 60)}px) brightness(0.55)`;
+  deVideo(x, y, w, h, dx + (dw - w * kc) / 2, dy + (dh - h * kc) / 2, w * kc, h * kc);
+  pctx.filter = "none";
+  const k = Math.min(dw / w, dh / h);
+  deVideo(x, y, w, h, dx + (dw - w * k) / 2, dy + (dh - h * k) / 2, w * k, h * k);
+  pctx.restore();
+}
 function dibujarMomento(i, t, dx, dy, dw, dh) {
   const m = E.armado.momentos[i];
   if (!m || !m.n) return;
@@ -740,7 +785,7 @@ function dibujarAbajo(e, t, s) {
   const [ix, iy, iw, ih] = A.inferior.map(v => v * s);
   if (e.ex[0] >= 0) dibujarMomento(e.ex[0], t, ix, iy, iw, ih);
   else if (e.ex[1] >= 0) {
-    if (vpActual) deVideo(...vpActual.r, ix, iy, iw, ih);
+    if (vpActual) deVideoAjustado(vpActual.r, ix, iy, iw, ih);
     else dibujarPantallaAbajo(e.ex[1], t, ix, iy, iw, ih);
   }
 }
@@ -767,21 +812,25 @@ function dibujarFondoVideo(cx, t, W, H) {
   if (fondoVid.readyState >= 2) cx.drawImage(fondoVid, 0, 0, W, H);
   else { cx.fillStyle = "#0B2533"; cx.fillRect(0, 0, W, H); }
 }
+const arribaEn = (t) => (E.arriba ? E.arriba[indice(t)] : -1) ?? -1;   // imagen en el lugar de Nacho (o -1)
 function componer(t, e, v) {
   const W = previa.width, H = previa.height, s = W / E.salida[0];
   pctx.fillStyle = "#000"; pctx.fillRect(0, 0, W, H);
   dibujarFondoVideo(pctx, t, W, H);   // «Tiktoks Gaby»: video de fondo detrás de la franja
   const area = (a) => (a || [0, 0, E.salida[0], E.salida[1]]).map(x => x * s);
+  const arr = arribaEn(t);
   if (e.tipo === "persona" || e.tipo === "video") {
     const [ax, ay, aw, ah] = e.tipo === "video" ? area(null) : area(E.areas.persona);
-    deVideo(...v.r, ax, ay, aw, ah);
+    if (arr >= 0 && e.tipo === "persona") dibujarMomento(arr, t, ax, ay, aw, ah);
+    else if (v) deVideo(...v.r, ax, ay, aw, ah);
   } else if (e.tipo === "dividida") {
     const [ax, ay, aw, ah] = area(E.areas.dividida);
-    deVideo(...v.r, ax, ay, aw, ah);
+    if (arr >= 0) dibujarMomento(arr, t, ax, ay, aw, ah);
+    else if (v) deVideo(...v.r, ax, ay, aw, ah);
     dibujarAbajo(e, t, s);
   } else if (e.tipo === "imagen") {
     if (e.ex[0] >= 0) dibujarMomento(e.ex[0], t, 0, 0, W, H);
-    else if (e.ex[1] >= 0 && vpActual) deVideo(...vpActual.r, 0, 0, W, H);
+    else if (e.ex[1] >= 0 && vpActual) deVideoAjustado(vpActual.r, 0, 0, W, H);
     else if (e.ex[1] >= 0) {
       const p = E.armado.proyeccion[e.ex[1]], [x, y, w, h] = p.caja, asp = W / H;
       const fase = Math.min(1, Math.max(0, (t - p.inicio) / Math.max(0.1, p.fin - p.inicio))), z = 1 + 0.06 * fase;
@@ -835,6 +884,7 @@ function dibujarEscenario(t, e, v, vp, pe) {
     ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(0, 0, capa.width, capa.height);
     ctx.fillStyle = "#fff"; ctx.font = `${15 * d}px Geist, system-ui`; ctx.textAlign = "center";
     ctx.fillText(e.tipo === "contenida" ? "Aquí se ve el recuadro completo de Nacho (no se recorta)"
+      : arribaEn(t) >= 0 ? "Aquí arriba se ve una imagen (en lugar de Nacho)"
       : "Aquí se ve una imagen a pantalla completa", capa.width / 2, capa.height / 2);
     return;
   }
@@ -865,14 +915,14 @@ function dibujarEscenario(t, e, v, vp, pe) {
   };
   if (v) marco(v, e.region, e.auto, "#facc15", "#22c55e", e.tipo === "video" ? "Video de la pantalla" : "Nacho");
   if (vp && vp.fin) {   // con movimiento: el recuadro de inicio y el de final
-    marco({ r: vp.ini, cual: vp.cual }, pe.region, pe.auto, "#38bdf8", "#38bdf8", "Pantalla · inicio");
-    marco({ r: vp.fin, cual: vp.cual === "edit" ? "edit" : "manual" }, pe.region, null, "#fb923c", "#fb923c", "Pantalla · final");
+    marco({ r: vp.ini, cual: vp.cual }, zonaP(pe), pe.auto, "#38bdf8", "#38bdf8", "Pantalla · inicio");
+    marco({ r: vp.fin, cual: vp.cual === "edit" ? "edit" : "manual" }, zonaP(pe), null, "#fb923c", "#fb923c", "Pantalla · final");
     const [a1, a2] = [vp.ini, vp.fin].map(r => [(r[0] + r[2] / 2) * s, (r[1] + r[3] / 2) * s]);
     ctx.strokeStyle = "#fb923c"; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(...a1); ctx.lineTo(...a2); ctx.stroke(); ctx.setLineDash([]);
   } else if (vp) {
     const todo = pe.region[0] <= 0.5 && pe.region[1] <= 0.5 && Math.abs(pe.region[2] - E.video.ancho) < 1 && Math.abs(pe.region[3] - E.video.alto) < 1;
-    marco(vp, pe.region, pe.auto, "#38bdf8", "#38bdf8", todo ? "Vista 9:16" : "Pantalla de Nacho");
+    marco(vp, zonaP(pe), pe.auto, "#38bdf8", "#38bdf8", todo ? "Vista 9:16" : "Pantalla de Nacho");
   }
   dibujarDifuminar(t, s, d);
 }
@@ -900,8 +950,19 @@ let ratonX = null;   // tiempo bajo el ratón (línea guía), o null
 function itemsLinea() {
   const it = [];
   for (const x of P.tramos) {
-    if (x.k[0] === "m") it.push({ carril: "m", tipo: "m", a: x.ini_s, b: x.fin_s, op: x.pantalla === "quitar" ? "quitar" : "imagen", ref: x, mov: true });
+    if (x.k[0] === "m") it.push({ carril: "m", tipo: "m", a: x.ini_s, b: x.fin_s, ref: x, mov: true,
+                                  op: x.pantalla === "quitar" ? "quitar" : x.pantalla === "arriba" ? "arriba" : "imagen" });
     else it.push({ carril: "p", tipo: x.k[0], a: x.ini_s, b: x.fin_s, op: x.pantalla, ref: x, mov: x.k[0] === "p" || x.k[0] === "e" });
+  }
+  // imágenes «arriba» en la mitad de arriba del carril; las de abajo que se enciman con ellas, en la mitad de abajo
+  const arrs = it.filter(x => x.carril === "m" && x.op === "arriba");
+  if (arrs.length) {
+    const [my, mh] = CARRILES.m;
+    for (const x of it) {
+      if (x.carril !== "m") continue;
+      if (x.op === "arriba") x.yh = [my, mh / 2 - 1];
+      else if (arrs.some(y => y.a < x.b && x.a < y.b)) x.yh = [my + mh / 2, mh / 2];
+    }
   }
   if (X.titulo_fin != null)   // estilo motivacional: hasta cuándo se ve el título (se estira su orilla derecha)
     it.push({ carril: "m", tipo: "ti", a: 0, b: aEditado(X.titulo_fin), op: "titulo", ref: { k: "titulo" }, mov: true });
@@ -1179,6 +1240,7 @@ function itemSel() {
 function seleccionar(it, aviso = true) {
   sel = it ? { tipo: it.tipo, clave: claveDe(it), a: it.a, b: it.b } : null;
   if (it && it.tipo === "st") stSel = it.ref;
+  if (it && it.tipo === "m" && it.ref && it.ref.k) { momPreferido = parseInt(it.ref.k.slice(1)); momSucio = false; }
   const tab = it && { st: "Stickers", m: "Imagen", p: "Pantalla", e: "Pantalla", en: "Encuadre", ep: "Encuadre" }[it.tipo];
   if (tab && window.irPestana) irPestana(tab);
   if (it && aviso) estado(`Seleccionado: ${NOMBRE_TIPO[it.tipo] || "bloque"} ${mmss(it.a)} – ${mmss(it.b)} (Ctrl+C, Supr, Ctrl+B…)`, "");
@@ -1370,7 +1432,11 @@ function tramoPantallaEn(te) {
   return P.tramos.find(x => x.k[0] !== "m" && x.ini_s <= te && te < x.fin_s && x.opciones && x.opciones.length)
       || P.tramos.find(x => x.k[0] !== "m" && x.ini_s <= te && te < x.fin_s) || null;
 }
-function momentoEn(t) { return X.momentos.find(m => m.inicio <= t && t < m.fin) || null; }
+let momPreferido = -1;   // el que se eligió en la línea de tiempo (una imagen arriba y otra abajo pueden encimarse)
+function momentoEn(t) {
+  const aqui = X.momentos.filter(m => m.inicio <= t && t < m.fin);
+  return aqui.find(m => m.i === momPreferido) || aqui.find(m => m.estilo !== "arriba") || aqui[0] || null;
+}
 
 function pintarPantalla(te) {
   if (cambioP && tramoP) return;   // hay un cambio sin aplicar: el panel se queda en ese tramo
@@ -1423,8 +1489,9 @@ function pintarImagen(t) {
     $("i_fotos").appendChild(d);
   }
   if (!m.n) $("i_fotos").innerHTML = `<span class="sub">Sin fotos: busca o sube algunas.</span>`;
-  $("i_ops").innerHTML = ["dividida", "completa", "quitar"].map(op =>
-    `<button class="op ${op === estiloMom ? "activo" : ""}" data-v="${op}">${{ dividida: "Dividida", completa: "Pantalla completa", quitar: "No mostrar" }[op]}</button>`).join("");
+  const opsI = E.estilo === "motivacional" ? ["dividida", "completa", "quitar"] : ["dividida", "completa", "arriba", "quitar"];
+  $("i_ops").innerHTML = opsI.map(op =>
+    `<button class="op ${op === estiloMom ? "activo" : ""}" data-v="${op}">${{ dividida: "Dividida", completa: "Pantalla completa", arriba: "Arriba (en lugar de Nacho)", quitar: "No mostrar" }[op]}</button>`).join("");
   $("i_ops").querySelectorAll(".op").forEach(b => b.onclick = () => {
     estiloMom = b.dataset.v; momSucio = true;
     $("i_ops").querySelectorAll(".op").forEach(x => x.classList.toggle("activo", x === b));
@@ -1542,7 +1609,10 @@ function objetivo(t, p) {   // qué recuadro está bajo el cursor: el de Nacho o
   if (vp) { const z = zonaDe(p, vp.fin ? vp.ini : vp.r); if (z) return { cual: "pantalla", z, e: pe }; }
   return null;
 }
-function ponerRectP(r, pe) { Object.assign(editP, aParametros(r, pe, "fijo")); }
+function ponerRectP(r, pe) {   // forma libre (si se movía, conserva su recuadro final)
+  const viejo = comoLibre(editP, pe);
+  editP = { ...viejo, ...aLibre(r, pe) };
+}
 function iniciarEncuadre() {
   capa.addEventListener("pointerdown", (ev) => {
     const t = ahoraO(), p = punto(ev), o = objetivo(t, p);
@@ -1585,9 +1655,17 @@ function iniciarEncuadre() {
     const asp = arrastre.e.aspect;
     const poner = arrastre.cual === "nacho" ? ponerRect : (arrastre.cual === "pantallaFin" ? ponerRectPF : ponerRectP);
     if (arrastre.z === "mover") poner([x + p[0] - arrastre.p0[0], y + p[1] - arrastre.p0[1], w, h], arrastre.e);
-    else {
+    else if (arrastre.cual !== "nacho" && !ev.shiftKey) {
+      // la pantalla de Nacho: forma libre (con Shift conserva la forma)
+      const dx = p[0] - arrastre.p0[0], dy = p[1] - arrastre.p0[1];
+      let nx = x, ny = y, nw, nh;
+      if (arrastre.z.includes("w")) { nx = Math.min(x + w - 40, x + dx); nw = x + w - nx; } else nw = Math.max(40, w + dx);
+      if (arrastre.z.includes("n")) { ny = Math.min(y + h - 30, y + dy); nh = y + h - ny; } else nh = Math.max(30, h + dy);
+      poner([nx, ny, nw, nh], arrastre.e);
+    } else {
       const fx = arrastre.z.includes("w") ? x + w : x, fy = arrastre.z.includes("n") ? y + h : y;
-      const nw = Math.max(Math.abs(p[0] - fx), Math.abs(p[1] - fy) * asp, 40), nh = nw / asp;
+      const ar = arrastre.cual === "nacho" ? asp : w / h;
+      const nw = Math.max(Math.abs(p[0] - fx), Math.abs(p[1] - fy) * ar, 40), nh = nw / ar;
       poner([arrastre.z.includes("w") ? fx - nw : fx, arrastre.z.includes("n") ? fy - nh : fy, nw, nh], arrastre.e);
     }
   });
@@ -1625,7 +1703,7 @@ function iniciarEncuadre() {
     const enFinal = vp && vp.fin && dentroDe(vp.fin);
     if (enPantalla || enFinal) {
       clearTimeout(timerP); empezarEdicionP(t, pe);
-      const r = enFinal ? finRect(editP, pe) : iniRect(editP, pe), cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2, w = r[2] * f, h = w / pe.aspect;
+      const r = enFinal ? finRect(editP, pe) : iniRect(editP, pe), cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2, w = r[2] * f, h = r[3] * f;
       (enFinal ? ponerRectPF : ponerRectP)([cx - w / 2, cy - h / 2, w, h], pe);
       programarGuardarP();
     } else {

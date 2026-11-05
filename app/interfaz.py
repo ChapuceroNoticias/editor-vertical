@@ -240,7 +240,7 @@ def guardar_pantalla(trabajo, tabla):
 # Línea de tiempo de pantalla (todos los estilos menos Solo subtítulos)
 # ----------------------------------------------------------------------------
 NOMBRES_OP = {"completa": "Pantalla completa", "dividida": "Dividida", "nacho": "Solo Nacho",
-              "cerca": "Nacho cerca", "lejos": "Nacho lejos", "imagen": "Imagen", "quitar": "Quitar"}
+              "cerca": "Nacho cerca", "lejos": "Nacho lejos", "imagen": "Imagen", "arriba": "Arriba (en lugar de Nacho)", "quitar": "Quitar"}
 
 
 def estilo_de(plan):
@@ -326,7 +326,7 @@ def tramos_pantalla(t):
         for i, m in enumerate(plan.get("momentos", [])):
             if m.get("imagenes"):
                 add(f"m{i}", m["inicio"], m["fin"], "Imagen de internet: " + (m.get("busqueda") or "")[:40],
-                    "quitar" if m.get("oculto") else (m.get("estilo") or "dividida"), ["completa", "dividida", "quitar"])
+                    "quitar" if m.get("oculto") else (m.get("estilo") or "dividida"), ["completa", "dividida", "arriba", "quitar"])
     out.sort(key=lambda x: (x["ini_s"], x["k"][0] != "m"))
     return {"tramos": out, "duracion": round(fin_ed, 3), "estilo": est}
 
@@ -438,7 +438,7 @@ def aplicar_pantalla(t, cambios):
             if i < len(moms):
                 m = moms[i]
                 m["oculto"] = op == "quitar"
-                if op in ("completa", "dividida"):
+                if op in ("completa", "dividida", "arriba"):
                     m["estilo"] = op
                 m["inicio"], m["fin"] = tiempos(c, m["inicio"], m["fin"])
     proy.extend(nuevos_proy)
@@ -801,12 +801,13 @@ def datos_encuadre(t):
             plan_fijo = ed.fijar_plan(plan, pl)
             escena = lambda tt: ed.escena_en(plan_fijo, pl, tt)  # noqa: E731
         paso = 0.2
-        muestras, extra, pvwin = [], [], []
+        muestras, extra, pvwin, arriba = [], [], [], []
         n = int(info["duracion"] / paso) + 1
         for i in range(n):
             tt = round(i * paso, 3)
             e = escena(tt)
             fila = [tt, TIPOS_ESCENA[e["tipo"]]]
+            arriba.append(e.get("arr", -1))
             if "auto" in e:
                 fila += [round(v, 1) for v in e["region"]] + [round(e["aspect"], 5)] + [round(v, 1) for v in e["auto"]]
             muestras.append(fila)
@@ -827,6 +828,7 @@ def datos_encuadre(t):
                 areas["dividida"] = pl["layouts"]["dividida"]["persona"]["area"]
         _CACHE_ENC.clear()
         _CACHE_ENC[clave] = {"paso": paso, "muestras": muestras, "extra": extra, "pvwin": pvwin,
+                             "arriba": arriba if any(a >= 0 for a in arriba) else None,
                              "salida": [W, H], "areas": areas,
                              "armado": datos_armado(plan, pl)}
     base = _CACHE_ENC[clave]
@@ -835,6 +837,8 @@ def datos_encuadre(t):
                       "archivo": Path(plan["video"]).name},
             "ajustes": plan.get("encuadre_manual") or [],
             "ajustes_pantalla": plan.get("encuadre_pantalla") or [],
+            # dónde puede ir el recuadro de la pantalla de Nacho (de su cámara a la orilla derecha, de arriba a abajo)
+            "zona_pantalla": zona_de(plan),
             # franjas desenfocadas sobre los subtítulos que ya trae el video de Nacho (tiempo y px del original)
             "difuminar": plan.get("difuminar") or [],
             "difuminar_busqueda": estado_difuminar(t),
@@ -864,6 +868,8 @@ def marcos_momento(m, plan, pl):
     moti = (plan.get("estilo") or pl.get("estilo")) == "motivacional"
     if moti or m.get("estilo") == "completa" or "layouts" not in pl:
         w, h = W, H
+    elif m.get("estilo") == "arriba":   # en el lugar de Nacho
+        w, h = pl["layouts"]["dividida"]["persona"]["area"][2:4]
     else:
         w, h = pl["layouts"]["dividida"]["inferior"]["area"][2:4]
     cfg_m = pl.get("momentos", {})
@@ -1366,7 +1372,8 @@ def accion_momento_http(t, d):
         if fin - ini < 0.3:
             raise ValueError("El momento es muy corto")
         busq = (d.get("busqueda") or "").strip()
-        m = {"inicio": round(ini, 3), "fin": round(fin, 3), "estilo": d.get("estilo") or "dividida",
+        m = {"inicio": round(ini, 3), "fin": round(fin, 3),
+             "estilo": d.get("estilo") if d.get("estilo") in ("dividida", "completa", "arriba") else "dividida",
              "busqueda": busq, "busquedas": [busq] if busq else [], "que_mostrar": busq, "texto": "", "imagenes": [],
              "prioridad": "imagen"}   # puesta a mano: se ve aunque Nacho tenga algo en pantalla
         if busq:
@@ -1412,7 +1419,7 @@ def accion_momento_http(t, d):
         guardar_plan(t, plan)
         return {"ok": True, "i": i, "mensaje": "Imagen partida en dos."}
     if acc == "guardar":
-        if d.get("estilo") in ("dividida", "completa"):
+        if d.get("estilo") in ("dividida", "completa", "arriba"):
             m["estilo"] = d["estilo"]
             m["oculto"] = False
         if d.get("estilo") == "quitar":
@@ -1960,6 +1967,15 @@ def mandar_a_editar(nombre, ids, gpu):
     return len(trabajos)
 
 
+def zona_de(plan):
+    try:
+        pl = plantilla(plan)
+        ed.escalar_cajas(pl, plan["info"]["ancho"], plan["info"]["alto"])
+        return ed.zona_pantalla(pl, plan["info"])
+    except Exception:
+        return [0.0, 0.0, float(plan["info"]["ancho"]), float(plan["info"]["alto"])]
+
+
 def guardar_encuadre(t, ajustes, clave="encuadre_manual"):
     plan, _ = cargar(t)
     dur = plan["info"]["duracion"]
@@ -1967,6 +1983,17 @@ def guardar_encuadre(t, ajustes, clave="encuadre_manual"):
     for a in ajustes:
         ini, fin = max(0.0, float(a["inicio"])), min(dur, float(a["fin"]))
         if fin - ini < 0.05:
+            continue
+        if a.get("modo") == "libre" and a.get("r") and len(a["r"]) == 4:
+            # recuadro de forma libre (pantalla de Nacho): se guarda tal cual, con su recuadro final si se mueve
+            e = {"inicio": round(ini, 3), "fin": round(fin, 3), "modo": "libre",
+                 "r": [round(float(v), 1) for v in a["r"]]}
+            if a.get("region") and len(a["region"]) == 4:
+                e["region"] = [round(float(v), 1) for v in a["region"]]
+            if isinstance(a.get("final"), dict) and a["final"].get("r") and len(a["final"]["r"]) == 4:
+                e["final"] = {"r": [round(float(v), 1) for v in a["final"]["r"]]}
+                e["suavizado"] = "lineal" if a.get("suavizado") == "lineal" else "suave"
+            limpios.append(e)
             continue
         e = {"inicio": round(ini, 3), "fin": round(fin, 3), "modo": "ajuste" if a.get("modo") == "ajuste" else "fijo",
              "zoom": round(min(8.0, max(0.2, float(a.get("zoom", 1.0)))), 4)}

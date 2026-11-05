@@ -538,7 +538,20 @@ function muestra(t) {
   }
   return e;
 }
+function rectEnRegion(r, reg) {
+  const [rx, ry, rw, rh] = reg, w = Math.max(16, Math.min(r[2], rw)), h = Math.max(16, Math.min(r[3], rh));
+  return [Math.min(Math.max(r[0], rx), rx + rw - w), Math.min(Math.max(r[1], ry), ry + rh - h), w, h];
+}
 function ventanaManual(a, e, t) {   // igual que ventana_manual() del editor.py
+  if (a.modo === "libre") {   // recuadro de forma libre (pantalla de Nacho)
+    let r = a.r.slice();
+    if (a.final && a.final.r && t != null && a.inicio != null) {
+      const f = Math.min(1, Math.max(0, (t - a.inicio) / Math.max(0.05, a.fin - a.inicio)));
+      const p = a.suavizado === "lineal" ? f : 0.5 - 0.5 * Math.cos(Math.PI * f);
+      r = r.map((v, k) => v + (a.final.r[k] - v) * p);
+    }
+    return rectEnRegion(r, a.region || e.region);
+  }
   const [rx, ry, rw, rh] = a.region || e.region, asp = e.aspect;
   const maxW = Math.min(rw, rh * asp);
   const [ax, ay, aw, ah] = e.auto;
@@ -635,6 +648,19 @@ function dibujarPantallaAbajo(i, t, dx, dy, dw, dh) {   // lo que proyecta Nacho
   else { cw = Math.min(w, h * asp) / E.armado.zoom_imagen; ch = cw / asp; x0 = x + (w - cw) * (0.2 + 0.6 * fase); y0 = y + (h - ch) * 0.45; }
   deVideo(x0, y0, cw, ch, dx, dy, dw, dh);
 }
+// ventana de otra forma (recuadro libre): completa, con la misma imagen difuminada de fondo (como el render)
+function deVideoAjustado(r, dx, dy, dw, dh) {
+  const [x, y, w, h] = r;
+  if (Math.abs((w / h) / (dw / dh) - 1) < 0.02) return deVideo(x, y, w, h, dx, dy, dw, dh);
+  actx.save(); actx.beginPath(); actx.rect(dx, dy, dw, dh); actx.clip();
+  const kc = Math.max(dw / w, dh / h);
+  actx.filter = `blur(${Math.max(3, dw / 60)}px) brightness(0.55)`;
+  deVideo(x, y, w, h, dx + (dw - w * kc) / 2, dy + (dh - h * kc) / 2, w * kc, h * kc);
+  actx.filter = "none";
+  const k = Math.min(dw / w, dh / h);
+  deVideo(x, y, w, h, dx + (dw - w * k) / 2, dy + (dh - h * k) / 2, w * k, h * k);
+  actx.restore();
+}
 function pantallaManual(t) {   // recuadro de la pantalla de Nacho acomodado a mano en t (o null)
   const a = (E.ajustes_pantalla || []).find(x => x.inicio <= t && t < x.fin);
   const w = E.pvwin && E.pvwin[indice(t)];
@@ -652,7 +678,7 @@ function dibujarAbajo(e, t, s) {
   const [ix, iy, iw, ih] = A.inferior.map(v => v * s);
   const pm = pantallaManual(t);
   if (e.ex[0] >= 0) dibujarMomento(e.ex[0], t, ix, iy, iw, ih);
-  else if (e.ex[1] >= 0 && pm) deVideo(...pm, ix, iy, iw, ih);
+  else if (e.ex[1] >= 0 && pm) deVideoAjustado(pm, ix, iy, iw, ih);
   else if (e.ex[1] >= 0) dibujarPantallaAbajo(e.ex[1], t, ix, iy, iw, ih);
 }
 // ---------- video de fondo del estilo («Tiktoks Gaby»), al ritmo del video editado ----------
@@ -684,17 +710,20 @@ function componer() {
   actx.fillStyle = "#000"; actx.fillRect(0, 0, W, H);
   dibujarFondoVideo(actx, t, W, H);   // «Tiktoks Gaby»: video de fondo detrás de la franja
   const area = (a) => (a || [0, 0, E.salida[0], E.salida[1]]).map(v => v * s);
+  const arr = (E.arriba ? E.arriba[indice(t)] : -1) ?? -1;   // imagen en el lugar de Nacho
   if (e.tipo === "persona" || e.tipo === "video") {
     const [ax, ay, aw, ah] = e.tipo === "video" ? area(null) : area(E.areas.persona);
-    deVideo(...ventana(t, e), ax, ay, aw, ah);
+    if (arr >= 0 && e.tipo === "persona") dibujarMomento(arr, t, ax, ay, aw, ah);
+    else if (e.auto) deVideo(...ventana(t, e), ax, ay, aw, ah);
   } else if (e.tipo === "dividida") {
     const [ax, ay, aw, ah] = area(E.areas.dividida);
-    deVideo(...ventana(t, e), ax, ay, aw, ah);
+    if (arr >= 0) dibujarMomento(arr, t, ax, ay, aw, ah);
+    else if (e.auto) deVideo(...ventana(t, e), ax, ay, aw, ah);
     dibujarAbajo(e, t, s);
   } else if (e.tipo === "imagen") {
     const pm = pantallaManual(t);
     if (e.ex[0] >= 0) dibujarMomento(e.ex[0], t, 0, 0, W, H);
-    else if (e.ex[1] >= 0 && pm) deVideo(...pm, 0, 0, W, H);
+    else if (e.ex[1] >= 0 && pm) deVideoAjustado(pm, 0, 0, W, H);
     else if (e.ex[1] >= 0) {   // imagen fija de la pantalla (p. ej. un tweet) a pantalla completa
       const p = E.armado.proyeccion[e.ex[1]], [x, y, w, h] = p.caja, asp = W / H;
       const fase = Math.min(1, Math.max(0, (t - p.inicio) / Math.max(0.1, p.fin - p.inicio))), z = 1 + 0.06 * fase;

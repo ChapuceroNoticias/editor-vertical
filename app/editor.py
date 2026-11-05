@@ -2310,7 +2310,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-05j v1.6.1"
+VERSION = "2026-11-05k v1.7.0"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3411,6 +3411,15 @@ def ventana_manual(ajustes, t, region, aspect, auto):
         return auto
     if e.get("region"):
         region = e["region"]
+    if e.get("modo") == "libre":
+        # recuadro de forma libre (pantalla de Nacho): se ve COMPLETO abajo, acomodado con fondo difuminado
+        r = [float(v) for v in e["r"]]
+        f = e.get("final")
+        if f and f.get("r"):
+            fase = (t - e["inicio"]) / max(0.05, e["fin"] - e["inicio"])
+            p = curva(fase, e.get("suavizado", "suave"))
+            r = [a_ + (float(b_) - a_) * p for a_, b_ in zip(r, f["r"])]
+        return rect_en_region(r, region)
     rx, ry, rw, rh = [float(v) for v in region]
     max_w = min(rw, rh * aspect)
     ax, ay, aw, ah = [float(v) for v in auto]
@@ -3434,6 +3443,49 @@ def ventana_manual(ajustes, t, region, aspect, auto):
     return int(round(x0)), int(round(y0)), int(round(w)), int(round(h))
 
 
+def rect_en_region(r, region):
+    """El recuadro (x, y, w, h) metido dentro de la región: si es más grande se achica, si se sale se recorre."""
+    rx, ry, rw, rh = [float(v) for v in region]
+    x, y, w, h = [float(v) for v in r]
+    w, h = max(16.0, min(w, rw)), max(16.0, min(h, rh))
+    x = min(max(x, rx), rx + rw - w)
+    y = min(max(y, ry), ry + rh - h)
+    return int(round(x)), int(round(y)), int(round(w)), int(round(h))
+
+
+def zona_pantalla(pl, info):
+    """Dónde puede ir el recuadro de la pantalla de Nacho: desde donde termina su cámara (lado derecho) hasta el
+    final del video, de arriba a abajo. 'pl' ya con escalar_cajas aplicado."""
+    W, H = float(info["ancho"]), float(info["alto"])
+    pd = (pl.get("fuente_16x9") or {}).get("persona_dividida")
+    x0 = float(pd[0]) + float(pd[2]) if pd else 0.0
+    x0 = min(max(0.0, x0), W * 0.6)
+    return [round(x0, 1), 0.0, round(W - x0, 1), H]
+
+
+def pintar_ventana(frame, vent, w, h):
+    """Lo que hay en la ventana del video, en un recuadro de w x h. Si la ventana tiene otra forma (recuadro libre),
+    se ve COMPLETA (sin recortar) y lo que sobra se rellena con la misma imagen agrandada y difuminada."""
+    x0, y0, cw, ch = [float(v) for v in vent]
+    if cw <= 0 or ch <= 0:
+        return np.zeros((h, w, 3), np.uint8)
+    if abs((cw / ch) / (w / h) - 1) < 0.02:
+        return recortar(frame, vent, w, h)
+    k = min(w / cw, h / ch)
+    iw, ih = max(2, int(round(cw * k))), max(2, int(round(ch * k)))
+    # fondo: la misma ventana cubriendo el recuadro, difuminada y un poco más oscura
+    kc = max(w / cw, h / ch)
+    fw, fh = cw * kc, ch * kc
+    fondo = recortar(frame, (x0 + (fw - w) / 2 / kc, y0 + (fh - h) / 2 / kc, w / kc, h / kc), max(2, w // 8), max(2, h // 8))
+    fondo = cv2.GaussianBlur(fondo, (0, 0), 6)
+    fondo = cv2.resize(fondo, (w, h), interpolation=cv2.INTER_LINEAR)
+    fondo = (fondo.astype(np.float32) * 0.55).astype(np.uint8)
+    nitido = recortar(frame, vent, iw, ih)
+    ox, oy = (w - iw) // 2, (h - ih) // 2
+    fondo[oy:oy + ih, ox:ox + iw] = nitido
+    return fondo
+
+
 def escena_en(plan, pl, t):
     """Qué se ve en el tiempo t (original) y de qué parte del video sale, igual que en el render.
     Devuelve {tipo, region, aspect, auto} si el encuadre se puede corregir, o {tipo} si en ese momento
@@ -3448,6 +3500,9 @@ def escena_en(plan, pl, t):
     proy = plan.get("proyeccion", [])
     todos = plan.get("momentos", [])
     momentos = [m for m in todos if m.get("imagenes") and not m.get("oculto")]
+    # imagen «arriba»: va en el lugar de Nacho (no compite con lo de abajo)
+    arr = dentro(t, [m for m in momentos if m.get("estilo") == "arriba"])
+    momentos = [m for m in momentos if m.get("estilo") != "arriba"]
     toma = next((s for s in tomas if t < s["fin"]), tomas[-1])
     pv = dentro(t, proy)
     i_pv = proy.index(pv) if pv else -1
@@ -3463,7 +3518,8 @@ def escena_en(plan, pl, t):
     if sobre:
         pv, i_pv, modo_pv = None, -1, None
     mom = sobre or (dentro(t, momentos) if not pv else None)
-    extra = {"mom": next((k for k, m in enumerate(todos) if m is mom), -1), "pv": i_pv}
+    extra = {"mom": next((k for k, m in enumerate(todos) if m is mom), -1), "pv": i_pv,
+             "arr": next((k for k, m in enumerate(todos) if m is arr), -1)}
     if pv and modo_pv == "916":
         fw, fh = plan["info"]["ancho"], plan["info"]["alto"]
         cara = interp_cara(toma["cara"], t) if toma.get("cara") else None
@@ -3496,6 +3552,8 @@ def escena_en(plan, pl, t):
         caja = [float(v) for v in pv["caja"]]
         extra["pv_ventana"] = {"region": caja, "aspect": iw / ih,
                                "auto": list(ventana_pantalla(pv, t, iw / ih, False, cfg_p))}
+    if arr:   # arriba se ve la imagen: no hay recuadro de Nacho que mover
+        return {"tipo": "persona" if lay == "persona" else "dividida", **extra}
     if cfg["persona"].get("ajuste") == "contener" and region[2] / region[3] < (aw / ah) * 0.8:
         return {"tipo": "contenida", "region": region, "lay": lay, **extra}
     return {"tipo": "persona" if lay == "persona" else "dividida", "region": region, "aspect": aw / ah,
@@ -4613,7 +4671,7 @@ def cmd_render(args):
     def imagen_momento(mom, k, w, h, fase):
         """Imagen k del momento, encuadrada y con su movimiento."""
         p = mom["imagenes"][k]
-        idx_global = momentos.index(mom) * 3 + k
+        idx_global = todos_m.index(mom) * 3 + k
         clave = (p, w, h, id(mom), k)
         if clave not in cache_img:
             im = leer_img(p)
@@ -4631,6 +4689,9 @@ def cmd_render(args):
     tomas = plan["tomas"]
     proy = plan.get("proyeccion", [])
     momentos = [m for m in plan.get("momentos", []) if m.get("imagenes") and not m.get("oculto")]
+    todos_m = list(momentos)
+    arribas = [m for m in momentos if m.get("estilo") == "arriba"]   # imagen en el lugar de Nacho
+    momentos = [m for m in momentos if m.get("estilo") != "arriba"]
     cortes = sorted(plan.get("cortes", []), key=lambda c: c["inicio"])
     manual = plan.get("encuadre_manual") or []
     if manual:
@@ -4742,7 +4803,7 @@ def cmd_render(args):
             vent = ventana_916(fw_, fh_, W, H, interp_cara(toma["cara"], t) if toma.get("cara") else None)
             if manual_p:
                 vent = ventana_manual(manual_p, t, [0, 0, fw_, fh_], W / H, vent)
-            lienzo[:] = enfocar(recortar(frame, vent, W, H), 0.3)
+            lienzo[:] = enfocar(pintar_ventana(frame, vent, W, H), 0.3)
             lay = "persona"
         elif pv and modo_pv == "completa" and (pv["tipo"] == "video" or pv.get("vertical") or not cfg_p.get("imagen_izquierda")):
             # video de la proyección a pantalla completa, centrado en quien habla (la cara más grande)
@@ -4759,7 +4820,7 @@ def cmd_render(args):
             vent = ventana_pantalla(pv, t, W / H, True, cfg_p)
             if manual_p:
                 vent = ventana_manual(manual_p, t, pv["caja"], W / H, vent)
-            lienzo[:] = enfocar(recortar(frame, vent, W, H), 0.3)
+            lienzo[:] = enfocar(pintar_ventana(frame, vent, W, H), 0.3)
             lay = "persona"
         elif mom and mom.get("estilo") == "completa":
             imgs = mom["imagenes"]
@@ -4771,17 +4832,26 @@ def cmd_render(args):
         else:
             lay = "dividida" if (mom or pv) else "persona"
             cfg = L[lay]
-            cara = interp_cara(toma["cara"], t)
-            region = caja_p if toma["layout"] == "dividida" else [0, 0, frame.shape[1], frame.shape[0]]
             ax, ay, aw, ah = cfg["persona"]["area"]
-            if cfg["persona"].get("ajuste") == "contener" and region[2] / region[3] < (aw / ah) * 0.8:
-                pers = persona_contenida(frame, region, cara, aw, ah, cfg["persona"])
+            arr = dentro(t, arribas) if arribas else None
+            if arr:
+                # imagen «arriba»: en el lugar de Nacho (tomas con solo pantalla, o para mostrar algo más)
+                imgs = arr["imagenes"]
+                dur = (arr["fin"] - arr["inicio"]) / len(imgs)
+                k = min(int((t - arr["inicio"]) // dur), len(imgs) - 1)
+                fase = min(1.0, (t - arr["inicio"] - k * dur) / dur)
+                lienzo[ay:ay + ah, ax:ax + aw] = imagen_momento(arr, k, aw, ah, fase)
             else:
-                x0, y0, cw, ch = recorte_persona(region, cara, (aw, ah), cfg["persona"])
-                if manual:
-                    x0, y0, cw, ch = ventana_manual(manual, t, region, aw / ah, (x0, y0, cw, ch))
-                pers = cv2.resize(frame[y0:y0 + ch, x0:x0 + cw], (aw, ah), interpolation=cv2.INTER_LANCZOS4)
-            lienzo[ay:ay + ah, ax:ax + aw] = enfocar(pers, cfg["persona"].get("nitidez", 0))
+                cara = interp_cara(toma["cara"], t)
+                region = caja_p if toma["layout"] == "dividida" else [0, 0, frame.shape[1], frame.shape[0]]
+                if cfg["persona"].get("ajuste") == "contener" and region[2] / region[3] < (aw / ah) * 0.8:
+                    pers = persona_contenida(frame, region, cara, aw, ah, cfg["persona"])
+                else:
+                    x0, y0, cw, ch = recorte_persona(region, cara, (aw, ah), cfg["persona"])
+                    if manual:
+                        x0, y0, cw, ch = ventana_manual(manual, t, region, aw / ah, (x0, y0, cw, ch))
+                    pers = cv2.resize(frame[y0:y0 + ch, x0:x0 + cw], (aw, ah), interpolation=cv2.INTER_LANCZOS4)
+                lienzo[ay:ay + ah, ax:ax + aw] = enfocar(pers, cfg["persona"].get("nitidez", 0))
 
             if lay == "dividida":
                 if franja is not None:
@@ -4801,7 +4871,7 @@ def cmd_render(args):
                     vent = ventana_pantalla(pv, t, iw / ih, False, cfg_p)
                     if manual_p:
                         vent = ventana_manual(manual_p, t, pv["caja"], iw / ih, vent)
-                    lienzo[iy:iy + ih, ix:ix + iw] = recortar(frame, vent, iw, ih)
+                    lienzo[iy:iy + ih, ix:ix + iw] = pintar_ventana(frame, vent, iw, ih)
 
         # stickers: encima de lo que se ve, pero debajo de la franja azul y del título. La vista previa va sin
         # ellos (se dibujan en vivo), así que se guarda una copia limpia para ella.
