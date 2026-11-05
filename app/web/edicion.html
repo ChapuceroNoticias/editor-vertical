@@ -1491,6 +1491,12 @@ function saltarPausas() {
   else if (c) video.currentTime = c.fin;
 }
 function bucle() {
+  // el siguiente cuadro se pide primero: un error al dibujar ya no congela la línea de tiempo ni la vista
+  requestAnimationFrame(bucle);
+  if (!linea.width || !capa.width) { if (linea.getBoundingClientRect().width) medir(); return; }   // pestaña oculta
+  try { pasoBucle(); } catch (err) { if (!bucle._aviso) { bucle._aviso = true; console.error(err); } }
+}
+function pasoBucle() {
   saltarPausas();
   const t = ahoraO(), te = aEditado(t), e = muestra(t), v = ventanaActual(t, e);
   const pe = pvEn(t), vp = ventanaPActual(t, pe);
@@ -1502,7 +1508,6 @@ function bucle() {
   $("tiempo").innerHTML = `${mmss(te)} <small>/ ${mmss(durE())}</small>`;
   $("b_play").textContent = video.paused ? "▶ Reproducir" : "❚❚ Pausa";
   pintarPantalla(te); pintarImagen(t); pintarEncuadre(t, e, v); pintarStickerSel();
-  requestAnimationFrame(bucle);
 }
 
 // ---------- encuadre: arrastrar el recuadro ----------
@@ -1719,7 +1724,7 @@ function picoEntre(t0, t1) {   // pico de la onda entre dos tiempos del ORIGINAL
 }
 function dibujarOnda() {
   const [y, h] = CARRILES.au, d = devicePixelRatio, W = linea.width;
-  if (!ONDA) return;
+  if (!ONDA || !W || !h) return;
   const clave = `${vista[0]}|${vista[1]}|${W}|${(E.cortes || []).length}|${(E.cortes || []).map(c => c.inicio + c.fin).reduce((a, b) => a + b, 0)}`;
   if (!ondaCache || ondaCache.clave !== clave) {
     const cv = document.createElement("canvas"); cv.width = W; cv.height = Math.round(h * d);
@@ -1734,7 +1739,7 @@ function dibujarOnda() {
     }
     ondaCache = { clave, cv };
   }
-  lctx.drawImage(ondaCache.cv, 0, y * d);
+  if (ondaCache.cv.width && ondaCache.cv.height) lctx.drawImage(ondaCache.cv, 0, y * d);
 }
 function cortesVisibles() { return (E.cortes_detalle || []).filter(c => c.fin - c.inicio > 0.005); }
 function xCorte(c) { return xDe(aEditado(c.inicio)); }

@@ -491,8 +491,11 @@ function dibujar() {
 }
 
 function bucle() {
-  if (vivo && E) { saltarPausas(); componer(); actualizarControles(); }
-  dibujar(); marcoArrastre(); marcarActiva(); requestAnimationFrame(bucle);
+  requestAnimationFrame(bucle);   // primero: un error al dibujar no congela la pestaña
+  try {
+    if (vivo && E) { saltarPausas(); componer(); actualizarControles(); }
+    dibujar(); marcoArrastre(); marcarActiva();
+  } catch (err) { if (!bucle._aviso) { bucle._aviso = true; console.error(err); } }
 }
 
 // ---------- armado en vivo (misma lógica que el render, sin movimiento de las fotos) ----------
