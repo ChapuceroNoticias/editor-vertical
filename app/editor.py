@@ -2310,7 +2310,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-05k v1.7.0"
+VERSION = "2026-11-05l v1.7.1"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3174,21 +3174,36 @@ def grupos_subtitulos(trabajo, palabras, cfg):
     p = Path(trabajo) / "subtitulos.json"
     if p.exists():
         grupos = cargar_json(p)
-        return sanear_grupos([g for g in grupos if g.get("palabras")])
+        try:
+            cortes = cargar_json(Path(trabajo) / "plan.json").get("cortes", [])
+        except Exception:
+            cortes = []
+        return sanear_grupos([g for g in grupos if g.get("palabras")], cortes)
     palabras = limpiar_transcripcion(palabras)
     if cfg.get("modo") == "frases":
         return estilo_motivacional().agrupar_frases(palabras, cfg)
     return agrupar_subtitulos(palabras, cfg)
 
 
-def sanear_grupos(grupos):
+def sanear_grupos(grupos, cortes=None):
     """Ordena los subtítulos y evita que uno siga activo encima de los siguientes: su fin no pasa del inicio del
-    que sigue (un fin mal escrito, p. ej. 390:11:00, hacía que una línea vieja reapareciera más adelante)."""
+    que sigue (un fin mal escrito, p. ej. 390:11:00, hacía que una línea vieja reapareciera más adelante).
+    'cortes' = tramos quitados a mano: un subtítulo que quedó entero ahí no se ve, así que no cuenta como «el que
+    sigue» (antes cortaba el fin del anterior y al guardar regresaba al tiempo de antes)."""
     grupos = sorted(grupos, key=lambda g: float(g["i"]))
+    cortes = cortes_quitados(cortes) if cortes else []
+
+    def oculto(g):
+        pal = g.get("palabras") or []
+        return bool(cortes) and bool(pal) and all(palabra_cortada(p, cortes) for p in pal)
+    ocultos = [oculto(g) for g in grupos]
     out = []
     for k, g in enumerate(grupos):
         i, f = float(g["i"]), float(g["f"])
-        sig = next((float(h["i"]) for h in grupos[k + 1:] if float(h["i"]) > i), None)
+        if ocultos[k]:
+            out.append(g)
+            continue
+        sig = next((float(h["i"]) for n, h in enumerate(grupos[k + 1:], k + 1) if float(h["i"]) > i and not ocultos[n]), None)
         pal = g.get("palabras") or []
         ult = max((float(p["f"]) for p in pal), default=i)
         tope = sig if sig is not None else ult + 3.0
