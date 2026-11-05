@@ -2016,6 +2016,8 @@ def datos_subtitulos(t):
         # con qué tramos quitados se calcularon estos tiempos (si cambian en Edición, la pestaña se pone al día)
         "cortes": [{"inicio": c["inicio"], "fin": c["fin"], **({"manual": True} if c.get("manual") else {})} for c in cs],
         "firma_cortes": ed.firma_cortes(plan),
+        # si cambia el título en Edición, esta pestaña vuelve a pedir su imagen
+        "titulo_firma": json.dumps([plan.get("titulo", ""), plan.get("titulo_en_video"), plan.get("titulo_fin")]),
         "previa_v": round(vp.stat().st_mtime, 2) if vp.exists() else 0,
         "salida": salida,
         "estilo": {k: cfg.get(k) for k in ("tam", "tam_min", "max_lineas", "color", "contorno", "color_contorno",

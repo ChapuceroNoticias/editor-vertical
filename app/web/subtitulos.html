@@ -213,6 +213,29 @@ function finEf(n) {
   }
   return f;
 }
+// Alargar el fin de un subtítulo recorre el inicio del siguiente (antes se regresaba al guardar, porque el fin no
+// puede pasar del inicio del que sigue). Igual al revés: adelantar un inicio acorta el fin del anterior.
+function ponerTiempo(k, c, v) {
+  filas[k][c] = mmss(v);
+  const el = document.querySelectorAll(".fila")[k];
+  if (el) { const inp = el.querySelector(`input.t[data-c="${c}"]`); if (inp) inp.value = filas[k][c]; el.classList.add("cambiada"); }
+}
+function empujarVecino(n, c) {
+  const fl = filas[n], i = seg(fl.iTxt), f = seg(fl.fTxt);
+  if (i === null || f === null || f <= i) return;
+  if (c === "fTxt") {
+    for (let k = n + 1; k < filas.length; k++) {
+      const j = seg(filas[k].iTxt), fj = seg(filas[k].fTxt);
+      if (j === null || j <= i) continue;
+      if (f > j && fj !== null && f <= fj - 0.2) ponerTiempo(k, "iTxt", f);
+      break;
+    }
+  } else if (c === "iTxt" && n > 0) {
+    const pv = filas[n - 1], ip = seg(pv.iTxt), fp = seg(pv.fTxt);
+    if (ip !== null && fp !== null && i < fp && i >= ip + 0.2) ponerTiempo(n - 1, "fTxt", i);
+  }
+  marcarTiempos(); actualizarBotones();
+}
 function tiempoMal(n, c) {
   const fl = filas[n], i = seg(fl.iTxt), f = seg(fl.fTxt);
   if (c === "iTxt") return i === null || (f !== null && i >= f) || (typeof E !== "undefined" && E && E.video && i > duracionEd() + 1);
@@ -231,7 +254,7 @@ function marcarTiempos() {
     el.querySelectorAll("input.t").forEach(inp => {
       const mal = tiempoMal(n, inp.dataset.c);
       inp.classList.toggle("mal", mal);
-      inp.title = mal ? "Tiempo inválido: el fin no puede pasar del inicio del siguiente subtítulo (se corrige al guardar)" : "";
+      inp.title = mal ? "Tiempo inválido: el fin no puede tapar todo el subtítulo que sigue (se corrige al guardar)" : "";
       m = m || mal;
     });
     if (m) malos++;
@@ -806,9 +829,28 @@ new ResizeObserver(async () => {
 // ¿se renderizó de nuevo o se quitó / restauró un tramo en Edición? Entonces los tiempos de los subtítulos
 // se recalculan (se recarga si aquí no hay cambios sin guardar). true = se recargó.
 let avisoEdicion = false;
+// el título cambió en Edición: se vuelven a pedir sus imágenes (barra del título y la máscara de los stickers)
+function refrescarTitulo(d) {
+  D.titulo_firma = d.titulo_firma; D.titulo = d.titulo; D.titulo_fin = d.titulo_fin;
+  const url = () => `/enc/titulo?t=${encodeURIComponent(T)}&v=${Date.now()}`;
+  stTitulo = null;
+  if (E) { E.titulo = d.titulo; tituloImg = null; if (d.titulo) { const im = new Image(); im.onload = () => { tituloImg = im; }; im.src = url(); } }
+  if (D.solo) {
+    tituloGuardado = d.titulo_texto || ""; enVideoGuardado = !!d.titulo_en_video;
+    if (document.activeElement !== $("titulo_txt")) $("titulo_txt").value = tituloGuardado;
+    $("titulo_en_video").checked = enVideoGuardado;
+    cargarTituloImg(); pintarTitulo();
+  } else if (!vivo && E) {
+    // el video renderizado trae el título anterior: se muestra el armado en vivo con el título nuevo
+    ponerModo(true);
+    $("nota").textContent = "El título cambió: se muestra el armado en vivo. Renderiza la vista previa para verlo en el video renderizado.";
+    $("nota").className = "nota alerta";
+  }
+}
 async function revisarCambiosEdicion() {
   try {
     const d = await (await fetch(`/sub/datos?t=${encodeURIComponent(T)}`)).json();
+    if (D && d.titulo_firma !== D.titulo_firma) refrescarTitulo(d);
     if (D && (d.previa_v !== D.previa_v || d.firma_cortes !== D.firma_cortes)) {
       if (!hayCambios()) { location.reload(); return true; }
       if (!avisoEdicion) {
@@ -896,6 +938,7 @@ function pintarLista() {
         actualizarBotones();
       };
       inp.onfocus = () => { const i = seg(fl.iTxt); if (i !== null && video.paused) irA(i + 0.01); };
+      if (inp.classList.contains("t")) inp.addEventListener("change", () => empujarVecino(n, inp.dataset.c));
     });
     div.querySelector(".mas").onclick = () => {
       const f = seg(fl.fTxt) || 0;
