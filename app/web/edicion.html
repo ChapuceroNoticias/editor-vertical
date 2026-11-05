@@ -1139,8 +1139,8 @@ function tocarLinea(ev) {   // qué bloque y qué parte (mover / inicio / fin) e
   for (const it of itemsLinea()) {
     const [cy, ch] = it.yh || CARRILES[it.carril];
     if (!it.mov || y < cy * d || y > (cy + ch) * d) continue;
-    const x0 = xDe(it.a), x1 = xDe(it.b), borde = Math.min(8 * d, (x1 - x0) / 3);
-    if (x < x0 - 2 * d || x > x1 + 2 * d) continue;
+    const x0 = xDe(it.a), x1 = xDe(it.b), borde = Math.min(10 * d, Math.max(4 * d, (x1 - x0) / 3));
+    if (x < x0 - 5 * d || x > x1 + 5 * d) continue;
     if (it.tipo === "ti") return { it, modo: "fin" };   // del título solo se mueve su final
     return { it, modo: x - x0 < borde ? "ini" : (x1 - x < borde ? "fin" : "mover") };
   }
@@ -1486,7 +1486,8 @@ function pintarListas() {
 // ---------- bucle ----------
 function saltarPausas() {
   if (fuenteProxy || video.paused || video.seeking) return;   // la copia ligera ya no tiene pausas
-  const t = video.currentTime, c = E.cortes.find(c => c.inicio <= t && t < c.fin - 0.02);
+  // se adelanta un poco (≈ un cuadro de pantalla) para no dejar ver los cortes de centésimas de segundo
+  const t = video.currentTime, c = E.cortes.find(c => c.inicio - 0.035 <= t && t < c.fin - 0.005);
   if (c && c.fin >= E.video.duracion - 0.05) { video.pause(); video.currentTime = Math.max(0, c.inicio - 0.02); }   // hasta el final: se detiene
   else if (c) video.currentTime = c.fin;
 }
@@ -1670,7 +1671,7 @@ function leerTramo(ida, idb) {
   const a = seg($(ida).value), b = seg($(idb).value);
   if (a == null || b == null || isNaN(a) || isNaN(b)) return null;
   const ia = aOriginal(a), ib = Math.min(E.video.duracion, aOriginal(b));
-  return ib - ia >= 0.02 ? [ia, ib] : null;
+  return ib - ia >= 0.005 ? [ia, ib] : null;
 }
 async function guardarEncuadre(lista, msg) {
   await enviar("/enc/guardar", { t: T, ajustes: lista }, msg);
@@ -2474,6 +2475,14 @@ async function iniciar() {
     linea.setPointerCapture(ev.pointerId); video.pause();
     const mc = marcaCorteEn(ev);
     if (mc) { elegirCorte(mc, true); return; }
+    // las orillas de un bloque (estirar / acortar) tienen prioridad sobre mover el pedazo de video
+    const hb = tocarLinea(ev);
+    if (hb && hb.modo !== "mover") {
+      if (segSel) { segSel = null; pintarSegbar(); }
+      arrLinea = { ...hb, t0: tLinea(ev), a0: hb.it.a, b0: hb.it.b, a: hb.it.a, b: hb.it.b, x0: ev.clientX, movido: false,
+                   cursor: ahoraE() };
+      return;
+    }
     if (X.estilo !== "solo_subtitulos" && enCarrilP(ev)) {
       const t = tLinea(ev);
       if (ev.shiftKey) {   // Shift + arrastrar: seleccionar un pedazo del video

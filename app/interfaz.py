@@ -1530,12 +1530,14 @@ def quitar_tramo(t, a, b, al_final=False):
     """Quita del video un tramo (a, b en segundos del video ORIGINAL). al_final / un «hasta» en el último cuadro:
     se quita todo lo que sigue (no se cuela el último cuadro)."""
     plan, _ = cargar(t)
-    if b - a < 0.02:
+    if b - a < 0.005:
         raise ValueError("El tramo es muy corto")
     fps = plan["info"]["fps"]
     dur = float(plan["info"]["duracion"])
-    a2 = round(int(float(a) * fps + 0.999) / fps, 4)
-    b2 = round(int(float(b) * fps + 0.999) / fps, 4)
+    # al cuadro más cercano; un tramo de centésimas siempre quita al menos un cuadro
+    ca = int(round(float(a) * fps))
+    cb = max(int(round(float(b) * fps)), ca + 1)
+    a2, b2 = round(ca / fps, 4), round(cb / fps, 4)
     corte = {"inicio": a2, "fin": b2, "manual": True}
     if al_final or b2 >= dur - 1.5 / fps:
         corte.update(fin=round(dur, 4), hasta_final=True)
