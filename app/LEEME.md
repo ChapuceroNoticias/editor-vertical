@@ -283,6 +283,9 @@ Opciones:
   anterior). En la pestaña Encuadre el recuadro automático ya se ve con estas tomas fijas.
 - La persona va a pantalla completa (del recuadro pequeño si la toma es dividida), siempre con la cabeza bajo el título.
 - En los "momentos" cambia a pantalla dividida con una imagen del tema y zoom lento (de 4 a 7 s, cada ~15 s como máximo).
+- **Sin saltos a Nacho completo:** dentro de una pantalla dividida ya no se brinca a Nacho mientras la página se
+  desplaza; los huecos de menos de 1 s (ya con los cortes) entre dos tramos con pantalla o imagen se tapan, y un tramo
+  que empieza o acaba a unas centésimas de un corte se pega al corte (sin cuadros sueltos).
 - La proyección solo se muestra si tiene movimiento (un video corriendo); si está congelada se oculta.
 - Subtítulos palabra por palabra con la palabra activa en rojo.
 - Música en loop que baja sola cuando la persona habla; la voz se nivela si se acerca o aleja del micrófono.

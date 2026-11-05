@@ -2309,7 +2309,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-04f v1.5.1"
+VERSION = "2026-11-05a v1.5.2"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -2888,9 +2888,44 @@ def pista_fija(pista, ancho_ventana, cfg=None, puntos=()):
     return [[round(float(v), 3) for v in f] for f in filas]
 
 
+def sin_saltos(plan, pl, hueco_max=1.0, pegar=0.3):
+    """Evita que la vista salte a Nacho completo por un instante dentro de la pantalla dividida:
+    - mientras la página se desplaza (lectura) ya no se quita la pantalla: se sigue viendo;
+    - huecos cortos (en tiempo del video ya editado) entre dos tramos con pantalla/imagen se tapan;
+    - un tramo que empieza o acaba a unas centésimas de un corte se pega al corte (sin cuadros sueltos).
+    Trabaja sobre una copia: el plan guardado no cambia."""
+    cfg_p = pl.get("proyeccion", {})
+    cortes = unir_cortes(plan.get("cortes", []))
+    ae = lambda t: a_editado(t, cortes)  # noqa: E731
+    plan = dict(plan)
+    proy = []
+    for p in plan.get("proyeccion", []):
+        p = dict(p)
+        if p.get("tipo") == "lectura" and p.get("ocultar") and not cfg_p.get("scroll_como_documento"):
+            p["ocultar"] = []
+        proy.append(p)
+    moms = [dict(m) for m in plan.get("momentos", [])]
+    vis = [p for p in proy if pantalla_de(p, cfg_p) != "nacho"] + \
+          [m for m in moms if m.get("imagenes") and not m.get("oculto")]
+    vis.sort(key=lambda x: x["inicio"])
+    for a, b in zip(vis, vis[1:]):
+        if a["fin"] < b["inicio"] and ae(b["inicio"]) - ae(a["fin"]) < hueco_max:
+            a["fin"] = b["inicio"]
+    for x in vis:
+        for c in cortes:
+            if 0 < x["inicio"] - c["fin"] and ae(x["inicio"]) - ae(c["fin"]) < pegar \
+                    and not any(y is not x and y["inicio"] < c["fin"] + 1e-6 and y["fin"] > c["inicio"] for y in vis):
+                x["inicio"] = c["fin"]
+            if 0 < c["inicio"] - x["fin"] and ae(c["inicio"]) - ae(x["fin"]) < pegar:
+                x["fin"] = c["inicio"]
+    plan["proyeccion"], plan["momentos"] = proy, moms
+    return plan
+
+
 def fijar_plan(plan, pl):
     """Copia del plan con las pistas de cara convertidas en tomas fijas (Nacho y videos de la proyección).
     'pl' debe venir ya con escalar_cajas aplicado."""
+    plan = sin_saltos(plan, pl)
     cfg = pl.get("toma_fija", {})
     if not cfg.get("activar", True):
         return plan
