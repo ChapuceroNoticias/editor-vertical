@@ -1081,6 +1081,25 @@ def estado_difuminar(t):
     return "cancelado" if fue_cancelado(proc) else "error"
 
 
+def soltar_otros(t):
+    """Al abrir otro trabajo: se detienen las vistas previas, copias ligeras y difuminados que seguían trabajando
+    para los trabajos anteriores (le quitaban procesador al actual). La exportación y el video largo no se tocan."""
+    t = str(t or "")
+    n = 0
+    for reg in (_PROXY_TRABAJOS, _DIF_PROC, _RENDER_EDI):
+        for k in list(reg):
+            v = reg[k]
+            proc = v.get("proc") if isinstance(v, dict) else v
+            if str(k) == t or proc is None:
+                continue
+            if proc.poll() is None:
+                _matar(proc); n += 1
+            reg.pop(k, None)
+    if n:
+        registrar(f"🧹 Se detuvieron {n} proceso(s) que seguían trabajando para otro trabajo")
+    return n
+
+
 def cancelar_todo():
     """Detiene todo lo que esté trabajando: análisis, exportación, conversión, vistas previas,
     búsqueda de clips del video largo y la cola de fragmentos pendientes."""
@@ -2692,6 +2711,7 @@ def registrar(linea):
     linea = f"{time.strftime('%H:%M:%S')}  {linea}"
     with _reg_lock:
         REGISTRO.append(linea)
+        _REG_N[0] += 1
         if len(REGISTRO) > REGISTRO_MAX:
             del REGISTRO[:len(REGISTRO) - REGISTRO_MAX]
         try:
@@ -2701,14 +2721,127 @@ def registrar(linea):
             pass
 
 
+_REG_N = [0]   # cuántas veces cambió el registro (para no mandar el texto si no hay nada nuevo)
+
+
 def texto_registro():
     with _reg_lock:
         return "\n".join(REGISTRO[-1500:]) or "Aquí aparece lo que va haciendo la plataforma cuando procesas un video."
 
 
+def tick_registro(visto):
+    """Cada 2 s: solo manda el registro si hay algo nuevo (antes mandaba hasta 1500 líneas cada vez, todo el día)."""
+    n = _REG_N[0]
+    if n == visto:
+        return gr.update(), visto
+    return texto_registro(), n
+
+
+_GPU_CACHE = {"t": 0, "datos": None}
+
+
+def estado_gpu():
+    """Temperatura, uso y si la tarjeta NVIDIA está bajando su velocidad por calor (se consulta cada 15 s)."""
+    if time.time() - _GPU_CACHE["t"] < 15:
+        return _GPU_CACHE["datos"]
+    _GPU_CACHE["t"] = time.time()
+    datos = None
+    smi = shutil.which("nvidia-smi")
+    if smi:
+        base = "name,temperature.gpu,utilization.gpu,memory.used,memory.total"
+        for calor in ("clocks_event_reasons.sw_thermal_slowdown,clocks_event_reasons.hw_thermal_slowdown",
+                      "clocks_throttle_reasons.sw_thermal_slowdown,clocks_throttle_reasons.hw_thermal_slowdown", ""):
+            try:
+                q = base + ("," + calor if calor else "")
+                r = subprocess.run([smi, f"--query-gpu={q}", "--format=csv,noheader,nounits"], capture_output=True,
+                                   text=True, timeout=5, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                if r.returncode != 0 or not r.stdout.strip():
+                    continue
+                v = [x.strip() for x in r.stdout.strip().splitlines()[0].split(",")]
+                datos = {"nombre": v[0], "temp": float(v[1]), "uso": float(v[2]), "mem": float(v[3]), "mem_total": float(v[4]),
+                         "calor": any(x.lower() == "active" for x in v[5:])}
+                break
+            except Exception:
+                continue
+    _GPU_CACHE["datos"] = datos
+    return datos
+
+
+def estado_equipo():
+    """Recuadro de «Registro»: memoria, disco, procesos de la plataforma y calor, para saber por qué se alenta."""
+    filas, alertas = [], []
+    try:
+        import psutil
+    except Exception:
+        psutil = None
+    if psutil:
+        try:
+            yo = psutil.Process()
+            hijos = yo.children(recursive=True)
+            mem = yo.memory_info().rss
+            for h in hijos:
+                try:
+                    mem += h.memory_info().rss
+                except Exception:
+                    pass
+            vm = psutil.virtual_memory()
+            filas.append(("Memoria de la plataforma", f"{mem / 2**30:.1f} GB"))
+            filas.append(("Memoria del equipo", f"{vm.percent:.0f}% ocupada ({vm.available / 2**30:.1f} GB libres)"))
+            if vm.percent >= 90:
+                alertas.append("La memoria del equipo está casi llena: cierra pestañas de Chrome o reinicia la plataforma.")
+            cpu = psutil.cpu_percent(interval=None)
+            filas.append(("Procesador", f"{cpu:.0f}% en uso"))
+            try:
+                temps = psutil.sensors_temperatures() if hasattr(psutil, "sensors_temperatures") else {}
+                maxt = max((x.current for v in temps.values() for x in v if x.current), default=None)
+                if maxt:
+                    filas.append(("Temperatura del procesador", f"{maxt:.0f} °C"))
+                    if maxt >= 90:
+                        alertas.append("El procesador está muy caliente: baja su velocidad solo para protegerse.")
+            except Exception:
+                pass
+        except Exception:
+            pass
+    try:
+        du = shutil.disk_usage(CARPETA_VIDEOS if Path(CARPETA_VIDEOS).exists() else BASE)
+        pct = du.used / du.total * 100
+        filas.append(("Disco de los videos", f"{du.free / 2**30:.0f} GB libres ({pct:.0f}% ocupado)"))
+        if pct >= 90 or du.free < 15 * 2**30:
+            alertas.append("Queda poco espacio en disco: borra trabajos viejos o exportados que ya no uses.")
+    except Exception:
+        pass
+    g = estado_gpu()
+    if g:
+        filas.append(("Tarjeta gráfica", f"{g['nombre']} · {g['temp']:.0f} °C · {g['uso']:.0f}% en uso · "
+                                          f"{g['mem'] / 1024:.1f} de {g['mem_total'] / 1024:.0f} GB"))
+        if g["calor"] or g["temp"] >= 85:
+            alertas.append("La tarjeta gráfica está caliente y bajó su velocidad: por eso el render va más lento. "
+                           "Revisa que tenga ventilación.")
+    with _ACTIVOS_LOCK:
+        vivos = [x for x in _ACTIVOS if x.poll() is None]
+    nombres = []
+    for x in vivos:
+        try:
+            args = x.args if isinstance(x.args, (list, tuple)) else [str(x.args)]
+            que = next((a for a in args[2:3]), Path(str(args[0])).name)
+            que = {"proxy": "copia ligera", "render": "render", "difuminar": "difuminado", "analizar": "análisis",
+                   "exportar": "exportación"}.get(str(que), str(que))
+            mins = (time.time() - getattr(x, "_inicio", time.time())) / 60
+            nombres.append(f"{que} ({mins:.0f} min)")
+        except Exception:
+            pass
+    filas.append(("Procesos trabajando", ", ".join(nombres) if nombres else "ninguno"))
+    if any(getattr(x, "_inicio", time.time()) < time.time() - 3600 for x in vivos):
+        alertas.append("Hay un proceso trabajando desde hace más de una hora: si no esperas nada, usa «Cancelar todo».")
+    html = "".join(f"<div class='est-f'><span>{k}</span><b>{v}</b></div>" for k, v in filas)
+    html += "".join(f"<div class='est-a'>⚠ {a}</div>" for a in alertas) or "<div class='est-ok'>Todo en orden.</div>"
+    return f"<div id='estado_equipo'><div class='est-t'>Estado del equipo</div>{html}</div>"
+
+
 def limpiar_registro():
     with _reg_lock:
         REGISTRO.clear()
+        _REG_N[0] += 1
     return texto_registro()
 
 
@@ -2841,6 +2974,35 @@ footer { display: none !important; }
 #btn_cerrar { justify-content: flex-start !important; height: 38px; padding: 0 10px !important; border: 0 !important; background: transparent !important;
   color: #9A9AA3 !important; font: 400 14px "Geist", sans-serif !important; box-shadow: none !important; }
 #btn_cerrar:hover { color: #FF8C8F !important; background: rgba(229,37,42,.08) !important; }
+/* menú lateral plegable (solo iconos), como el de ChatGPT */
+#nav { transition: flex-basis .18s ease, min-width .18s ease, max-width .18s ease, padding .18s ease; overflow: hidden; }
+#nav .marca { position: relative; padding-right: 40px; white-space: nowrap; }
+#nav .plegar { position: absolute; right: 2px; top: 0; width: 30px; height: 30px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+#nav .plegar::before { content: ''; position: absolute; inset: 6px; background: #9A9AA3; -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='4'%20width='18'%20height='16'%20rx='2.5'/%3E%3Cpath%20d='M9%204v16'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='4'%20width='18'%20height='16'%20rx='2.5'/%3E%3Cpath%20d='M9%204v16'/%3E%3C/svg%3E") center / contain no-repeat; }
+#nav .plegar:hover { background: #141417; } #nav .plegar:hover::before { background: #fff; }
+#nav_editor::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M4%2020h4L19%209l-4-4L4%2016v4z'/%3E%3Cpath%20d='M13.5%206.5l4%204'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M4%2020h4L19%209l-4-4L4%2016v4z'/%3E%3Cpath%20d='M13.5%206.5l4%204'/%3E%3C/svg%3E"); }
+#nav_largo::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='5'%20width='18'%20height='14'%20rx='2'/%3E%3Cpath%20d='M7%205v14M17%205v14M3%209.5h4M3%2014.5h4M17%209.5h4M17%2014.5h4'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='5'%20width='18'%20height='14'%20rx='2'/%3E%3Cpath%20d='M7%205v14M17%205v14M3%209.5h4M3%2014.5h4M17%209.5h4M17%2014.5h4'/%3E%3C/svg%3E"); }
+#nav_aprendido::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9%2018h6M10%2021h4'/%3E%3Cpath%20d='M12%203a6%206%200%200%200-3.5%2010.9c.6.5%201%201.2%201%202.1h5c0-.9.4-1.6%201-2.1A6%206%200%200%200%2012%203z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9%2018h6M10%2021h4'/%3E%3Cpath%20d='M12%203a6%206%200%200%200-3.5%2010.9c.6.5%201%201.2%201%202.1h5c0-.9.4-1.6%201-2.1A6%206%200%200%200%2012%203z'/%3E%3C/svg%3E"); }
+#nav_registro::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M8%206h12M8%2012h12M8%2018h12'/%3E%3Ccircle%20cx='4'%20cy='6'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='12'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='18'%20r='.6'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M8%206h12M8%2012h12M8%2018h12'/%3E%3Ccircle%20cx='4'%20cy='6'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='12'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='18'%20r='.6'/%3E%3C/svg%3E"); }
+#btn_cerrar::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%203v8'/%3E%3Cpath%20d='M6.3%206.8a8%208%200%201%200%2011.4%200'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%203v8'/%3E%3Cpath%20d='M6.3%206.8a8%208%200%201%200%2011.4%200'/%3E%3C/svg%3E"); }
+#nav button.nav::before, #btn_cerrar::before { content: ''; flex: 0 0 18px; width: 18px; height: 18px; margin-right: 10px; background: currentColor; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
+#nav button.nav, #btn_cerrar { white-space: nowrap; overflow: hidden; }
+#nav.mini { flex-basis: 64px !important; max-width: 64px !important; min-width: 64px !important; padding: 22px 10px !important; }
+#nav.mini .marca { padding: 4px 0 22px 6px; font-size: 0; }
+#nav.mini .marca i { display: none; }
+#nav.mini .plegar { position: relative; right: auto; top: auto; display: block; margin: 0 auto; }
+#nav.mini .marca { padding: 4px 0 22px 0; gap: 0; justify-content: center; }
+#nav.mini button.nav, #nav.mini #btn_cerrar { font-size: 0 !important; justify-content: center !important; padding: 0 !important; }
+#nav.mini button.nav::before, #nav.mini #btn_cerrar::before { margin-right: 0; }
+#nav.mini .carpeta { display: none; }
+
+/* estado del equipo (Registro) */
+#estado_equipo { border: 1px solid #2A2A30; border-radius: 12px; background: #141417; padding: 14px 16px; margin-bottom: 14px; }
+#estado_equipo .est-t { font: 600 13px "Geist", sans-serif; color: #EDEDF0; margin-bottom: 8px; }
+#estado_equipo .est-f { display: flex; justify-content: space-between; gap: 16px; padding: 5px 0; border-top: 1px solid #1D1D22; font-size: 13px; }
+#estado_equipo .est-f span { color: #9A9AA3; } #estado_equipo .est-f b { color: #EDEDF0; font-weight: 500; text-align: right; }
+#estado_equipo .est-a { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(242,163,58,.1); color: #F2A33A; font-size: 13px; }
+#estado_equipo .est-ok { margin-top: 8px; color: #3DD68C; font-size: 13px; }
 /* contenido */
 #contenido { padding: 0 !important; min-width: 0 !important; gap: 0 !important; }
 #secciones > .tab-wrapper { display: none !important; }
@@ -2909,7 +3071,26 @@ button.secondary { background: #1D1D22 !important; border: 1px solid #2A2A30 !im
 #caja_registro textarea { font: 12.5px/1.5 "Geist Mono", monospace !important; background: #0B0B0D !important; }
 """
 
-TEMA_JS = "() => { document.body.classList.add('dark'); }"
+TEMA_JS = """() => {
+  document.body.classList.add('dark');
+  // menú lateral plegable: se recuerda en este navegador
+  let MINI = false;
+  const poner = (mini) => {
+    MINI = mini;
+    const n = document.getElementById('nav'); if (n) n.classList.toggle('mini', mini);
+    document.querySelectorAll('#nav button.nav, #btn_cerrar').forEach(b => { b.title = mini ? b.textContent.trim() : ''; });
+    const p = document.querySelector('#nav .plegar'); if (p) p.title = mini ? 'Mostrar menú' : 'Ocultar menú';
+  };
+  let mini = false; try { mini = localStorage.getItem('nav_mini') === '1'; } catch (e) {}
+  poner(mini);
+  // por si la página vuelve a dibujar el menú
+  setInterval(() => { const n = document.getElementById('nav'); if (n && n.classList.contains('mini') !== MINI) poner(MINI); }, 700);
+  document.addEventListener('click', (ev) => {
+    if (!ev.target.closest('#nav .plegar')) return;
+    const m = !MINI; poner(m);
+    try { localStorage.setItem('nav_mini', m ? '1' : '0'); } catch (e) {}
+  });
+}"""
 
 JS_CERRAR = """() => {
   if (!confirm('¿Cerrar el Editor Vertical? Se detiene todo lo que esté trabajando (análisis, exportación, vistas previas, video largo).')) return;
@@ -2976,11 +3157,12 @@ def construir():
         with gr.Row(elem_id="marco", equal_height=False):
             # ======================== menú lateral ========================
             with gr.Column(elem_id="nav", scale=0, min_width=232):
-                gr.HTML('<div class="marca"><i><span></span></i>Editor Vertical</div>')
-                botones_nav = [gr.Button(txt, elem_classes=["nav"] + (["activo"] if k == "editor" else []), size="sm")
-                               for k, txt in NAV]
+                gr.HTML('<div class="marca"><i><span></span></i>Editor Vertical'
+                        '<button class="plegar" type="button" title="Ocultar menú"></button></div>')
+                botones_nav = [gr.Button(txt, elem_id=f"nav_{k}", elem_classes=["nav"] + (["activo"] if k == "editor" else []),
+                                         size="sm") for k, txt in NAV]
                 gr.HTML(f'<div class="relleno"></div><div class="carpeta">Carpeta<b>{CARPETA_VIDEOS}</b></div>')
-                btn_cerrar = gr.Button("⏻  Cerrar", elem_id="btn_cerrar", size="sm")
+                btn_cerrar = gr.Button("Cerrar", elem_id="btn_cerrar", size="sm")
             # Cerrar: detiene todo lo que esté trabajando, apaga la plataforma y deja la pestaña en blanco
             btn_cerrar.click(None, None, None, js=JS_CERRAR)
 
@@ -3059,6 +3241,7 @@ def construir():
                             gr.HTML('<div class="titulo-sec"><h1>Registro</h1><p>Lo que va haciendo la plataforma paso a paso '
                                     f'(se actualiza solo). También se guarda en {ARCHIVO_REGISTRO.name} dentro de la carpeta '
                                     'del editor.</p></div>')
+                            caja_estado = gr.HTML(estado_equipo)
                             caja_registro = gr.Textbox(value=texto_registro, show_label=False, lines=28, max_lines=28,
                                                        interactive=False, autoscroll=True, elem_id="caja_registro")
                             with gr.Row():
@@ -3073,9 +3256,12 @@ def construir():
             b.click(lambda k=k: ir_a(k), None, [secciones] + botones_nav, queue=False)
 
         btn_reg_act.click(texto_registro, None, caja_registro)
+        btn_reg_act.click(estado_equipo, None, caja_estado)
         btn_reg_limpiar.click(limpiar_registro, None, caja_registro)
         if hasattr(gr, "Timer"):
-            gr.Timer(2.0).tick(texto_registro, None, caja_registro, show_progress="hidden")
+            reg_visto = gr.State(-1)
+            gr.Timer(2.0).tick(tick_registro, reg_visto, [caja_registro, reg_visto], show_progress="hidden")
+            gr.Timer(6.0).tick(estado_equipo, None, caja_estado, show_progress="hidden")
 
         # ======================== lógica ========================
         def refrescar_listas():
@@ -3108,6 +3294,7 @@ def construir():
 
         def todo_ui(t):
             """Valores para refrescar la interfaz con el trabajo t."""
+            soltar_otros(t)
             return (t, iframe_edi(t), iframe_subs(t), video_salida(t), nombre_trabajo(t),
                     gr.Column(visible=False), gr.Column(visible=True))
 

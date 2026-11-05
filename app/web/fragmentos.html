@@ -463,7 +463,12 @@ function cabezal() {
   const tl = $("tl"), x = t * k;
   if (!$("vid").paused && (x < tl.scrollLeft || x > tl.scrollLeft + tl.clientWidth - 30)) tl.scrollLeft = x - 40;
 }
-function bucleCabezal() { if (!$("vid").paused) cabezal(); requestAnimationFrame(bucleCabezal); }
+function bucleCabezal() {
+  requestAnimationFrame(bucleCabezal);
+  const v = $("vid");
+  if (document.hidden || !document.documentElement.clientWidth) { if (!v.paused) v.pause(); return; }   // sección oculta
+  if (!v.paused) cabezal();
+}
 requestAnimationFrame(bucleCabezal);
 $("vid").addEventListener("timeupdate", cabezal);
 $("vid").addEventListener("seeked", cabezal);
@@ -649,6 +654,17 @@ $("estilo").onchange = () => guardar();
   await cargarVideos();
   try { const v = localStorage.getItem("frag_video"); if (v && [...$("video").options].some(o => o.value === v)) $("video").value = v; } catch (e) {}
   if ($("video").value) abrir();
+})();
+
+// Sección oculta: el navegador deja de pedir cuadros, pero un video que se estaba reproduciendo seguía
+// decodificándose (procesador). Si pasa más de 1.5 s sin cuadros, se pausan los videos y audios de la página.
+(function () {
+  let ultimo = performance.now();
+  (function marca() { ultimo = performance.now(); requestAnimationFrame(marca); })();
+  setInterval(() => {
+    if (performance.now() - ultimo > 1500)
+      document.querySelectorAll("video, audio").forEach(m => { if (!m.paused) m.pause(); });
+  }, 1000);
 })();
 </script>
 </body>

@@ -254,6 +254,15 @@ En la pestaña **«Lo aprendido»** ves las reglas propuestas: **Aprobar** o **D
 usan, y solo en los análisis nuevos (no cambian videos ya hechos). «Aprender de todos los trabajos» revisa todas
 las carpetas `_trabajo` que ya tengas. Todo se guarda en la carpeta `aprendizaje\` del programa.
 
+## Si la plataforma se alenta después de horas
+
+- **Registro › Estado del equipo** (se actualiza solo): memoria de la plataforma y del equipo, procesador, espacio en
+  disco, temperatura y uso de la tarjeta gráfica (avisa si bajó su velocidad por calor) y los procesos que siguen
+  trabajando. Cuando algo está mal aparece un aviso en naranja.
+- Al abrir otro trabajo se detienen las vistas previas y copias ligeras que seguían trabajando para el anterior.
+- Las secciones ocultas pausan su video; el Registro solo se manda al navegador cuando hay líneas nuevas.
+- Remedio rápido: **Cerrar** la plataforma, cerrar Chrome y volver a abrir.
+
 ## Uso desde la terminal
 Todo en un paso:
     cd C:\editor_vertical

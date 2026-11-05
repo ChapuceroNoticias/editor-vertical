@@ -12,3 +12,4 @@ rapidocr
 onnxruntime
 scikit-learn>=1.3
 scipy>=1.10
+psutil

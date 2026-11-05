@@ -515,6 +515,8 @@ function dibujar() {
 
 function bucle() {
   requestAnimationFrame(bucle);   // primero: un error al dibujar no congela la pestaña
+  // pestaña oculta (estás en Edición u otra sección): no se dibuja nada y el video se pausa
+  if (document.hidden || !document.documentElement.clientWidth) { if (!video.paused) video.pause(); return; }
   try {
     if (vivo && E) { saltarPausas(); componer(); actualizarControles(); }
     dibujar(); marcoArrastre(); marcarActiva();
@@ -1129,6 +1131,17 @@ new ResizeObserver(ajustarCanvas).observe(video);
 video.addEventListener("loadedmetadata", ajustarCanvas);
 if (T) { cargar(); requestAnimationFrame(bucle); }
 else $("lista").innerHTML = '<div style="padding:30px;color:var(--suave)">Carga un video primero.</div>';
+
+// Sección oculta: el navegador deja de pedir cuadros, pero un video que se estaba reproduciendo seguía
+// decodificándose (procesador). Si pasa más de 1.5 s sin cuadros, se pausan los videos y audios de la página.
+(function () {
+  let ultimo = performance.now();
+  (function marca() { ultimo = performance.now(); requestAnimationFrame(marca); })();
+  setInterval(() => {
+    if (performance.now() - ultimo > 1500)
+      document.querySelectorAll("video, audio").forEach(m => { if (!m.paused) m.pause(); });
+  }, 1000);
+})();
 </script>
 </body>
 </html>
