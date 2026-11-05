@@ -254,6 +254,18 @@ En la pestaña **«Lo aprendido»** ves las reglas propuestas: **Aprobar** o **D
 usan, y solo en los análisis nuevos (no cambian videos ya hechos). «Aprender de todos los trabajos» revisa todas
 las carpetas `_trabajo` que ya tengas. Todo se guarda en la carpeta `aprendizaje\` del programa.
 
+## Exportación rápida (por partes y con la tarjeta gráfica)
+
+- La exportación final se reparte en **3 partes que se arman a la vez** (4 en equipos de 20 hilos o más), cada una en
+  su núcleo; al final se juntan **sin volver a codificar** y se les pone el audio de todo el video. Sale idéntica a la
+  exportación de antes (mismos cuadros, mismo audio).
+- Los cuadros del video original los **decodifica la tarjeta gráfica** (NVDEC) en un proceso aparte; si no se puede,
+  ffmpeg lo hace con el procesador, y si tampoco, se usa la lectura de siempre.
+- Videos de menos de 20 s se exportan de la forma normal. Si alguna parte falla, se detienen las demás y se exporta de
+  la forma normal (sale bien, solo tarda lo de antes).
+- Para forzar: variable `EDITOR_TRAMOS` (1 = como antes; 2 a 6 = partes a la vez). `EDITOR_SIN_NVDEC=1` = sin la
+  tarjeta gráfica para leer.
+
 ## Si la plataforma se alenta después de horas
 
 - **Registro › Estado del equipo** (se actualiza solo): memoria de la plataforma y del equipo, procesador, espacio en

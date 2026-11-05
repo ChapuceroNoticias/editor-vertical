@@ -365,7 +365,7 @@ def render(args, trabajo, plan, pl):
            "-i", plan["video"], "-map", "0:v", "-map", "1:a:0?",
            "-c:a", "aac", "-b:a", f"{max(32, int(kbps * 0.96))}k",
            *venc, "-pix_fmt", "yuv420p", "-shortest", "-movflags", "+faststart", str(salida)]
-    ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    ff = ed.abrir_salida(cmd)
     vista = ed.VistaPrevia(trabajo, W, H, fps)
 
     titulo_capa = titulo_del_plan(plan, pl)   # barra del título encima del clip (si se pidió)
@@ -382,8 +382,8 @@ def render(args, trabajo, plan, pl):
                 return f
         return None
 
-    cap = cv2.VideoCapture(plan["video"])
-    idx = 0
+    cap = ed.lector_render(plan, info)
+    idx = ed.inicio_tramo()[0]
     total = info["cuadros"] or 1
     while True:
         ok, frame = cap.read()
@@ -437,6 +437,8 @@ def render(args, trabajo, plan, pl):
     if ff.wait() != 0:
         raise SystemExit("ffmpeg falló al codificar")
     vista.cerrar(salida)
+    if ed.TRAMO:
+        return salida
     ed.Progreso.paso(1.0, "Listo")
     ed.log(f"Listo: {salida}")
     return salida

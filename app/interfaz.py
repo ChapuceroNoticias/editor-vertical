@@ -578,6 +578,22 @@ def leer_saltos(texto):
     return palabras, saltos
 
 
+def fuera_de_cortes(a_o, b_o, cortes):
+    """Tiempo (original) de una palabra escrita a mano, siempre FUERA de los tramos quitados: si cruza uno, se queda
+    del lado donde dura más (antes se quedaba del lado donde empezaba aunque fuera por 2 milésimas, y quedaba casi
+    toda dentro del tramo quitado: se ocultaba al guardar, p. ej. «Santiago» en «de parte de Santiago Peña»)."""
+    b_o = max(a_o + 0.02, b_o)
+    for c in cortes:
+        if a_o < c["fin"] and b_o > c["inicio"]:   # se enciman
+            antes, despues = c["inicio"] - a_o, b_o - c["fin"]
+            if antes >= despues and antes >= 0.02:
+                b_o = c["inicio"] - 0.001
+            else:
+                a_o = c["fin"] + 0.001
+                b_o = max(b_o, a_o + 0.02)
+    return round(a_o, 3), round(b_o, 3)
+
+
 def guardar_subtitulos(trabajo, tabla, cortes=None):
     """Los tiempos de la tabla son del video editado. 'cortes' = los tramos quitados con los que la pestaña
     calculó esos tiempos (si en Edición se quitó o restauró algo después, se convierten con los de entonces)."""
@@ -645,13 +661,10 @@ def guardar_subtitulos(trabajo, tabla, cortes=None):
             paso = (fin_e - ini_e) / len(palabras_nuevas)
             tiempos = [(ini_e + k * paso, ini_e + (k + 1) * paso) for k in range(len(palabras_nuevas))]
         pal = []
+        todos_cortes = ed.unir_cortes(plan.get("cortes", []))
         for txt, (a_e, b_e) in zip(palabras_nuevas, tiempos):
-            a_o = a_orig(a_e + 0.001)
-            b_o = max(a_o + 0.02, a_orig(max(a_e + 0.002, b_e - 0.001)))
-            # si cruza una pausa recortada, la palabra se queda en el lado donde empieza (no dentro de la pausa)
-            if any(c["inicio"] < (a_o + b_o) / 2 < c["fin"] for c in ed.unir_cortes(plan.get("cortes", []))):
-                b_o = a_o + min(0.3, b_e - a_e)
-            pal.append({"p": txt, "i": a_o, "f": round(b_o, 3)})
+            a_o, b_o = fuera_de_cortes(a_orig(a_e + 0.001), a_orig(max(a_e + 0.002, b_e - 0.001)), todos_cortes)
+            pal.append({"p": txt, "i": a_o, "f": b_o})
         for k in saltos:
             if k < len(pal) - 1:
                 pal[k]["salto"] = True

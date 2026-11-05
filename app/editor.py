@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
@@ -2309,7 +2310,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-05h v1.5.9"
+VERSION = "2026-11-05j v1.6.1"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3685,6 +3686,8 @@ class VistaPrevia:
     def __init__(self, trabajo, W, H, fps, solo_diseno=False):
         self.dir = Path(trabajo)
         self.tmp = self.dir / "vista_previa_tmp.mp4"
+        if TRAMO:   # en una exportación por partes cada parte hace su pedazo de vista previa
+            self.tmp = Path(TRAMO["dir"]) / f"vista_{TRAMO['k']}.mp4"
         self.w, self.h = W // 2, H // 2
         self.fps = fps
         self.linea = []
@@ -3694,8 +3697,9 @@ class VistaPrevia:
             return
         cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{self.w}x{self.h}",
                "-r", f"{fps}", "-i", "-",
-               *(["-c:v", "h264_nvenc", "-preset", "p1", "-cq", "32"] if SOLO_GPU else
-                 ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "30", "-threads", "2"]),
+               # por partes: con el procesador (es chica) para no pasar del límite de codificadores de la tarjeta
+               *(["-c:v", "h264_nvenc", "-preset", "p1", "-cq", "32"] if SOLO_GPU and not TRAMO else
+                 ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "30", "-threads", "1" if TRAMO else "2"]),
                "-pix_fmt", "yuv420p", str(self.tmp)]
         try:
             self.ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
@@ -3712,6 +3716,12 @@ class VistaPrevia:
                 self.ff = None
 
     def cerrar(self, final):
+        if TRAMO:   # la junta el proceso que repartió el trabajo
+            guardar_json(Path(TRAMO["dir"]) / f"vista_{TRAMO['k']}.json", {"diseno": self.linea})
+            if self.ff:
+                self.ff.stdin.close()
+                self.ff.wait()
+            return
         guardar_json(self.dir / "vista_previa.json", {"diseno": self.linea, "fps": self.fps})
         if not self.ff:
             return
@@ -4112,6 +4122,388 @@ def nvenc_disponible():
 PREVIA_FPS = 15   # cuadros por segundo de la «vista previa ligera»
 
 
+# ----------------------------------------------------------------------------
+# Lectura de cuadros con la tarjeta gráfica (NVDEC) y exportación por tramos en paralelo
+# ----------------------------------------------------------------------------
+_SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+_PROBE_CACHE = {}
+
+
+def _sondear_video(video):
+    """{'cfr': bool, 'hw': bool} — si el video es de cuadros parejos (se puede brincar por tiempo) y si hay NVIDIA."""
+    clave = str(video)
+    if clave in _PROBE_CACHE:
+        return _PROBE_CACHE[clave]
+    cfr = False
+    try:
+        r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                            "stream=r_frame_rate,avg_frame_rate", "-of", "json", str(video)],
+                           capture_output=True, text=True, timeout=30, creationflags=_SIN_VENTANA)
+        st = json.loads(r.stdout or "{}").get("streams", [{}])[0]
+
+        def fr(x):
+            a, _, b = str(x or "0/1").partition("/")
+            return float(a) / float(b or 1) if float(b or 1) else 0.0
+        rf, af = fr(st.get("r_frame_rate")), fr(st.get("avg_frame_rate"))
+        cfr = rf > 0 and abs(rf - af) < 1e-3 * rf
+    except Exception:
+        pass
+    hw = bool(shutil.which("nvidia-smi")) and os.environ.get("EDITOR_SIN_NVDEC") != "1"
+    _PROBE_CACHE[clave] = {"cfr": cfr, "hw": hw}
+    return _PROBE_CACHE[clave]
+
+
+class Lector:
+    """Lee los cuadros del video como cv2.VideoCapture.read(), pero decodificando en un proceso de ffmpeg aparte,
+    con la tarjeta gráfica si hay NVIDIA (si no puede, ffmpeg decodifica con el procesador por su cuenta).
+    'desde' = primer cuadro (contando desde 0) y 'hasta' = cuadro donde se detiene (sin incluirlo).
+    Si algo falla al arrancar, se usa cv2 como siempre."""
+
+    def __init__(self, video, info, desde=0, hasta=None):
+        self.video, self.desde, self.hasta = str(video), int(desde), hasta
+        self.w, self.h = int(info["ancho"]), int(info["alto"])
+        self.n = 0
+        self.proc = None
+        self.cap = None
+        self.modo = "cv2"
+        if os.environ.get("EDITOR_LECTOR") != "cv2":
+            try:
+                self._abrir_ffmpeg(info)
+            except Exception as e:
+                log(f"Lectura con ffmpeg no disponible ({e}); se usa la normal")
+                self._cerrar_proc()
+        if self.proc is None:
+            self.cap = cv2.VideoCapture(self.video)
+            k = 0
+            while k < self.desde and self.cap.grab():   # exacto aunque el video no tenga cuadros parejos
+                k += 1
+
+    def _abrir_ffmpeg(self, info):
+        s = _sondear_video(self.video)
+        cmd = ["ffmpeg", "-v", "error", "-nostdin"]
+        if s["hw"]:
+            cmd += ["-hwaccel", "cuda"]
+        filtro = []
+        if self.desde > 0:
+            if s["cfr"]:
+                # brinco exacto por tiempo (ffmpeg decodifica desde el cuadro clave y tira lo de antes)
+                cmd += ["-ss", f"{(self.desde - 0.5) / float(info['fps']):.6f}"]
+            else:
+                filtro = ["-vf", f"select=gte(n\\,{self.desde})"]
+        cmd += ["-i", self.video, "-map", "0:v:0", *filtro, "-fps_mode", "passthrough",
+                "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
+        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                     bufsize=self.w * self.h * 3 * 2, creationflags=_SIN_VENTANA)
+        self.bytes = self.w * self.h * 3
+        # el primer cuadro dice si funcionó (si no, se usa cv2)
+        self.primero = self._leer_bytes()
+        if self.primero is None:
+            raise RuntimeError("ffmpeg no entregó cuadros")
+        self.modo = "nvdec" if s["hw"] else "ffmpeg"
+
+    def _leer_bytes(self):
+        fr = np.empty((self.h, self.w, 3), np.uint8)
+        mv = memoryview(fr).cast("B")
+        leidos = 0
+        while leidos < self.bytes:
+            k = self.proc.stdout.readinto(mv[leidos:])
+            if not k:
+                return None
+            leidos += k
+        return fr
+
+    def read(self):
+        if self.hasta is not None and self.desde + self.n >= self.hasta:
+            return False, None
+        if self.proc is not None:
+            if self.primero is not None:
+                fr, self.primero = self.primero, None
+            else:
+                fr = self._leer_bytes()
+            if fr is None:
+                return False, None
+            self.n += 1
+            return True, fr
+        ok, fr = self.cap.read()
+        if ok:
+            self.n += 1
+        return ok, fr
+
+    def _cerrar_proc(self):
+        if self.proc is not None:
+            try:
+                self.proc.kill()
+                self.proc.wait(timeout=5)
+            except Exception:
+                pass
+            self.proc = None
+
+    def release(self):
+        self._cerrar_proc()
+        if self.cap is not None:
+            self.cap.release()
+
+
+# Proceso hijo que arma un solo tramo (lo pone EDITOR_TRAMO = {"k", "desde", "hasta", "n0", "dir"})
+TRAMO = json.loads(os.environ["EDITOR_TRAMO"]) if os.environ.get("EDITOR_TRAMO") else None
+
+
+def inicio_tramo():
+    """(primer cuadro del video original, cuadros de salida que van antes) para el ciclo del render."""
+    return (TRAMO["desde"], TRAMO["n0"]) if TRAMO else (0, 0)
+
+
+def lector_render(plan, info):
+    return Lector(plan["video"], info, *((TRAMO["desde"], TRAMO["hasta"]) if TRAMO else (0, None)))
+
+
+class _Salida:
+    """El ffmpeg del render. En un tramo: solo video (sin audio) a su archivo, y se cuentan los cuadros."""
+
+    def __init__(self, cmd):
+        self.escritos = 0
+        if TRAMO:
+            i0 = cmd.index("-f")
+            i1 = cmd.index("-i", i0) + 2               # entrada de cuadros: -f rawvideo ... -i -
+            c0 = cmd.index("-c:v")
+            c1 = cmd.index("-pix_fmt", c0)             # codificador de video, hasta -pix_fmt yuv420p
+            d = Path(TRAMO["dir"])
+            if TRAMO["k"] == 0:
+                guardar_json(d / "cmd.json", {"cmd": cmd, "entrada": [i0, i1], "codec": [c0, c1 + 2]})
+            # sin B-frames: al juntar las partes se corta el final en copia directa, y con B-frames saldría un cuadro equivocado
+            cmd = ["ffmpeg", "-y", "-loglevel", "error", *cmd[i0:i1], *cmd[c0:c1], "-bf", "0", *cmd[c1:c1 + 2],
+                   str(d / f"tramo_{TRAMO['k']}.mp4")]
+        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+        self.stdin = self
+
+    def write(self, b):
+        self.proc.stdin.write(b)
+        self.escritos += 1
+
+    def close(self):
+        self.proc.stdin.close()
+
+    def wait(self):
+        rc = self.proc.wait()
+        if TRAMO:
+            guardar_json(Path(TRAMO["dir"]) / f"tramo_{TRAMO['k']}.json", {"escritos": self.escritos, "rc": rc})
+        return rc
+
+
+def abrir_salida(cmd):
+    return _Salida(cmd)
+
+
+def tramos_en_paralelo():
+    """Cuántos tramos a la vez (EDITOR_TRAMOS para forzar; 1 = como antes)."""
+    try:
+        n = int(os.environ.get("EDITOR_TRAMOS") or 0)
+    except ValueError:
+        n = 0
+    if n <= 0:
+        cpu = os.cpu_count() or 2
+        n = 1 if cpu < 6 else (3 if cpu < 20 else 4)
+    return max(1, min(n, 6))
+
+
+def _cuadros_que_quedan(plan, info, con_cortes=True):
+    """Índices (del video original) de los cuadros que salen en el video final, con la MISMA regla que el render."""
+    fps = info["fps"]
+    total = int(info.get("cuadros") or 0)
+    cortes = sorted(plan.get("cortes", []), key=lambda c: c["inicio"]) if con_cortes else []
+    fin_v = fin_del_video(plan) if con_cortes else 1e12
+    quedan, ci = [], 0
+    for idx in range(total):
+        t = idx / fps
+        if t >= fin_v - 1e-6:
+            break
+        while ci < len(cortes) and t >= cortes[ci]["fin"] - 1e-6:
+            ci += 1
+        if ci < len(cortes) and cortes[ci]["inicio"] - 1e-6 <= t < cortes[ci]["fin"] - 1e-6:
+            continue
+        quedan.append(idx)
+    return quedan
+
+
+def asegurar_transiciones_camara(trabajo, plan, pl):
+    """Las transiciones de cambio de cámara se buscan una sola vez ANTES de repartir el trabajo (si cada tramo
+    las buscara, los cuatro escribirían el plan a la vez)."""
+    cfg_cam = pl.get("transicion_camara") or {}
+    if "transiciones_camara" in plan or not cfg_cam.get("activar"):
+        return
+    try:
+        plan["transiciones_camara"] = detectar_transiciones(plan["video"], plan["info"], cfg_cam)
+        p_plan = cargar_json(Path(trabajo) / "plan.json")
+        p_plan["transiciones_camara"] = plan["transiciones_camara"]
+        guardar_json(Path(trabajo) / "plan.json", p_plan)
+    except Exception as e:
+        log(f"No pude buscar las transiciones de cambio de cámara ({e})")
+
+
+def render_en_paralelo(args, trabajo, plan, pl, con_cortes=True):
+    """Exportación repartida: el video se parte en N tramos que se arman a la vez (cada uno en su proceso y su
+    núcleo), cada tramo se codifica solo con video y al final se juntan SIN volver a codificar, con el audio de
+    todo el video encima. Devuelve la salida, o None si no conviene o algo falló (entonces se hace como antes)."""
+    n = tramos_en_paralelo()
+    if n < 2 or getattr(args, "previa", False) or TRAMO:
+        return None
+    info = plan["info"]
+    fps = float(info["fps"])
+    quedan = _cuadros_que_quedan(plan, info, con_cortes)
+    if len(quedan) < fps * float(os.environ.get("EDITOR_TRAMOS_MIN") or 20) or not info.get("cuadros"):
+        return None   # video corto: no vale la pena repartir
+    d = Path(trabajo) / "_tramos"
+    shutil.rmtree(d, ignore_errors=True)
+    d.mkdir(parents=True, exist_ok=True)
+    if con_cortes:
+        asegurar_transiciones_camara(trabajo, plan, pl)
+    cortes_n = [len(quedan) * k // n for k in range(n + 1)]
+    tramos = []
+    for k in range(n):
+        desde = quedan[cortes_n[k]] if k else 0
+        hasta = quedan[cortes_n[k + 1]] if k + 1 < n else None
+        tramos.append({"k": k, "desde": desde, "hasta": hasta, "n0": cortes_n[k], "dir": str(d),
+                       "esperados": cortes_n[k + 1] - cortes_n[k]})
+    log(f"Exportación en {n} partes a la vez ({len(quedan)} cuadros)")
+    t_ini = time.time()
+    total = float(info["cuadros"])
+    avance = [0.0] * n
+    procs, salidas = [], [[] for _ in range(n)]
+    script = str(Path(__file__).resolve())
+    for tr in tramos:
+        env = dict(os.environ, EDITOR_TRAMO=json.dumps({k: tr[k] for k in ("k", "desde", "hasta", "n0", "dir")}),
+                   PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+        cmd_t = [sys.executable, script, "render", str(trabajo)]
+        if getattr(args, "salida", None):
+            cmd_t += ["--salida", str(args.salida)]
+        cmd_t += (["--gpu"] if getattr(args, "gpu", False) else []) + (["--sin-musica"] if getattr(args, "sin_musica", False) else [])
+        cmd_t += ["--solo-gpu"] if SOLO_GPU else []
+        procs.append(subprocess.Popen(cmd_t, env=env, stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                                      creationflags=_SIN_VENTANA))
+
+    def leer(k, p):
+        tr = tramos[k]
+        largo = max(1, (tr["hasta"] if tr["hasta"] is not None else total) - tr["desde"])
+        for linea in p.stderr:
+            if linea.startswith("@@PROGRESO@@"):
+                try:
+                    frac = float(linea.split()[1].split("|")[0])
+                    avance[k] = min(1.0, max(0.0, (frac * total - tr["desde"]) / largo))
+                except Exception:
+                    pass
+                continue
+            salidas[k].append(linea.rstrip())
+            if k == 0 and "Listo" not in linea:
+                print(linea.rstrip(), file=sys.stderr, flush=True)
+    hilos = [threading.Thread(target=leer, args=(k, p), daemon=True) for k, p in enumerate(procs)]
+    for h in hilos:
+        h.start()
+    while any(p.poll() is None for p in procs):
+        if any(p.poll() not in (None, 0) for p in procs):   # una parte falló: las demás ya no sirven
+            for p in procs:
+                if p.poll() is None:
+                    try:
+                        p.kill()
+                    except Exception:
+                        pass
+            break
+        Progreso.paso(0.93 * sum(avance) / n, f"Armando el video ({n} partes a la vez)")
+        time.sleep(0.5)
+    for p in procs:
+        try:
+            p.wait(timeout=30)
+        except Exception:
+            pass
+    for h in hilos:
+        h.join(timeout=5)
+    # ¿salieron bien todos y con los cuadros justos?
+    fallo = None
+    for tr, p in zip(tramos, procs):
+        res = cargar_json(d / f"tramo_{tr['k']}.json") if (d / f"tramo_{tr['k']}.json").exists() else {}
+        if p.returncode != 0 or res.get("rc") != 0:
+            fallo = f"la parte {tr['k'] + 1} falló: " + " | ".join(salidas[tr["k"]][-4:])
+        elif tr["hasta"] is not None and res.get("escritos") != tr["esperados"]:
+            fallo = f"la parte {tr['k'] + 1} salió con {res.get('escritos')} cuadros (se esperaban {tr['esperados']})"
+        elif tr["hasta"] is None and abs(res.get("escritos", 0) - tr["esperados"]) > max(3, fps):
+            fallo = f"la última parte salió con {res.get('escritos')} cuadros (se esperaban ~{tr['esperados']})"
+        if fallo:
+            break
+    if fallo or not (d / "cmd.json").exists():
+        log(f"No se pudo exportar en partes ({fallo or 'sin comando'}); se exporta de la forma normal")
+        shutil.rmtree(d, ignore_errors=True)
+        return None
+    # juntar: los tramos tal cual (sin volver a codificar) + el audio de todo el video
+    Progreso.paso(0.94, "Juntando las partes")
+    meta = cargar_json(d / "cmd.json")
+    cmd = meta["cmd"]
+    (i0, i1), (c0, c1) = meta["entrada"], meta["codec"]
+    lista = d / "lista.txt"
+    escritos = [cargar_json(d / f"tramo_{k}.json").get("escritos", 0) for k in range(n)]
+    # con la duración exacta de cada parte (cuadros / fps): si no, el redondeo de cada una se acumula al juntarlas
+    lista.write_text("".join("file '" + str((d / f"tramo_{k}.mp4").resolve()).replace("'", "'\\''") + "'\n"
+                             f"duration {escritos[k] / fps:.6f}\n" for k in range(n)), encoding="utf-8")
+    entrada = ["-f", "concat", "-safe", "0", "-i", str(lista)]
+    medio = cmd[i1:c0]
+    # 1) el audio solo, para saber cuánto dura: la exportación normal corta el video donde acaba el audio
+    #    (-shortest); con el video copiado ese corte no es exacto, así que se calcula aquí el número de cuadros
+    sin_video = []
+    k = 0
+    while k < len(medio):
+        if medio[k] == "-map" and k + 1 < len(medio) and medio[k + 1] == "0:v":
+            k += 2
+            continue
+        sin_video.append(medio[k])
+        k += 1
+    n_cuadros = sum(escritos)
+    if any(x == "-c:a" for x in sin_video):
+        aud = d / "audio.m4a"
+        ra = subprocess.run(cmd[:i0] + entrada + sin_video + ["-vn", str(aud)])
+        if ra.returncode == 0 and aud.exists():
+            try:
+                pr = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                                     str(aud)], capture_output=True, text=True, creationflags=_SIN_VENTANA)
+                dur_a = float(pr.stdout.strip())
+                n_cuadros = min(n_cuadros, max(1, int(dur_a * fps + 1e-6)))
+            except Exception:
+                pass
+    cola = [x for x in cmd[c1:] if x != "-shortest"]   # el corte ya va calculado arriba
+    final = cmd[:i0] + entrada + medio + ["-c:v", "copy", "-frames:v", str(n_cuadros)] + cola
+    r = subprocess.run(final)
+    if r.returncode != 0:
+        log("No se pudieron juntar las partes; se exporta de la forma normal")
+        shutil.rmtree(d, ignore_errors=True)
+        return None
+    salida = Path(cmd[-1])
+    # vista previa (sin subtítulos) de los tramos, junta y con el audio del video final
+    Progreso.paso(0.97, "Vista previa")
+    try:
+        linea = []
+        for k in range(n):
+            p = d / f"vista_{k}.json"
+            for te, lay in (cargar_json(p).get("diseno", []) if p.exists() else []):
+                if not linea or linea[-1][1] != lay:
+                    linea.append([te, lay])
+        guardar_json(Path(trabajo) / "vista_previa.json", {"diseno": linea, "fps": fps})
+        partes = [d / f"vista_{k}.mp4" for k in range(n)]
+        if all(p.exists() for p in partes):
+            lv = d / "lista_vista.txt"
+            lv.write_text("".join("file '" + str(p.resolve()).replace("'", "'\\''") + "'\n"
+                                  f"duration {escritos[k] / fps:.6f}\n" for k, p in enumerate(partes)), encoding="utf-8")
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lv),
+                            "-i", str(salida), "-map", "0:v", "-map", "1:a?", "-c", "copy", "-movflags", "+faststart",
+                            str(Path(trabajo) / "vista_previa.mp4")])
+    except Exception as e:
+        log(f"No pude juntar la vista previa ({e})")
+    if os.environ.get("EDITOR_TRAMOS_GUARDAR") != "1":
+        shutil.rmtree(d, ignore_errors=True)
+    Progreso.paso(1.0, "Listo")
+    log(f"Listo en {time.time() - t_ini:.0f} s ({n} partes a la vez): {salida}")
+    return salida
+
+
+
+
 def salida_render(args, trabajo, plan, pl, W, H, fps, hay_musica, musica, f_audio, map_audio, salida):
     """Comando de ffmpeg del render. Con --previa («Renderizar de nuevo» de la pestaña Edición) NO se hace el
     video final: solo la vista previa (mitad de tamaño, ~15 cuadros por segundo, codificación rápida) directo a
@@ -4142,6 +4534,9 @@ def salida_render(args, trabajo, plan, pl, W, H, fps, hay_musica, musica, f_audi
 
 def cerrar_render(args, trabajo, vista, salida, fps, paso):
     """Al terminar: la vista ligera se vuelve vista_previa.mp4 (el video final no se toca)."""
+    if TRAMO:
+        vista.cerrar(None)
+        return salida
     if getattr(args, "previa", False):
         destino = Path(trabajo) / "vista_previa.mp4"
         destino.unlink(missing_ok=True)
@@ -4181,7 +4576,18 @@ def cmd_render(args):
     plan = cargar_json(trabajo / "plan.json")
     pl = plantilla_plan(plan)
     info = plan["info"]
-    if plan.get("estilo") == "solo_subtitulos" or pl.get("estilo") == "solo_subtitulos":
+    solo = plan.get("estilo") == "solo_subtitulos" or pl.get("estilo") == "solo_subtitulos"
+    # exportación final: repartida en partes que se arman a la vez (si algo falla, se hace como antes)
+    if not getattr(args, "previa", False) and not TRAMO:
+        try:
+            hecho = render_en_paralelo(args, trabajo, plan, pl, con_cortes=not solo)
+        except Exception as e:
+            log(f"No se pudo exportar en partes ({e}); se exporta de la forma normal")
+            shutil.rmtree(trabajo / "_tramos", ignore_errors=True)
+            hecho = None
+        if hecho:
+            return hecho
+    if solo:
         return estilo_solo_subtitulos().render(args, trabajo, plan, pl)
     if plan.get("estilo") == "motivacional" or pl.get("estilo") == "motivacional":
         return estilo_motivacional().render(args, trabajo, plan, pl)
@@ -4241,10 +4647,10 @@ def cmd_render(args):
     cmd, salida, paso, tam = salida_render(args, trabajo, plan, pl, W, H, fps, hay_musica, musica, f_audio, map_audio,
                                            salida)
     previa = paso > 1 or getattr(args, "previa", False)
-    ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    ff = abrir_salida(cmd)
     vista = VistaPrevia(trabajo, W, H, fps, solo_diseno=previa)
 
-    cap = cv2.VideoCapture(plan["video"])
+    cap = lector_render(plan, info)
     # transición (cortinilla) al entrar y salir de la pantalla dividida, si la plantilla la tiene
     cortinilla, ventanas_cort = [], []
     cfg_tr = pl.get("transicion_dividida") or {}
@@ -4278,15 +4684,9 @@ def cmd_render(args):
 
     # cortinilla limpia encima de las transiciones de cambio de cámara de Nacho (el audio es el del video)
     cfg_cam = pl.get("transicion_camara") or {}
-    if "transiciones_camara" not in plan and cfg_cam.get("activar"):
+    if "transiciones_camara" not in plan and cfg_cam.get("activar") and not TRAMO:
         # trabajo analizado antes de esta función: se buscan ahora (una sola vez) y se guardan en el plan
-        try:
-            plan["transiciones_camara"] = detectar_transiciones(plan["video"], info, cfg_cam)
-            p_plan = cargar_json(trabajo / "plan.json")
-            p_plan["transiciones_camara"] = plan["transiciones_camara"]
-            guardar_json(trabajo / "plan.json", p_plan)
-        except Exception as e:
-            log(f"No pude buscar las transiciones de cambio de cámara ({e})")
+        asegurar_transiciones_camara(trabajo, plan, pl)
     trans_cam = plan.get("transiciones_camara") or []
     cort_cam = Cortinilla(pl.get("transicion_camara") or {}, W, H) if trans_cam and \
         (pl.get("transicion_camara") or {}).get("activar", True) else None
@@ -4295,7 +4695,7 @@ def cmd_render(args):
 
     stickers = Stickers(plan.get("stickers"), W, H, trabajo) if plan.get("stickers") else None
     fin_v = fin_del_video(plan)
-    idx, ti, ci, n_out = 0, 0, 0, 0
+    (idx, n_out), ti, ci = inicio_tramo(), 0, 0
     total = info["cuadros"] or 1
     lienzo = np.zeros((H, W, 3), np.uint8)
     while True:

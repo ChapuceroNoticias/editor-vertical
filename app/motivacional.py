@@ -1332,12 +1332,12 @@ def render(args, trabajo, plan, pl):
     cmd, salida, paso, tam = ed.salida_render(args, trabajo, plan, pl, W, H, fps, hay_musica, musica, f_audio,
                                               map_audio, salida)
     previa = paso > 1 or getattr(args, "previa", False)
-    ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    ff = ed.abrir_salida(cmd)
     vista = ed.VistaPrevia(trabajo, W, H, fps, solo_diseno=previa)
     stickers = ed.Stickers(plan.get("stickers"), W, H, trabajo) if plan.get("stickers") else None
 
-    cap = cv2.VideoCapture(plan["video"])
-    idx, ci, n_out = 0, 0, 0
+    cap = ed.lector_render(plan, info)
+    (idx, n_out), ci = ed.inicio_tramo(), 0
     total = info["cuadros"] or 1
     fin_v = ed.fin_del_video(plan)
     while True:
