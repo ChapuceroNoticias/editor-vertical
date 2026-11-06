@@ -1484,6 +1484,20 @@ def partir_toma(t, tc):
     raise ValueError("Pon el cursor dentro del bloque (no tan cerca de sus orillas) para partirlo")
 
 
+def mover_frontera_toma(t, de, a):
+    """Recorre el punto donde se partió un bloque gris (la orilla entre dos tomas seguidas). Tiempos del original."""
+    plan, _ = cargar(t)
+    tomas = plan.get("tomas", [])
+    for k in range(len(tomas) - 1):
+        if abs(tomas[k]["fin"] - de) < 0.08 and abs(tomas[k + 1]["inicio"] - de) < 0.08:
+            a = min(max(a, tomas[k]["inicio"] + 0.3), tomas[k + 1]["fin"] - 0.3)
+            respaldar(t)
+            tomas[k]["fin"] = tomas[k + 1]["inicio"] = round(a, 3)
+            guardar_plan(t, plan)
+            return
+    raise ValueError("Ahí no hay un corte entre dos bloques para mover")
+
+
 def guardar_subidas(t, i, archivos, reemplazar):
     plan, _ = cargar(t)
     moms = plan.get("momentos", [])
@@ -2356,6 +2370,12 @@ def crear_app():
     @app.get("/edi/datos")
     def edi_datos(t: str):
         return JSONResponse(datos_edicion(validar(t)))
+
+    @app.post("/edi/mover_toma")
+    def edi_mover_toma(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        _ok(lambda: mover_frontera_toma(t, float(d["de"]), float(d["a"])))
+        return {"ok": True, "mensaje": "Corte recorrido."}
 
     @app.post("/edi/partir_toma")
     def edi_partir_toma(d: dict = Body(...)):

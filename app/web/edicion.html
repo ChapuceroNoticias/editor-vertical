@@ -1194,6 +1194,18 @@ function pastilla(txt, x, y, fondo, color) {   // etiqueta con fondo junto a una
   lctx.fill();
   lctx.fillStyle = color; lctx.textAlign = "left"; lctx.fillText(txt, izq + 5 * d, y + 11 * d);
 }
+// corte entre dos bloques grises seguidos (donde se partió la toma con Ctrl+B): su orilla se puede recorrer
+function fronteraEn(ev) {
+  if (!enCarrilP(ev)) return null;
+  const r = linea.getBoundingClientRect(), d = devicePixelRatio, x = (ev.clientX - r.left) * d;
+  const grises = itemsLinea().filter(it => it.carril === "p" && (it.tipo === "n" || it.tipo === "g")).sort((p, q) => p.a - q.a);
+  for (let k = 0; k + 1 < grises.length; k++) {
+    const A = grises[k], B = grises[k + 1];
+    if (Math.abs(A.b - B.a) > 0.05) continue;
+    if (Math.abs(x - xDe(A.b)) <= 6 * d) return { t: A.b, min: A.a + 0.3, max: B.b - 0.3 };
+  }
+  return null;
+}
 function tocarLinea(ev) {   // qué bloque y qué parte (mover / inicio / fin) está bajo el cursor
   const r = linea.getBoundingClientRect(), d = devicePixelRatio;
   const x = (ev.clientX - r.left) * d, y = (ev.clientY - r.top) * d;
@@ -2548,7 +2560,7 @@ async function iniciar() {
   $("b_mf").onclick = () => mover(-1 / fps); $("b_pf").onclick = () => mover(1 / fps);
   document.addEventListener("keydown", atajos);
   // línea de tiempo
-  let presionado = false;
+  let presionado = false, movFrontera = null;
   const tLinea = (ev) => { const r = linea.getBoundingClientRect(); return vista[0] + (ev.clientX - r.left) / r.width * (vista[1] - vista[0]); };
   // el cursor y la línea guía van de 0.10 en 0.10 s (con Alt: libre)
   const tCursor = (ev, t) => { t = Math.min(durE(), Math.max(0, t ?? tLinea(ev))); return ev && ev.altKey ? t : Math.min(durE(), Math.round(t * 10) / 10); };
@@ -2556,6 +2568,8 @@ async function iniciar() {
     linea.setPointerCapture(ev.pointerId); video.pause();
     const mc = marcaCorteEn(ev);
     if (mc) { elegirCorte(mc, true); return; }
+    const fr = X.estilo !== "solo_subtitulos" && fronteraEn(ev);
+    if (fr) { movFrontera = { ...fr, t0: fr.t, movido: false }; return; }
     // las orillas de un bloque (estirar / acortar) tienen prioridad sobre mover el pedazo de video
     const hb = tocarLinea(ev);
     if (hb && hb.modo !== "mover") {
@@ -2589,6 +2603,12 @@ async function iniciar() {
   linea.addEventListener("pointermove", (ev) => {
     corteRaton = marcaCorteEn(ev);
     linea.style.cursor = corteRaton ? "pointer" : "";
+    if (movFrontera) {   // recorriendo el corte entre dos bloques grises
+      const t = Math.min(movFrontera.max, Math.max(movFrontera.min, tCursor(ev)));
+      if (Math.abs(t - movFrontera.t0) > 0.001) movFrontera.movido = true;
+      movFrontera.t = t; ratonX = t;
+      return;
+    }
     if (creaSeg) {
       const t = aCuadro(Math.min(durE(), Math.max(0, tLinea(ev))));
       segSel = [Math.min(creaSeg.t0, t), Math.max(creaSeg.t0, t)]; pintarSegbar(); return;
@@ -2640,7 +2660,7 @@ async function iniciar() {
       return;
     }
     const h = tocarLinea(ev);
-    linea.style.cursor = !h ? "col-resize" : (h.modo === "mover" ? "grab" : "ew-resize");
+    linea.style.cursor = fronteraEn(ev) ? "ew-resize" : !h ? "col-resize" : (h.modo === "mover" ? "grab" : "ew-resize");
     ratonX = tCursor(ev);
   });
   linea.addEventListener("pointerleave", () => { ratonX = null; });
@@ -2650,6 +2670,11 @@ async function iniciar() {
     irE(tCursor(ev));
   });
   linea.addEventListener("pointerup", async (ev) => {
+    if (movFrontera) {
+      const f = movFrontera; movFrontera = null;
+      if (f.movido) await enviar("/edi/mover_toma", { t: T, de: aOriginal(f.t0), a: aOriginal(f.t) }, `Corte recorrido a ${mmss(f.t)}.`);
+      return;
+    }
     if (creaSeg) {
       creaSeg = null;
       if (segSel[1] - segSel[0] < 0.2) segSel = null;
