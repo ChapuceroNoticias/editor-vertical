@@ -229,7 +229,7 @@
     <span><i style="background:var(--c-titulo)"></i>Título (motivacional: estira su orilla)</span>
     <span><i style="background:var(--c-difuminar)"></i>Difuminar subtítulos del video</span>
     <span><i style="background:var(--c-sticker)"></i>Sticker</span>
-    <span class="ayuda">Clic: seleccionar · arrastra o estira las orillas (con <b>Alt</b>, sin imán) · <b>Ctrl + rueda</b>: acercar · <b>Doble clic</b>: llevar el cursor</span>
+    <span class="ayuda">Clic: seleccionar · arrastra o estira las orillas (con <b>Alt</b>, sin imán) · <b>Ctrl + rueda</b>: acercar · <b>Doble clic</b>: llevar el cursor (de 0.10 en 0.10 s · con <b>Alt</b>: libre)</span>
   </div>
 
  </div>
@@ -1672,7 +1672,7 @@ function iniciarEncuadre() {
   capa.addEventListener("pointerup", () => {
     if (arrastre && arrastre.cual === "dif") {
       const fue = arrastre; arrastre = null;
-      if (!fue.movido) { video.paused ? video.play() : video.pause(); return; }
+      if (!fue.movido) { video.pause(); return; }
       fue.x.auto = false;
       guardarDifuminar(E.difuminar.map(x => x === fue.x ? { ...x } : x), "Difuminado acomodado.");
       return;
@@ -1684,7 +1684,7 @@ function iniciarEncuadre() {
         else { editP = null; tramoPE = null; }
       }
       const fue = arrastre; arrastre = null;
-      if (fue.nuevo) video.paused ? video.play() : video.pause();
+      if (fue.nuevo) video.pause();
       return;
     }
     if (arrastre && (arrastre.cual === "pantalla" || arrastre.cual === "pantallaFin")) programarGuardarP();
@@ -1734,7 +1734,7 @@ function iniciarEncuadre() {
   capa.addEventListener("click", (ev) => {
     if (arrastre || edit || editP) return;
     if (objetivo(ahoraO(), punto(ev))) return;   // el clic sobre un recuadro ya se atendió
-    video.paused ? video.play() : video.pause();
+    video.pause();   // un clic en el video ya no lo reproduce (estorbaba al mover recuadros e imágenes)
   });
 }
 function recortarFuera(lista, a, b) {
@@ -2226,7 +2226,7 @@ function iniciarStickers() {
   };
   previa.addEventListener("pointerup", soltar);
   previa.addEventListener("pointercancel", soltar);
-  previa.addEventListener("click", () => { if (clicLibre) video.paused ? video.play() : video.pause(); clicLibre = false; });
+  previa.addEventListener("click", () => { if (clicLibre) video.pause(); clicLibre = false; });
   previa.addEventListener("wheel", (ev) => {
     const o = tocarSticker(puntoPrevia(ev));
     if (!o) return;
@@ -2550,6 +2550,8 @@ async function iniciar() {
   // línea de tiempo
   let presionado = false;
   const tLinea = (ev) => { const r = linea.getBoundingClientRect(); return vista[0] + (ev.clientX - r.left) / r.width * (vista[1] - vista[0]); };
+  // el cursor y la línea guía van de 0.10 en 0.10 s (con Alt: libre)
+  const tCursor = (ev, t) => { t = Math.min(durE(), Math.max(0, t ?? tLinea(ev))); return ev && ev.altKey ? t : Math.min(durE(), Math.round(t * 10) / 10); };
   linea.addEventListener("pointerdown", (ev) => {
     linea.setPointerCapture(ev.pointerId); video.pause();
     const mc = marcaCorteEn(ev);
@@ -2634,18 +2636,18 @@ async function iniciar() {
     }
     if (presionado) {
       if (!presionado.movido && Math.abs(ev.clientX - presionado.x0) > 3) presionado.movido = true;
-      if (presionado.movido) irE(Math.min(durE(), Math.max(0, tLinea(ev))));
+      if (presionado.movido) irE(tCursor(ev));
       return;
     }
     const h = tocarLinea(ev);
     linea.style.cursor = !h ? "col-resize" : (h.modo === "mover" ? "grab" : "ew-resize");
-    ratonX = Math.min(durE(), Math.max(0, tLinea(ev)));
+    ratonX = tCursor(ev);
   });
   linea.addEventListener("pointerleave", () => { ratonX = null; });
   // doble clic: el cursor (dónde vamos) se va a ese punto
   linea.addEventListener("dblclick", (ev) => {
     ev.preventDefault(); video.pause();
-    irE(Math.min(durE(), Math.max(0, tLinea(ev))));
+    irE(tCursor(ev));
   });
   linea.addEventListener("pointerup", async (ev) => {
     if (creaSeg) {
@@ -2658,7 +2660,7 @@ async function iniciar() {
     if (mueveSeg) {
       const m = mueveSeg; mueveSeg = null;
       if (!m.movido) {   // clic sin arrastrar: también lleva el cursor ahí (para pegar en ese punto)
-        irE(Math.min(durE(), Math.max(0, m.t0)));
+        irE(tCursor(ev, m.t0));
         if (m.gris) estado("Pedazo seleccionado: arrástralo para moverlo (con Ctrl: copia) · Ctrl+C copiar · Ctrl+V pega en el cursor.", "ok");
         return;
       }

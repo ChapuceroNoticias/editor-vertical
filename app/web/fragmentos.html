@@ -414,6 +414,11 @@ document.addEventListener("pointerup", () => {
   }
 });
 let buscando = null;
+// el cursor y la línea guía van de 0.10 en 0.10 s (con Alt: libre)
+function tCursor(ev) {
+  const t = tEn(ev.clientX);
+  return ev.altKey ? t : Math.min(D.duracion, Math.round(t * 10) / 10);
+}
 $("pista").addEventListener("pointerdown", (ev) => {
   if (ev.target.closest(".bloque") || ev.button !== 0) return;
   // arrastrar sobre la línea mueve el tiempo; un clic suelto solo quita la selección
@@ -422,20 +427,20 @@ $("pista").addEventListener("pointerdown", (ev) => {
 });
 document.addEventListener("pointermove", (ev) => {
   if (D && ev.target.closest && ev.target.closest("#pista")) {   // línea guía con el tiempo bajo el ratón
-    const t = tEn(ev.clientX);
+    const t = tCursor(ev);
     $("raton").style.display = "block"; $("raton").style.left = (t * pxs()) + "px"; $("raton").firstChild.textContent = fmtD(t);
   } else $("raton").style.display = "none";
   if (!buscando) return;
   if (!buscando.movido && Math.abs(ev.clientX - buscando.x0) > 3) buscando.movido = true;
   if (!buscando.movido) return;
-  $("vid").currentTime = tEn(ev.clientX);
+  $("vid").currentTime = tCursor(ev);
 });
 document.addEventListener("pointerup", () => { buscando = null; });
 // doble clic: el cursor (la posición del video) va a donde diste doble clic
 $("pista").addEventListener("dblclick", (ev) => {
   if (!D) return;
   ev.preventDefault();
-  $("vid").currentTime = tEn(ev.clientX); cabezal();
+  $("vid").currentTime = tCursor(ev); cabezal();
 });
 // Ctrl + rueda: zoom alrededor del ratón; rueda sola: avanzar / regresar la vista
 $("tl").addEventListener("wheel", (ev) => {
