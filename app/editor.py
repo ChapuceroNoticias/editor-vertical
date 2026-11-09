@@ -2310,7 +2310,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-09d v1.8.3"
+VERSION = "2026-11-09e v1.8.4"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3032,7 +3032,7 @@ def recorte_persona(region, cara, area_wh, cfg):
     x0 = cx - w / 2
     y0 = cy - cfg.get("cara_y", 0.38) * h
     # la cabeza (pelo y audífonos incluidos) no debe cortarse ni quedar bajo el título
-    tope_cabeza = cy - fh * 1.1
+    tope_cabeza = cy - fh * 0.75   # caja de YuNet: el pelo (y la diadema) llega ~0.7 de su alto arriba del centro
     margen = cfg.get("margen_sup", 0) * (h / ah)
     if tope_cabeza - margen < y0:
         y0 = tope_cabeza - margen
