@@ -39,7 +39,7 @@
   #estado { font-size: 13px; color: var(--suave); width: 100%; }
   #estado.ok { color: var(--ok); } #estado.pend { color: var(--pend); } #estado.err { color: var(--rojo); }
   .lista { overflow: auto; flex: 1 1 auto; }
-  .fila { display: grid; grid-template-columns: 30px 86px 86px 1fr 118px 28px; gap: 6px; align-items: center;
+  .fila { display: grid; grid-template-columns: 30px 86px 86px 1fr 118px 22px 28px; gap: 6px; align-items: center;
     padding: 6px 10px; border-bottom: 1px solid var(--borde); }
   .fila.activa { background: var(--activo); }
   .fila.cambiada { box-shadow: inset 3px 0 0 var(--pend); }
@@ -51,6 +51,8 @@
     color: var(--texto); font: inherit; resize: none; overflow: hidden; line-height: 1.35; display: block; min-height: 32px; }
   .fila .ir, .fila .mas { border: 0; background: none; color: var(--suave); cursor: pointer; font-size: 15px; padding: 2px; }
   .fila .ir:hover, .fila .mas:hover { color: var(--acento); }
+  .fila input.marca { width: 15px; height: 15px; margin: 0; accent-color: var(--acento); cursor: pointer; }
+  .fila.marcada { box-shadow: inset 3px 0 0 var(--acento); }
   .fila .alt { display: flex; gap: 3px; align-items: center; }
   .fila .alt button { border: 1px solid var(--borde); background: var(--panel); color: var(--texto); border-radius: 6px;
     cursor: pointer; font-size: 11px; padding: 5px 6px; line-height: 1; }
@@ -59,7 +61,7 @@
   .fila .alt input.dy.movido { border-color: var(--pend); color: var(--pend); }
   /* sobre el subtítulo: cursor ↕ (también encima de la vista previa armada y del video, que traen su propio cursor) */
   .pantalla.sobre-sub, .pantalla.sobre-sub *, .pantalla.arrastrando, .pantalla.arrastrando * { cursor: ns-resize !important; }
-  .encabezado { display: grid; grid-template-columns: 30px 86px 86px 1fr 118px 28px; gap: 6px; padding: 6px 10px;
+  .encabezado { display: grid; grid-template-columns: 30px 86px 86px 1fr 118px 22px 28px; gap: 6px; padding: 6px 10px;
     font-size: 12px; color: var(--suave); font-weight: 600; border-bottom: 1px solid var(--borde); }
 </style>
 <link rel="stylesheet" href="/app/grafito.css">
@@ -113,8 +115,9 @@
   .titulo_solo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 20px; border-bottom: 1px solid var(--linea); }
   .titulo_solo[hidden] { display: none; }
   .titulo_solo label { font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--tenue); }
-  .titulo_solo input { flex: 1 1 320px; height: 36px; padding: 0 12px; font-size: 14px; }
-  .titulo_solo input.falta { border-color: #7A5A1E; }
+  .titulo_solo input, .titulo_solo textarea { flex: 1 1 320px; height: 36px; padding: 0 12px; font-size: 14px; }
+  .titulo_solo textarea { border: 1px solid var(--borde); border-radius: 6px; background: var(--fondo); color: var(--texto); resize: none; overflow: hidden; padding: 8px 12px; line-height: 18px; font-family: inherit; }
+  .titulo_solo textarea.falta { border-color: #7A5A1E; }
   .titulo_solo .en_video { display: flex; align-items: center; gap: 6px; font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--texto2); cursor: pointer; }
   .titulo_solo .en_video input { accent-color: var(--texto); width: 15px; height: 15px; }
   .aviso_titulo { flex-basis: 100%; font-size: 12.5px; color: var(--suave); }
@@ -146,7 +149,7 @@
   <div class="der">
     <div class="titulo_solo" id="titulo_solo" hidden>
       <label for="titulo_txt">Título</label>
-      <input type="text" id="titulo_txt" placeholder="Título del video (con él se nombra el archivo al exportar)">
+      <textarea id="titulo_txt" rows="1" placeholder="Título del video (Enter = segundo renglón · con él se nombra el archivo)"></textarea>
       <label class="en_video" title="Pone la barra roja del título encima del clip (se ve aquí en vivo y sale en el video exportado)"><input type="checkbox" id="titulo_en_video"> Ponerlo en el video</label>
       <button class="btn" id="titulo_guardar" disabled>Guardar título</button>
       <span class="aviso_titulo" id="titulo_aviso"></span>
@@ -161,10 +164,10 @@
       <button class="btn prim" id="guardar" disabled>Guardar subtítulos</button>
       <div id="estado"></div>
     </div>
-    <div class="encabezado"><span></span><span>Inicio</span><span>Fin</span><span>Texto</span><span title="Sube (▲) o baja (▼) cada subtítulo por separado. También puedes arrastrarlo arriba o abajo sobre el video.">Altura ↕</span><span></span></div>
+    <div class="encabezado"><span></span><span>Inicio</span><span>Fin</span><span>Texto</span><span title="Sube (▲) o baja (▼) cada subtítulo por separado. También puedes arrastrarlo arriba o abajo sobre el video.">Altura ↕</span><span title="Marca varios: al subir o bajar uno de los marcados, se mueven todos igual">☑</span><span></span></div>
     <div class="lista" id="lista"></div>
     <div class="pie">
-      <span><b>Enter</b> siguiente</span><span><b>Shift+Enter</b> cortar renglón</span><span><b>＋</b> agregar debajo</span>
+      <span><b>Enter</b> siguiente</span><span><b>Shift+Enter</b> cortar renglón</span><span><b>＋</b> agregar debajo</span><span><b>☑</b> marca varios para subirlos o bajarlos juntos</span>
       <span><b>▲▼</b> altura (Shift = 50 px) o arrastrándolo en el video</span><span><b>Alt+↑↓</b> mover el que se ve</span>
       <span>Texto vacío = quitar · tiempos en min:seg:centésimas del video editado</span>
     </div>
@@ -178,7 +181,7 @@ const video = $("video"), capa = $("capa"), ctx = capa.getContext("2d");
 const arm = $("armado"), actx = arm.getContext("2d");
 let vivo = false;      // true = se arma la vista previa en vivo desde el video original
 let E = null;          // datos del armado (los mismos del editor de encuadre)
-let tituloImg = null, franjaImg = null;
+let tituloImg = null, franjaImgs = {};
 const imagenes = {};   // imágenes de los momentos ya cargadas
 let D = null;          // datos del servidor
 let filas = [];        // [{id, i, f, texto, palabras}]
@@ -379,8 +382,9 @@ function dibujarStickers(cx, t, W, H) {
     g.restore();
   }
   const esc = W / D.salida[0];
-  if (D.franja_area && disenoEn(t) === "dividida") {
-    const [fx, fy, fw, fh] = D.franja_area.map(v => v * esc);
+  const layF = disenoEn(t), fa = (D.franja_areas || {})[layF] || (layF === "dividida" ? D.franja_area : null);
+  if (fa && (layF === "dividida" || layF === "ganso")) {
+    const [fx, fy, fw, fh] = fa.map(v => v * esc);
     g.clearRect(fx, fy, fw, fh);
   }
   if (D.titulo && (D.titulo_fin == null || t < D.titulo_fin)) {
@@ -438,8 +442,8 @@ function dibujar() {
     }
     const paso = tam * (st.interlineado || 1.1);
     let [cx, cy] = st.centro;
-    if (lay === "dividida" && D.areas.dividida) {   // dentro de la franja azul
-      const [fx, fy, fw, fh] = D.areas.dividida; cx = fx + fw / 2; cy = fy + fh / 2;
+    if ((lay === "dividida" || lay === "ganso") && D.areas[lay]) {   // dentro de la franja azul
+      const [fx, fy, fw, fh] = D.areas[lay]; cx = fx + fw / 2; cy = fy + fh / 2;
     }
     const y0 = cy * s + dy - paso * (lineas.length - 1) / 2;
     cajaSub = { fila: act, x0: cx * s - ancho / 2, x1: cx * s + ancho / 2, y0: y0 - tam, y1: y0 + paso * (lineas.length - 1) + tam * 0.6 };
@@ -577,7 +581,7 @@ function disenoVivo() {
   const t = tO();
   if (E.estilo === "motivacional") return t < E.armado.titulo_fin ? "titulo" : "frases";
   const e = muestra(t);
-  return (e.tipo === "dividida" || (e.tipo === "contenida" && e.ex[6] === 1)) ? "dividida" : "persona";
+  return (e.tipo === "dividida" || (e.tipo === "contenida" && e.ex[6] === 1)) ? (gansoEn(t) ? "ganso" : "dividida") : "persona";
 }
 function imagenMomento(m, k) {
   const clave = m + "_" + k;
@@ -667,8 +671,9 @@ function pantallaManual(t) {   // recuadro de la pantalla de Nacho acomodado a m
   if (!a || !w) return null;
   return ventanaManual(a, { region: w.slice(0, 4), aspect: w[4], auto: w.slice(5, 9) }, t);
 }
-function dibujarAbajo(e, t, s) {
-  const A = E.armado.dividida;
+const gansoEn = (t) => !!(E.ganso && E.ganso[indice(t)] === 1);   // «Dividida Ganso» en este momento
+function dibujarAbajo(e, t, s, key = "dividida") {
+  const A = E.armado[key] || E.armado.dividida, franjaImg = franjaImgs[key];
   if (A.franja) {
     const [fx, fy, fw, fh] = A.franja.map(v => v * s);
     if (franjaImg && franjaImg.complete && franjaImg.naturalWidth) cubrir(franjaImg, franjaImg.naturalWidth, franjaImg.naturalHeight, fx, fy, fw, fh);
@@ -716,10 +721,11 @@ function componer() {
     if (arr >= 0 && e.tipo === "persona") dibujarMomento(arr, t, ax, ay, aw, ah);
     else if (e.auto) deVideo(...ventana(t, e), ax, ay, aw, ah);
   } else if (e.tipo === "dividida") {
-    const [ax, ay, aw, ah] = area(E.areas.dividida);
+    const key = gansoEn(t) ? "ganso" : "dividida";
+    const [ax, ay, aw, ah] = area(E.areas[key] || E.areas.dividida);
     if (arr >= 0) dibujarMomento(arr, t, ax, ay, aw, ah);
     else if (e.auto) deVideo(...ventana(t, e), ax, ay, aw, ah);
-    dibujarAbajo(e, t, s);
+    dibujarAbajo(e, t, s, key);
   } else if (e.tipo === "imagen") {
     const pm = pantallaManual(t);
     if (e.ex[0] >= 0) dibujarMomento(e.ex[0], t, 0, 0, W, H);
@@ -732,7 +738,8 @@ function componer() {
     }
   } else if (e.tipo === "contenida") {   // recuadro angosto completo al centro, con fondo desenfocado
     const [rx, ry, rw, rh] = e.ex.slice(2, 6), divi = e.ex[6] === 1;
-    const [ax, ay, aw, ah] = area(divi ? E.areas.dividida : E.areas.persona), C = E.armado.contener;
+    const key = gansoEn(t) ? "ganso" : "dividida";
+    const [ax, ay, aw, ah] = area(divi ? (E.areas[key] || E.areas.dividida) : E.areas.persona), C = E.armado.contener;
     actx.save();
     actx.beginPath(); actx.rect(ax, ay, aw, ah); actx.clip();
     actx.filter = `blur(${C.desenfoque * s}px) brightness(${C.oscurecer_fondo})`;
@@ -742,7 +749,7 @@ function componer() {
     const k = aw * C.ancho_panel / rw;
     deVideo(rx, ry, rw, rh, ax + (aw - rw * k) / 2, ay, rw * k, rh * k);
     actx.restore();
-    if (divi) dibujarAbajo(e, t, s);
+    if (divi) dibujarAbajo(e, t, s, key);
   }
   dibujarCortinilla(actx, t, W, H);
   if (tituloImg && tituloImg.complete && tituloImg.naturalWidth && (E.estilo !== "motivacional" || t < E.armado.titulo_fin))
@@ -793,7 +800,8 @@ async function cargarArmado() {
     E = d;
   } catch (err) { return false; }
   if (E.titulo) { tituloImg = new Image(); tituloImg.src = `/enc/titulo?t=${encodeURIComponent(T)}&v=${Date.now()}`; }
-  if (E.armado.dividida.franja_fondo) { franjaImg = new Image(); franjaImg.src = `/enc/franja?t=${encodeURIComponent(T)}`; }
+  for (const key of ["dividida", "ganso"])
+    if (E.armado[key] && E.armado[key].franja_fondo) { franjaImgs[key] = new Image(); franjaImgs[key].src = `/enc/franja?t=${encodeURIComponent(T)}&lay=${key}`; }
   $("barra_t").max = duracionEd();
   return true;
 }
@@ -838,7 +846,16 @@ $("barra_t").addEventListener("change", () => { arrastrando = false; });
 $("m_vivo").onclick = () => { if (!vivo) ponerModo(true); };
 $("buscar").addEventListener("input", filtrar);
 $("titulo_txt").addEventListener("input", () => pintarTitulo());
-$("titulo_txt").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (!$("titulo_guardar").disabled) guardarTitulo(); } });
+$("titulo_txt").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  if (e.ctrlKey || e.metaKey) { e.preventDefault(); if (!$("titulo_guardar").disabled) guardarTitulo(); }
+  else if ($("titulo_txt").value.includes("\n")) e.preventDefault();   // máximo dos renglones
+});
+$("titulo_txt").addEventListener("input", () => {
+  const el = $("titulo_txt"), ls = el.value.split("\n");
+  if (ls.length > 2) el.value = ls[0] + "\n" + ls.slice(1).join(" ");
+  el.style.height = "auto"; el.style.height = el.scrollHeight + "px";
+});
 $("titulo_guardar").onclick = guardarTitulo;
 $("titulo_en_video").addEventListener("change", () => pintarTitulo());
 $("m_render").onclick = () => { if (vivo) ponerModo(false); };
@@ -898,15 +915,23 @@ setInterval(() => { if (T && D && !document.hidden && document.documentElement.c
 
 // ---------- lista ----------
 function firma() { return JSON.stringify(filas.map(f => [f.iTxt, f.fTxt, f.texto, f.dy || 0])); }
-function moverFila(fl, d) {   // sube (−) o baja (+) SOLO este subtítulo
-  fl.dy = Math.max(-1800, Math.min(1800, Math.round((fl.dy || 0) + d)));
-  const n = filas.indexOf(fl), el = document.querySelectorAll(".fila")[n];
-  if (el) {
-    const inp = el.querySelector("input.dy");
-    inp.value = fl.dy; inp.classList.toggle("movido", !!fl.dy);
-    el.classList.add("cambiada");
+function moverFila(fl, d) {   // sube (−) o baja (+) este subtítulo; si está marcado, todos los marcados igual
+  const grupo = fl.marcado ? filas.filter(f => f.marcado) : [fl];
+  const els = document.querySelectorAll(".fila");
+  for (const f of grupo) {
+    f.dy = Math.max(-1800, Math.min(1800, Math.round((f.dy || 0) + d)));
+    const el = els[filas.indexOf(f)];
+    if (el) {
+      const inp = el.querySelector("input.dy");
+      inp.value = f.dy; inp.classList.toggle("movido", !!f.dy);
+      el.classList.add("cambiada");
+    }
   }
   actualizarBotones();
+}
+function avisoMarcados() {
+  const n = filas.filter(f => f.marcado).length;
+  if (n > 1) estado(`${n} subtítulos marcados: al subir o bajar uno de ellos, se mueven todos igual.`, "");
 }
 function hayCambios() { return firma() !== base; }
 function actualizarBotones() {
@@ -939,7 +964,7 @@ function pintarLista() {
     div.innerHTML = `<button class="ir" title="Ir a este subtítulo">▶</button>
       <input class="t" data-c="iTxt" value="${fl.iTxt}"><input class="t" data-c="fTxt" value="${fl.fTxt}">
       <textarea class="tx" data-c="texto" rows="1" title="Shift+Enter = cortar el renglón aquí"></textarea>
-      <span class="alt"><button data-d="-10" title="Subir este subtítulo (Shift: 50 px)">▲</button><input class="dy" type="number" step="5" title="px: negativo = más arriba, 0 = donde lo pone la plataforma"><button data-d="10" title="Bajar este subtítulo (Shift: 50 px)">▼</button></span><button class="mas" title="Agregar un subtítulo debajo">＋</button>`;
+      <span class="alt"><button data-d="-10" title="Subir este subtítulo (Shift: 50 px)">▲</button><input class="dy" type="number" step="5" title="px: negativo = más arriba, 0 = donde lo pone la plataforma"><button data-d="10" title="Bajar este subtítulo (Shift: 50 px)">▼</button></span><input type="checkbox" class="marca" title="Marcar: al subir o bajar uno de los marcados, todos los marcados se mueven igual"><button class="mas" title="Agregar un subtítulo debajo">＋</button>`;
     const tx = div.querySelector('[data-c="texto"]');
     tx.value = fl.texto;
     const crecer = () => { tx.style.height = "auto"; tx.style.height = tx.scrollHeight + 2 + "px"; };
@@ -953,6 +978,9 @@ function pintarLista() {
     tx.addEventListener("input", crecer);
     requestAnimationFrame(crecer);
     div.querySelector(".ir").onclick = () => { const i = seg(fl.iTxt); if (i !== null) { irA(i + 0.01); } };
+    const marca = div.querySelector("input.marca");
+    marca.checked = !!fl.marcado; div.classList.toggle("marcada", !!fl.marcado);
+    marca.onchange = () => { fl.marcado = marca.checked; div.classList.toggle("marcada", marca.checked); avisoMarcados(); };
     const inDy = div.querySelector("input.dy");
     inDy.value = fl.dy || 0; inDy.classList.toggle("movido", !!fl.dy);
     div.querySelectorAll(".alt button").forEach(b => b.onclick = (e) => {

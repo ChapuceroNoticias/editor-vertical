@@ -240,7 +240,7 @@ def guardar_pantalla(trabajo, tabla):
 # Línea de tiempo de pantalla (todos los estilos menos Solo subtítulos)
 # ----------------------------------------------------------------------------
 NOMBRES_OP = {"completa": "Pantalla completa", "dividida": "Dividida", "nacho": "Solo Nacho",
-              "cerca": "Nacho cerca", "lejos": "Nacho lejos", "imagen": "Imagen", "arriba": "Arriba (en lugar de Nacho)", "quitar": "Quitar"}
+              "cerca": "Nacho cerca", "lejos": "Nacho lejos", "imagen": "Imagen", "arriba": "Arriba (en lugar de Nacho)", "ganso": "Dividida Ganso", "quitar": "Quitar"}
 
 
 def estilo_de(plan):
@@ -277,6 +277,8 @@ def tramos_pantalla(t):
     else:
         cfg_p = pl.get("proyeccion", {})
         proy = plan.get("proyeccion", [])
+        # «Dividida Ganso» solo si la plantilla trae ese acomodo
+        ops_p = ["completa", "dividida", "nacho", "916"] + (["ganso"] if "ganso" in pl.get("layouts", {}) else [])
         for i, p in enumerate(proy):
             tipo = TIPOS.get(p["tipo"], p["tipo"])
             if p.get("documento"):
@@ -285,7 +287,7 @@ def tramos_pantalla(t):
                 tipo = "Video de celular"
             if p.get("habla_otro"):
                 tipo += " (habla la persona del video)"
-            add(f"p{i}", p["inicio"], p["fin"], tipo, ed.pantalla_de(p, cfg_p), ["completa", "dividida", "nacho", "916"])
+            add(f"p{i}", p["inicio"], p["fin"], tipo, ed.pantalla_de(p, cfg_p), ops_p)
         # ratos de pantalla partida donde no se usa lo que Nacho proyecta (sale solo Nacho)
         for i, sg in enumerate(plan.get("tomas", [])):
             if sg.get("layout") != "dividida":
@@ -305,7 +307,7 @@ def tramos_pantalla(t):
                     libres_n = nuevos
                 for a, b in libres_n:
                     add(f"n{i}" if len(libres_n) == 1 else f"n{i}@{a:.3f}", a, b, "Nacho (sin pantalla)", "nacho",
-                        ["completa", "dividida", "nacho", "916"])
+                        ops_p)
                 continue
             libres = [(sg["inicio"], sg["fin"])]
             for p in proy:
@@ -322,7 +324,7 @@ def tramos_pantalla(t):
             for a, b in libres:
                 if b - a >= 1.0:
                     add(f"g{a:.3f}_{b:.3f}", a, b, "Lo que proyecta (no se está usando)", "nacho",
-                        ["completa", "dividida", "nacho", "916"])
+                        ops_p)
         for i, m in enumerate(plan.get("momentos", [])):
             if m.get("imagenes"):
                 add(f"m{i}", m["inicio"], m["fin"], "Imagen de internet: " + (m.get("busqueda") or "")[:40],
@@ -382,7 +384,7 @@ def aplicar_pantalla(t, cambios):
         k, op = str(c.get("k", "")), c.get("pantalla")
         if k.startswith("p") and k[1:].isdigit() and int(k[1:]) < len(proy):
             p = proy[int(k[1:])]
-            if op in ("completa", "dividida", "nacho", "916"):
+            if op in ("completa", "dividida", "nacho", "916", "ganso"):
                 p["pantalla"] = op
             p["inicio"], p["fin"] = tiempos(c, p["inicio"], p["fin"])
         elif k.startswith("g"):
@@ -390,7 +392,7 @@ def aplicar_pantalla(t, cambios):
                 a0, b0 = [float(x) for x in k[1:].split("_")]
             except ValueError:
                 continue
-            if op not in ("completa", "dividida", "916"):
+            if op not in ("completa", "dividida", "916", "ganso"):
                 continue
             a, b = tiempos(c, a0, b0)
             # misma caja que el tramo de proyección más cercano (o la de la plantilla)
@@ -405,7 +407,7 @@ def aplicar_pantalla(t, cambios):
             # rato que la plataforma tomó como «solo Nacho»: se vuelve pantalla partida con lo que proyecta Nacho
             tomas = plan.get("tomas", [])
             i = int(k[1:].split("@")[0])
-            if i >= len(tomas) or op not in ("completa", "dividida", "916"):
+            if i >= len(tomas) or op not in ("completa", "dividida", "916", "ganso"):
                 continue
             sg = tomas[i]
             a, b = tiempos(c, sg["inicio"], sg["fin"])
@@ -801,13 +803,14 @@ def datos_encuadre(t):
             plan_fijo = ed.fijar_plan(plan, pl)
             escena = lambda tt: ed.escena_en(plan_fijo, pl, tt)  # noqa: E731
         paso = 0.2
-        muestras, extra, pvwin, arriba = [], [], [], []
+        muestras, extra, pvwin, arriba, ganso = [], [], [], [], []
         n = int(info["duracion"] / paso) + 1
         for i in range(n):
             tt = round(i * paso, 3)
             e = escena(tt)
             fila = [tt, TIPOS_ESCENA[e["tipo"]]]
             arriba.append(e.get("arr", -1))
+            ganso.append(1 if e.get("ganso") else 0)
             if "auto" in e:
                 fila += [round(v, 1) for v in e["region"]] + [round(e["aspect"], 5)] + [round(v, 1) for v in e["auto"]]
             muestras.append(fila)
@@ -826,9 +829,12 @@ def datos_encuadre(t):
             areas["persona"] = pl["layouts"]["persona"]["persona"]["area"]
             if "dividida" in pl["layouts"]:   # «Tiktoks Gaby» no tiene pantalla dividida
                 areas["dividida"] = pl["layouts"]["dividida"]["persona"]["area"]
+            if "ganso" in pl["layouts"]:
+                areas["ganso"] = pl["layouts"]["ganso"]["persona"]["area"]
         _CACHE_ENC.clear()
         _CACHE_ENC[clave] = {"paso": paso, "muestras": muestras, "extra": extra, "pvwin": pvwin,
                              "arriba": arriba if any(a >= 0 for a in arriba) else None,
+                             "ganso": ganso if any(ganso) else None,
                              "salida": [W, H], "areas": areas,
                              "armado": datos_armado(plan, pl)}
     base = _CACHE_ENC[clave]
@@ -837,6 +843,7 @@ def datos_encuadre(t):
                       "archivo": Path(plan["video"]).name},
             "ajustes": plan.get("encuadre_manual") or [],
             "ajustes_pantalla": plan.get("encuadre_pantalla") or [],
+            "audio_tramos": plan.get("audio_tramos") or [],   # secciones de audio con su volumen (0 = silencio)
             # dónde puede ir el recuadro de la pantalla de Nacho (de su cámara a la orilla derecha, de arriba a abajo)
             "zona_pantalla": zona_de(plan),
             # franjas desenfocadas sobre los subtítulos que ya trae el video de Nacho (tiempo y px del original)
@@ -1249,9 +1256,13 @@ def datos_armado(plan, pl):
     cfg_p = pl.get("proyeccion", {})
     L = pl.get("layouts", {})
     div = L.get("dividida", {})
+
+    def acomodo(d):
+        return {"persona": d.get("persona", {}).get("area"), "franja": d.get("franja", {}).get("area"),
+                "franja_fondo": bool(d.get("franja", {}).get("fondo")), "inferior": d.get("inferior", {}).get("area")}
     return {
-        "dividida": {"persona": div.get("persona", {}).get("area"), "franja": div.get("franja", {}).get("area"),
-                     "franja_fondo": bool(div.get("franja", {}).get("fondo")), "inferior": div.get("inferior", {}).get("area")},
+        "dividida": acomodo(div),
+        **({"ganso": acomodo(L["ganso"])} if "ganso" in L else {}),
         "contener": {k: L.get("persona", {}).get("persona", {}).get(k, v)
                      for k, v in (("ancho_panel", 0.593), ("margen_sup_panel", 110), ("desenfoque", 22),
                                   ("oscurecer_fondo", 0.85))},
@@ -1484,6 +1495,26 @@ def partir_toma(t, tc):
     raise ValueError("Pon el cursor dentro del bloque (no tan cerca de sus orillas) para partirlo")
 
 
+def guardar_audio_tramos(t, tramos):
+    """Secciones del audio separadas en Edición, cada una con su volumen (0 = silenciada, 1 = normal)."""
+    plan, _ = cargar(t)
+    dur = float(plan["info"]["duracion"])
+    limpios = []
+    for x in tramos or []:
+        try:
+            a, b = max(0.0, float(x["inicio"])), min(dur, float(x["fin"]))
+            g = max(0.0, min(4.0, float(x.get("ganancia", 1.0))))
+        except (TypeError, ValueError, KeyError):
+            continue
+        if b - a >= 0.02:
+            limpios.append({"inicio": round(a, 3), "fin": round(b, 3), "ganancia": round(g, 3)})
+    limpios.sort(key=lambda x: x["inicio"])
+    respaldar(t)
+    plan["audio_tramos"] = limpios
+    guardar_plan(t, plan)
+    return len(limpios)
+
+
 def mover_frontera_toma(t, de, a):
     """Recorre el punto donde se partió un bloque gris (la orilla entre dos tomas seguidas). Tiempos del original."""
     plan, _ = cargar(t)
@@ -1522,24 +1553,13 @@ def guardar_subidas(t, i, archivos, reemplazar):
 
 
 def captura_pantalla(t, d):
-    """📸 Captura de lo que proyecta Nacho (nota, tuit…) en el punto donde va la reproducción, recortada del video
-    horizontal en calidad completa. Se agrega al momento con imagen de ese punto, o crea uno nuevo."""
+    """📸 Captura de TODO el cuadro del video horizontal (calidad completa) en el punto donde va la reproducción;
+    con el recuadro de la imagen se elige qué parte se usa. Se agrega al momento con imagen de ese punto, o crea uno nuevo."""
     plan, _ = cargar(t)
     tiempo = max(0.0, min(float(d["tiempo"]), float(plan["info"]["duracion"]) - 0.05))
     W, H = int(plan["info"]["ancho"]), int(plan["info"]["alto"])
-    caja = d.get("caja")
-    if not caja:   # lo que la plataforma detectó como contenido de la pantalla en ese punto, o la pantalla de la plantilla
-        p = next((p for p in plan.get("proyeccion", []) if p["inicio"] <= tiempo < p["fin"] and p.get("caja")
-                  and float(p["caja"][2]) > 40), None)
-        if p:
-            caja = p["caja"]
-        else:
-            pl_px = json.loads(json.dumps(plantilla(plan)))
-            try:
-                ed.escalar_cajas(pl_px, W, H)
-            except Exception:
-                pass
-            caja = caja_proyeccion(pl_px, plan)
+    # todo el cuadro del video: ya con el recuadro de la imagen se elige qué parte se ve
+    caja = d.get("caja") or [0, 0, W, H]
     x, y, w, h = [float(v) for v in caja]
     x, y = max(0, int(x)), max(0, int(y))
     w, h = int(min(w, W - x)), int(min(h, H - y))
@@ -1570,10 +1590,17 @@ def captura_pantalla(t, d):
             if nuevo else "📸 Captura agregada a las fotos de esta imagen."}
 
 
+def limpiar_titulo(titulo):
+    """Quita espacios sobrantes y deja como máximo un salto de línea (título a dos renglones)."""
+    ls = [" ".join(l.split()) for l in str(titulo or "").replace("\r", "").split("\n")]
+    ls = [l for l in ls if l]
+    return (ls[0] + ("\n" + " ".join(ls[1:]) if len(ls) > 1 else "")) if ls else ""
+
+
 def guardar_titulo(t, titulo, en_video=None):
     plan, _ = cargar(t)
     respaldar(t)
-    plan["titulo"] = (titulo or "").strip()
+    plan["titulo"] = limpiar_titulo(titulo)
     if en_video is not None:   # «Solo subtítulos»: poner o no la barra del título encima del clip
         plan["titulo_en_video"] = bool(en_video)
     guardar_plan(t, plan)
@@ -2111,6 +2138,7 @@ def datos_subtitulos(t):
         "meta_stickers": ed.meta_stickers(),
         # para que los stickers queden debajo de la franja azul y del título (en px del video vertical)
         "franja_area": (pl.get("layouts", {}).get("dividida", {}).get("franja") or {}).get("area"),
+        "franja_areas": {k: v["franja"]["area"] for k, v in pl.get("layouts", {}).items() if (v.get("franja") or {}).get("area")},
         "titulo": bool(plan.get("titulo")) and (estilo_de(plan) == "motivacional" or bool(pl.get("titulo", {}).get("barra"))),
         "titulo_fin": round(ed_t(float(plan.get("titulo_fin", 3.0)), plan), 3) if estilo_de(plan) == "motivacional" else None,
     }
@@ -2355,9 +2383,10 @@ def crear_app():
         return FileResponse(ed.ruta(f), media_type="video/mp4", headers={"Cache-Control": "max-age=86400"})
 
     @app.get("/enc/franja")
-    def enc_franja(t: str):
+    def enc_franja(t: str, lay: str = "dividida"):
         plan, _ = cargar(validar(t))
-        f = plantilla(plan).get("layouts", {}).get("dividida", {}).get("franja", {}).get("fondo")
+        lay = lay if lay in ("dividida", "ganso") else "dividida"
+        f = plantilla(plan).get("layouts", {}).get(lay, {}).get("franja", {}).get("fondo")
         if not f or not ed.ruta(f).exists():
             raise HTTPException(404, "Sin franja")
         return FileResponse(ed.ruta(f))
@@ -2370,6 +2399,12 @@ def crear_app():
     @app.get("/edi/datos")
     def edi_datos(t: str):
         return JSONResponse(datos_edicion(validar(t)))
+
+    @app.post("/edi/audio_tramos")
+    def edi_audio_tramos(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        _ok(lambda: guardar_audio_tramos(t, d.get("tramos")))
+        return {"ok": True}
 
     @app.post("/edi/mover_toma")
     def edi_mover_toma(d: dict = Body(...)):
@@ -2975,7 +3010,7 @@ def iframe_edi(t):
         return ("<div class='vacio-editor'>Elige un video y presiona <b>Analizar video</b>, "
                 "o abre un trabajo que ya exista.</div>")
     url = f"/edi/editor?t={quote(t)}&v={int(time.time() * 1000)}"
-    return (f'<iframe src="{url}" style="width:100%;height:1040px;border:0;border-radius:12px;background:#0b0b0d"></iframe>'
+    return (f'<iframe src="{url}" style="width:100%;height:1080px;border:0;border-radius:12px;background:#0b0b0d"></iframe>'
             f'<div style="text-align:right;font-size:13px"><a href="{url}" target="_blank">Abrir en otra ventana ↗</a></div>')
 
 
@@ -3199,7 +3234,7 @@ def opciones_recientes(n=8):
             plan = ed.cargar_json(p)
             est = nombres.get(Path(str(plan.get("plantilla", ""))).name, "")
             est = est.replace(" (Chapucero)", "")
-            titulo = (plan.get("titulo") or "").strip()
+            titulo = " ".join((plan.get("titulo") or "").split())
         except Exception:
             est, titulo = "", ""
         listo = " · exportado" if exportado_de(ruta) else ""
@@ -3251,7 +3286,7 @@ def construir():
                                         ruta_video = gr.Dropdown(label="Video", choices=opciones_videos(), value=None,
                                                                  allow_custom_value=True, filterable=True, scale=5)
                                         btn_refrescar = gr.Button("↻", scale=0, min_width=48)
-                                    titulo_nuevo = gr.Textbox(label="Título",
+                                    titulo_nuevo = gr.Textbox(label="Título  ·  Shift+Enter = segundo renglón", lines=1, max_lines=2,
                                                               placeholder="En «Tiktoks Yair»: arriba – abajo (en «Solo subtítulos» no hace falta)")
                                     estilo_edicion = gr.Radio(list(ESTILOS), value="Clips Chapuceros", label="Estilo de edición",
                                                               elem_id="estilo")
@@ -3456,7 +3491,7 @@ def construir():
                 v = convertido
             plantilla_est = plantilla_ruta or str(BASE / ESTILOS.get(est, ESTILOS["Clips Chapuceros"]))
             # solo análisis: la revisión se hace con las vistas previas en vivo; el video final se exporta al terminar
-            cmd = [sys.executable, str(BASE / "editor.py"), "analizar", v, "--titulo", (tit or "").strip(),
+            cmd = [sys.executable, str(BASE / "editor.py"), "analizar", v, "--titulo", limpiar_titulo(tit),
                    "--plantilla", plantilla_est, "--vista-previa"] + (["--solo-gpu", "--dispositivo", "cuda"] if gpu else [])
             for html, final in correr(cmd):
                 if final is not None and final.get("ok"):

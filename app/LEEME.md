@@ -211,6 +211,20 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
     **Ponerlo en el video** marcado, la barra roja del título se ve encima del clip en vivo (vertical: en su lugar de
     siempre; horizontal: arriba al centro) y sale igual en el video exportado.
 
+## Novedades 1.8.0
+
+- **Título nuevo** (Clips Chapuceros, Clips fuera y Solo subtítulos): barra roja degradada y letra Aku&Kamu. En un renglón
+  el texto llena lo ancho de la barra; con **Enter** (en Edición/Subtítulos) o **Shift+Enter** (al analizar) pasa a dos
+  renglones y se acomoda dentro de la barra. En Subtítulos, **Ctrl+Enter** guarda el título.
+- **Dividida Ganso** (Pantalla): dos cámaras, franja azul más alta y más arriba; abajo la pantalla.
+- **Línea de tiempo**: todos los carriles se mueven cada 0.10 s (Alt = cuadro por cuadro); las orillas se estiran.
+- **Imágenes 2 (arriba)**: carril propio para poner una imagen arriba y otra abajo de la franja al mismo tiempo.
+- **Captura del video**: toma el cuadro completo.
+- **Secciones de audio**: Shift + arrastrar en «Audio» separa una sección; abajo se silencia o se sube/baja su volumen
+  (0–300 %). Solo afecta la voz del video, la música de fondo sigue.
+- **Subtítulos**: casilla ☑ en cada fila; al subir/bajar uno de los marcados, todos los marcados se mueven igual.
+- **Sticker «Rectángulo»**: recuadro rojo recto y delgado (animado, se recolorea y se estira como los demás).
+
 ## Video largo (pestaña «Video largo»)
 
 Para sacar varios clips de un video de 1–2 horas:

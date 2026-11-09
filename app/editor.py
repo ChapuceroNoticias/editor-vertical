@@ -2310,7 +2310,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-05n v1.7.3"
+VERSION = "2026-11-09a v1.8.0"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -2700,6 +2700,55 @@ def pegar(lienzo, sup, dx=0, dy=0):
     lienzo[cy0:cy1, cx0:cx1] = (b * a + zona * (1 - a)).astype(np.uint8)
 
 
+def lineas_titulo(titulo):
+    """El título en renglones: el usuario puede poner UN salto de línea (máximo dos renglones)."""
+    ln = [x.strip() for x in str(titulo or "").replace("\r", "").split("\n") if x.strip()]
+    if len(ln) > 2:
+        ln = [ln[0], " ".join(ln[1:])]
+    return ln
+
+
+def texto_titulo_ancho(capa, cfg, lineas, x, y, w, h):
+    """Título grande (Aku&Kamu): a un renglón llena el ancho de la barra; a dos renglones, los dos con la misma
+    letra, del tamaño más grande que quepa en el ancho y en el alto de la barra."""
+    fuente = str(ruta(cfg["fuente"]))
+    mv = float(cfg.get("margen_v", 16))
+    alto_util = h - 2 * mv
+    inter = float(cfg.get("interlineado", 0.18))   # espacio entre renglones (fracción del alto de la letra)
+
+    def medir(tam):
+        f = ImageFont.truetype(fuente, tam)
+        cajas = [f.getbbox(t, stroke_width=cfg.get("contorno", 0)) for t in lineas]
+        anchos = [c[2] - c[0] for c in cajas]
+        hl = max(c[3] - c[1] for c in cajas) if len(lineas) == 1 else (f.getbbox("ÁH")[3] - f.getbbox("H")[1])
+        total = hl * len(lineas) + hl * inter * (len(lineas) - 1)
+        return f, cajas, anchos, hl, total
+    lo, hi = 10, int(cfg.get("tam_max", 400))
+    while lo < hi:   # el tamaño más grande que cabe
+        m = (lo + hi + 1) // 2
+        _, _, anchos, _, total = medir(m)
+        if max(anchos) <= w and total <= alto_util:
+            lo = m
+        else:
+            hi = m - 1
+    f, cajas, anchos, hl, total = medir(lo)
+    d = ImageDraw.Draw(capa)
+    color = hex_rgb(cfg["color"])
+    sw = int(cfg.get("contorno", 0))
+    sombra = cfg.get("sombra")
+    y0 = y + (h - total) / 2
+    for k, (t, c) in enumerate(zip(lineas, cajas)):
+        # cada renglón centrado; la caja del texto (sin el espacio de arriba de la letra) queda donde toca
+        tx = x + (w - (c[2] - c[0])) / 2 - c[0]
+        ty = y0 + k * hl * (1 + inter) - (c[1] if len(lineas) == 1 else f.getbbox("H")[1])
+        if len(lineas) == 1:
+            ty = y + (h - (c[3] - c[1])) / 2 - c[1]
+        if sombra:
+            d.text((tx + sombra[0], ty + sombra[1]), t, font=f, fill=(0, 0, 0, int(sombra[2] * 255)))
+        d.text((tx, ty), t, font=f, fill=color, stroke_width=sw,
+               stroke_fill=hex_rgb(cfg.get("color_contorno", "#000000")) if sw else None)
+
+
 def capa_titulo(pl, titulo, W, H):
     cfg = pl["titulo"]
     capa = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -2719,7 +2768,13 @@ def capa_titulo(pl, titulo, W, H):
         x, y = cx - (cx - x) * esc, max(0, cy - (cy - y) * esc)
         w, h = w * esc, h * esc
     capa.alpha_composite(barra)
+    if titulo and cfg.get("modo") == "ancho":
+        lineas = lineas_titulo(titulo.upper() if cfg.get("mayusculas") else titulo)
+        if lineas:
+            texto_titulo_ancho(capa, cfg, lineas, x, y, w, h)
+        return a_superposicion(capa)
     if titulo:
+        titulo = " ".join(lineas_titulo(titulo))
         texto = titulo.upper() if cfg.get("mayusculas") else titulo
         f = fuente_que_quepa(ruta(cfg["fuente"]), texto, w, h, cfg["tam_max"], cfg["contorno"])
         d = ImageDraw.Draw(capa)
@@ -3228,7 +3283,8 @@ DIR_STICKERS = BASE / "assets" / "stickers"
 CATALOGO_STICKERS = [
     # tipo, nombre, color, tamaño (fracción del ancho)
     ("circulo", "Círculo", "#e6231b", 0.38), ("ovalo", "Óvalo", "#e6231b", 0.5),
-    ("rectangulo", "Recuadro", "#e6231b", 0.55), ("enfoque", "Esquinas", "#e6231b", 0.5),
+    ("rectangulo", "Recuadro", "#e6231b", 0.55), ("marco", "Rectángulo", "#e8443a", 0.55),
+    ("enfoque", "Esquinas", "#e6231b", 0.5),
     ("subrayado", "Subrayado", "#e6231b", 0.5), ("tachado", "Tachado", "#e6231b", 0.5),
     ("flecha_abajo", "Flecha abajo", "#e6231b", 0.28), ("flecha_recta", "Flecha", "#e6231b", 0.32),
     ("flecha_curva", "Flecha curva", "#e8461c", 0.36), ("tache", "Tache", "#f0441a", 0.3),
@@ -3238,7 +3294,7 @@ CATALOGO_STICKERS = [
 ]
 
 
-STICKERS_LINEA = ("circulo", "ovalo", "rectangulo", "enfoque", "subrayado", "tachado")
+STICKERS_LINEA = ("circulo", "ovalo", "rectangulo", "marco", "enfoque", "subrayado", "tachado")
 
 
 def prop_sticker(s):
@@ -3556,21 +3612,24 @@ def escena_en(plan, pl, t):
     if mom and mom.get("estilo") == "completa":
         return {"tipo": "imagen", **extra}
     lay = "dividida" if (mom or pv) else "persona"
+    if lay == "dividida" and pv and modo_pv == "ganso" and "ganso" in L:
+        lay = "ganso"   # «Dividida Ganso»: franja azul más arriba (dos cámaras)
+        extra["ganso"] = 1
     cfg = L[lay]
     cara = interp_cara(toma["cara"], t)
     region = pl["fuente_16x9"]["persona_dividida"] if toma["layout"] == "dividida" \
         else [0, 0, plan["info"]["ancho"], plan["info"]["alto"]]
     region = [float(v) for v in region]
     ax, ay, aw, ah = cfg["persona"]["area"]
-    if pv and lay == "dividida" and L["dividida"].get("inferior"):
-        ix, iy, iw, ih = L["dividida"]["inferior"]["area"]
+    if pv and lay != "persona" and L[lay].get("inferior"):
+        ix, iy, iw, ih = L[lay]["inferior"]["area"]
         caja = [float(v) for v in pv["caja"]]
         extra["pv_ventana"] = {"region": caja, "aspect": iw / ih,
                                "auto": list(ventana_pantalla(pv, t, iw / ih, False, cfg_p))}
     if arr:   # arriba se ve la imagen: no hay recuadro de Nacho que mover
         return {"tipo": "persona" if lay == "persona" else "dividida", **extra}
     if cfg["persona"].get("ajuste") == "contener" and region[2] / region[3] < (aw / ah) * 0.8:
-        return {"tipo": "contenida", "region": region, "lay": lay, **extra}
+        return {"tipo": "contenida", "region": region, "lay": "dividida" if lay == "ganso" else lay, **extra}
     return {"tipo": "persona" if lay == "persona" else "dividida", "region": region, "aspect": aw / ah,
             "auto": list(recorte_persona(region, cara, (aw, ah), cfg["persona"])), **extra}
 
@@ -3621,7 +3680,24 @@ def ganancia_voz(video, cortes, objetivo_db=-19.0, max_db=20.0):
     return g
 
 
-def filtro_audio(pl, info, hay_musica, cortes, mezcla=None, video=None):
+def filtro_tramos_audio(tramos, cortes):
+    """Secciones de audio separadas en Edición: cada una con su volumen (0 = silenciada). Van DESPUÉS de nivelar la
+    voz (si no, el nivelador las regresaría a su volumen) y en tiempo del video ya editado."""
+    out, sube = "", False
+    for tr in tramos or []:
+        try:
+            g = max(0.0, min(4.0, float(tr.get("ganancia", 1.0))))
+            a, b = a_editado(float(tr["inicio"]), cortes), a_editado(float(tr["fin"]), cortes)
+        except (TypeError, ValueError, KeyError):
+            continue
+        if b - a < 0.01 or abs(g - 1.0) < 0.005:
+            continue
+        sube = sube or g > 1.0
+        out += f",volume=enable='between(t,{a:.3f},{b:.3f})':volume={g:.3f}"
+    return out, sube
+
+
+def filtro_audio(pl, info, hay_musica, cortes, mezcla=None, video=None, tramos=None):
     """Voz (sin pausas, nivelada) + música de fondo en loop a volumen FIJO (ya no baja sola cuando la persona
     habla): solo dura lo que dura el video. 'mezcla' = volúmenes elegidos en la pestaña Edición.
     audio.nivelar_voz: true = nivelador automático (dynaudnorm); "fijo" = una sola ganancia para todo el video
@@ -3663,8 +3739,10 @@ def filtro_audio(pl, info, hay_musica, cortes, mezcla=None, video=None):
         voz += ("dynaudnorm=f=150:g=15:p=0.9:m=8," if nivelar else "") + "aresample=48000"
     if abs(mezcla.get("voz", 1.0) - 1.0) > 0.001:
         voz += f",volume={mezcla['voz']:.3f}"
+    f_tr, sube = filtro_tramos_audio(tramos, cortes)
+    voz += f_tr
     if not hay_musica:
-        return voz + ",alimiter=limit=0.95[a]" if (fijo or mezcla.get("voz", 1.0) > 1.0) else voz + "[a]", "[a]"
+        return voz + ",alimiter=limit=0.95[a]" if (fijo or sube or mezcla.get("voz", 1.0) > 1.0) else voz + "[a]", "[a]"
     vol_m = a.get("volumen_musica", 0.5) * mezcla.get("musica", 1.0)
     f = (f"{voz}[voz];"
          f"[2:a]aresample=48000,volume={vol_m:.3f}[mus];"
@@ -3739,7 +3817,7 @@ def ventana_916(fw, fh, W, H, cara=None):
 def pantalla_de(pv, cfg_p):
     """Cómo se muestra un tramo de la proyección: 'completa', 'dividida' o 'nacho' (no se muestra).
     Se puede forzar por tramo con el campo 'pantalla' (lo cambia la interfaz)."""
-    if pv.get("pantalla") in ("completa", "dividida", "nacho", "916"):
+    if pv.get("pantalla") in ("completa", "dividida", "nacho", "916", "ganso"):
         return pv["pantalla"]
     aprendido = (cfg_p.get("aprendido_pantalla") or {}).get(clase_pantalla(pv))
     if aprendido in ("completa", "dividida", "nacho"):
@@ -3821,7 +3899,7 @@ def vista_previa_rapida(trabajo, plan=None):
     w, h = W // 2, H // 2
     fps = info["fps"]
     cortes = sorted(plan.get("cortes", []), key=lambda c: c["inicio"])
-    f_audio, map_audio = filtro_audio(pl, info, False, cortes, video=plan["video"])
+    f_audio, map_audio = filtro_audio(pl, info, False, cortes, video=plan["video"], tramos=plan.get("audio_tramos"))
     tmp = trabajo / "vista_previa_tmp.mp4"
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}",
            "-r", f"{fps}", "-i", "-", "-i", plan["video"], "-map", "0:v"]
@@ -4099,7 +4177,7 @@ def crear_proxy(trabajo):
     w = 960 if info["ancho"] >= info["alto"] else 540
     h = int(round(w * info["alto"] / info["ancho"] / 2)) * 2
     cortes = sorted(unir_cortes(plan.get("cortes", [])), key=lambda c: c["inicio"])
-    f_audio, map_audio = filtro_audio(pl, info, False, cortes, video=plan["video"])
+    f_audio, map_audio = filtro_audio(pl, info, False, cortes, video=plan["video"], tramos=plan.get("audio_tramos"))
     tmp = trabajo / "proxy_tmp.mp4"
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}",
            "-r", f"{fps}", "-i", "-", "-i", plan["video"], "-map", "0:v"]
@@ -4675,10 +4753,12 @@ def cmd_render(args):
                       pl["subtitulos"])
 
     L = pl["layouts"]
-    franja = None
-    if L["dividida"].get("franja", {}).get("fondo"):
-        fx, fy, fw, fh = L["dividida"]["franja"]["area"]
-        franja = ajustar(leer_img(ruta(L["dividida"]["franja"]["fondo"])), fw, fh)
+    franjas = {}   # franja azul de cada acomodo dividido («dividida» y «ganso»)
+    for k_lay in ("dividida", "ganso"):
+        if L.get(k_lay, {}).get("franja", {}).get("fondo"):
+            fx, fy, fw, fh = L[k_lay]["franja"]["area"]
+            franjas[k_lay] = ajustar(leer_img(ruta(L[k_lay]["franja"]["fondo"])), fw, fh)
+    franja = franjas.get("dividida")
 
     cache_img = {}
     cfg_m = pl["momentos"]
@@ -4718,7 +4798,7 @@ def cmd_render(args):
 
     musica = ruta(pl.get("audio", {}).get("musica")) if not args.sin_musica else None
     hay_musica = bool(musica and Path(musica).exists())
-    f_audio, map_audio = filtro_audio(pl, info, hay_musica, cortes, mezcla_de(plan), video=plan["video"])
+    f_audio, map_audio = filtro_audio(pl, info, hay_musica, cortes, mezcla_de(plan), video=plan["video"], tramos=plan.get("audio_tramos"))
 
     cmd, salida, paso, tam = salida_render(args, trabajo, plan, pl, W, H, fps, hay_musica, musica, f_audio, map_audio,
                                            salida)
@@ -4740,7 +4820,7 @@ def cmd_render(args):
                 if pv_ and pv_["tipo"] == "lectura" and any(a <= tt < b for a, b in pv_.get("ocultar", [])):
                     pv_ = None if not cfg_p.get("scroll_como_documento") else pv_
                 if pv_:
-                    return pantalla_de(pv_, cfg_p) == "dividida"
+                    return pantalla_de(pv_, cfg_p) in ("dividida", "ganso")
                 m_ = dentro(tt, momentos)
                 return bool(m_ and m_.get("estilo") != "completa")
             dur_c = len(cortinilla) / cfg_tr.get("fps", 25)
@@ -4846,6 +4926,8 @@ def cmd_render(args):
             lay = "persona"
         else:
             lay = "dividida" if (mom or pv) else "persona"
+            if lay == "dividida" and pv and modo_pv == "ganso" and "ganso" in L:
+                lay = "ganso"   # «Dividida Ganso»
             cfg = L[lay]
             ax, ay, aw, ah = cfg["persona"]["area"]
             arr = dentro(t, arribas) if arribas else None
@@ -4868,10 +4950,10 @@ def cmd_render(args):
                     pers = cv2.resize(frame[y0:y0 + ch, x0:x0 + cw], (aw, ah), interpolation=cv2.INTER_LANCZOS4)
                 lienzo[ay:ay + ah, ax:ax + aw] = enfocar(pers, cfg["persona"].get("nitidez", 0))
 
-            if lay == "dividida":
-                if franja is not None:
+            if lay in ("dividida", "ganso"):
+                if franjas.get(lay) is not None:
                     fx, fy, fw, fh = cfg["franja"]["area"]
-                    lienzo[fy:fy + fh, fx:fx + fw] = franja
+                    lienzo[fy:fy + fh, fx:fx + fw] = franjas[lay]
                 ix, iy, iw, ih = cfg["inferior"]["area"]
                 if mom:
                     imgs = mom["imagenes"]
@@ -4894,9 +4976,9 @@ def cmd_render(args):
         if stickers is not None and not previa and stickers.activos(t):
             limpio = lienzo.copy()
             stickers.pegar(lienzo, t)
-            if lay == "dividida" and franja is not None:
-                fx, fy, fw, fh = L["dividida"]["franja"]["area"]
-                lienzo[fy:fy + fh, fx:fx + fw] = franja
+            if lay in ("dividida", "ganso") and franjas.get(lay) is not None:
+                fx, fy, fw, fh = L[lay]["franja"]["area"]
+                lienzo[fy:fy + fh, fx:fx + fw] = franjas[lay]
         for a_c, b_c in ventanas_cort:
             if a_c <= te < b_c:
                 k = min(len(cortinilla) - 1, int((te - a_c) / (b_c - a_c) * len(cortinilla)))

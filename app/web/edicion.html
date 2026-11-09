@@ -8,7 +8,7 @@
   :root {
     --fondo: #0b0b0d; --panel: #15151a; --panel2: #1c1c22; --texto: #ececf1; --suave: #9a9aa6; --borde: #2a2a32;
     --acento: #d91e2b; --acento2: #ff4553; --ok: #22c55e; --pend: #f59e0b; --rojo: #ff4553;
-    --c-completa: #e11d48; --c-dividida: #0ea5e9; --c-nacho: #52525b; --c-916: #a855f7; --c-cerca: #f59e0b; --c-lejos: #b45309;
+    --c-completa: #e11d48; --c-dividida: #0ea5e9; --c-ganso: #6366f1; --c-audio: #fbbf24; --c-silencio: #f87171; --c-nacho: #52525b; --c-916: #a855f7; --c-cerca: #f59e0b; --c-lejos: #b45309;
     --c-imagen: #22c55e; --c-arriba: #14b8a6; --c-quitar: #3f3f46; --c-manual: #22c55e; --c-pantallaman: #38bdf8; --c-titulo: #e5e7eb; --c-difuminar: #d946ef; --c-sticker: #F2A33A;
   }
   * { box-sizing: border-box; }
@@ -21,7 +21,7 @@
   .btn.prim:hover:not(:disabled) { background: var(--acento2); }
   .btn.peligro { color: var(--rojo); }
   .btn:disabled { opacity: .4; cursor: default; }
-  input[type=text], input[type=search] { padding: 6px 8px; border: 1px solid var(--borde); border-radius: 6px;
+  input[type=text], input[type=search], textarea#titulo { padding: 6px 8px; border: 1px solid var(--borde); border-radius: 6px;
     background: var(--fondo); color: var(--texto); font: inherit; }
   input.t { width: 92px; font-variant-numeric: tabular-nums; }
   .barra { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--borde);
@@ -52,7 +52,7 @@
   .desliza.oculta { visibility: hidden; }
   #desliza_p { position: absolute; top: 1px; bottom: 1px; min-width: 24px; background: #4b4b57; border-radius: 6px; cursor: grab; }
   #desliza_p:hover, #desliza_p.arrastrando { background: #6b6b78; }
-  #linea { width: 100%; height: 238px; display: block; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde);
+  #linea { width: 100%; height: 276px; display: block; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde);
     cursor: pointer; }
   .leyenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--suave); padding: 6px 12px 0; }
   .difbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px 0; font-size: 12.5px; color: var(--suave); }
@@ -115,7 +115,8 @@
   /* ---------- Grafito: disposición de Edición ---------- */
   .barra { background: var(--fondo); border-bottom: 1px solid var(--linea); padding: 10px 14px; gap: 8px; }
   .barra .campo_titulo { flex: 1 1 340px; gap: 10px; font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--tenue); }
-  .barra .campo_titulo input { height: 34px; padding: 0 12px; font-size: 14px; letter-spacing: 0; text-transform: none; flex: 1; }
+  .barra .campo_titulo textarea { resize: none; overflow: hidden; line-height: 16px; min-height: 34px; padding: 8px 12px; font-family: inherit; }
+  .barra .campo_titulo input, .barra .campo_titulo textarea { height: 34px; padding: 0 12px; font-size: 14px; letter-spacing: 0; text-transform: none; flex: 1; }
   .btn.ico { width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--texto2); font-weight: 600; }
   .btn.fant { background: transparent; border-color: transparent; color: var(--texto2); }
   .btn.fant:hover:not(:disabled) { background: var(--panel2); border-color: var(--borde); }
@@ -163,7 +164,7 @@
 </head>
 <body>
 <div class="barra">
-  <label class="campo_titulo"><span>Título</span><input type="text" id="titulo" placeholder="Título del video"></label>
+  <label class="campo_titulo"><span>Título</span><textarea id="titulo" rows="1" placeholder="Título del video (Enter = segundo renglón)"></textarea></label>
   <button class="btn" id="b_titulo">Guardar título</button>
   <span id="estado"></span>
   <button class="btn ico" id="b_deshacer" title="Regresa el último cambio guardado (Ctrl+Z)" aria-label="Deshacer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
@@ -207,6 +208,14 @@
   </div>
   <div class="linea"><canvas id="linea"></canvas>
     <div class="desliza" id="desliza" title="Arrastra para moverte por el video cuando la línea de tiempo está acercada (Ctrl + rueda)"><div id="desliza_p"></div></div></div>
+  <div class="segbar" id="audbar">
+    <b>Audio:</b>
+    <span id="aud_info" class="sub">Shift + arrastrar en «Audio» separa una sección para silenciarla o cambiarle el volumen.</span>
+    <button class="btn" id="aud_mute" disabled title="Silencia (o regresa el sonido de) la sección seleccionada">🔇 Silenciar</button>
+    <span class="sub">Volumen</span><input type="range" id="aud_vol" min="0" max="300" step="5" value="100" disabled style="width:140px">
+    <span id="aud_vol_txt" class="sub">100%</span>
+    <button class="btn" id="aud_quitar" disabled title="Quita la sección (vuelve al volumen normal) (Supr)">Quitar sección</button>
+  </div>
   <div class="segbar" id="segbar">
     <b>Segmento del video:</b>
     <span id="seg_info" class="sub">Clic en un bloque gris (o Shift + arrastrar en «Pantalla») para seleccionar un pedazo del video.</span>
@@ -220,6 +229,7 @@
   <div class="leyenda">
     <span><i style="background:var(--c-completa)"></i>Pantalla completa</span>
     <span><i style="background:var(--c-dividida)"></i>Dividida</span>
+    <span><i style="background:var(--c-ganso)"></i>Dividida Ganso</span>
     <span><i style="background:var(--c-nacho)"></i>Solo Nacho</span>
     <span><i style="background:var(--c-916)"></i>9:16 (vista vertical de todo el video)</span>
     <span><i style="background:var(--c-imagen)"></i>Imagen</span>
@@ -296,7 +306,7 @@
         <div class="fila">
           <input type="file" id="n_archivos" accept="image/*" multiple style="display:none">
           <button class="btn prim" id="n_subir" title="Elige una o varias imágenes de tu PC: se crea el momento aquí con esas fotos">📁 Subir imagen desde la PC…</button>
-          <button class="btn" id="n_captura" title="Toma lo que Nacho tiene en pantalla (nota, tuit…) justo en este punto del video y lo pone aquí como imagen">📸 Captura de la pantalla de Nacho</button>
+          <button class="btn" id="n_captura" title="Toma el cuadro completo del video en este punto y lo pone aquí como imagen (luego eliges qué parte se ve)">📸 Captura del video</button>
         </div>
         <div class="sub" style="margin-top:4px"><b>Opción 2 · Buscar en internet</b></div>
         <div class="fila">
@@ -460,11 +470,11 @@ const $ = (id) => document.getElementById(id);
 const TIPOS = ["persona", "dividida", "video", "imagen", "contenida"];
 const NOMBRES_ESC = { persona: "Nacho a pantalla completa", dividida: "Nacho arriba (dividida)",
   video: "Video de la proyección a pantalla completa", imagen: "Imagen o documento", contenida: "Recuadro completo de Nacho" };
-const OPS = { completa: "Pantalla completa", dividida: "Dividida", nacho: "Solo Nacho", "916": "9:16", cerca: "Nacho cerca",
+const OPS = { completa: "Pantalla completa", dividida: "Dividida", ganso: "Dividida Ganso", nacho: "Solo Nacho", "916": "9:16", cerca: "Nacho cerca",
   lejos: "Nacho lejos", imagen: "Imagen", arriba: "Arriba (en lugar de Nacho)", quitar: "Quitar" };
 let E = null, P = null, X = null;     // armado, tramos de pantalla, datos de edición
 let video, capa, ctx, previa, pctx, linea, lctx;
-let tituloImg = null, franjaImg = null, version = Date.now();
+let tituloImg = null, franjaImgs = {}, version = Date.now();
 const imagenes = {};
 let vista = [0, 1];                   // ventana de la línea de tiempo (tiempo EDITADO)
 // encuadre
@@ -771,16 +781,17 @@ function dibujarPantallaAbajo(i, t, dx, dy, dw, dh) {
   else { cw = Math.min(w, h * asp) / E.armado.zoom_imagen; ch = cw / asp; x0 = x + (w - cw) * (0.2 + 0.6 * fase); y0 = y + (h - ch) * 0.45; }
   deVideo(x0, y0, cw, ch, dx, dy, dw, dh);
 }
-function dibujarFranja(s) {   // franja azul de la pantalla dividida
-  const A = E.armado.dividida;
+const gansoEn = (t) => !!(E.ganso && E.ganso[indice(t)] === 1);   // «Dividida Ganso» en este momento
+function dibujarFranja(s, key = "dividida") {   // franja azul de la pantalla dividida (o de la «Ganso»)
+  const A = E.armado[key] || E.armado.dividida, franjaImg = franjaImgs[key];
   if (!A.franja) return;
   const [fx, fy, fw, fh] = A.franja.map(v => v * s);
   if (franjaImg && franjaImg.complete && franjaImg.naturalWidth) cubrir(franjaImg, franjaImg.naturalWidth, franjaImg.naturalHeight, fx, fy, fw, fh);
   else { pctx.fillStyle = "#1e3a8a"; pctx.fillRect(fx, fy, fw, fh); }
 }
-function dibujarAbajo(e, t, s) {
-  const A = E.armado.dividida;
-  dibujarFranja(s);
+function dibujarAbajo(e, t, s, key = "dividida") {
+  const A = E.armado[key] || E.armado.dividida;
+  dibujarFranja(s, key);
   if (!A.inferior) return;
   const [ix, iy, iw, ih] = A.inferior.map(v => v * s);
   if (e.ex[0] >= 0) dibujarMomento(e.ex[0], t, ix, iy, iw, ih);
@@ -824,10 +835,11 @@ function componer(t, e, v) {
     if (arr >= 0 && e.tipo === "persona") dibujarMomento(arr, t, ax, ay, aw, ah);
     else if (v) deVideo(...v.r, ax, ay, aw, ah);
   } else if (e.tipo === "dividida") {
-    const [ax, ay, aw, ah] = area(E.areas.dividida);
+    const key = gansoEn(t) ? "ganso" : "dividida";
+    const [ax, ay, aw, ah] = area(E.areas[key] || E.areas.dividida);
     if (arr >= 0) dibujarMomento(arr, t, ax, ay, aw, ah);
     else if (v) deVideo(...v.r, ax, ay, aw, ah);
-    dibujarAbajo(e, t, s);
+    dibujarAbajo(e, t, s, key);
   } else if (e.tipo === "imagen") {
     if (e.ex[0] >= 0) dibujarMomento(e.ex[0], t, 0, 0, W, H);
     else if (e.ex[1] >= 0 && vpActual) deVideoAjustado(vpActual.r, 0, 0, W, H);
@@ -839,7 +851,8 @@ function componer(t, e, v) {
     }
   } else if (e.tipo === "contenida") {
     const [rx, ry, rw, rh] = e.ex.slice(2, 6), divi = e.ex[6] === 1;
-    const [ax, ay, aw, ah] = area(divi ? E.areas.dividida : E.areas.persona), C = E.armado.contener;
+    const key = gansoEn(t) ? "ganso" : "dividida";
+    const [ax, ay, aw, ah] = area(divi ? (E.areas[key] || E.areas.dividida) : E.areas.persona), C = E.armado.contener;
     pctx.save(); pctx.beginPath(); pctx.rect(ax, ay, aw, ah); pctx.clip();
     pctx.filter = `blur(${C.desenfoque * s}px) brightness(${C.oscurecer_fondo})`;
     const esc = Math.max(aw / rw, ah / rh) * 1.15;
@@ -848,10 +861,10 @@ function componer(t, e, v) {
     const k = aw * C.ancho_panel / rw;
     deVideo(rx, ry, rw, rh, ax + (aw - rw * k) / 2, ay, rw * k, rh * k);
     pctx.restore();
-    if (divi) dibujarAbajo(e, t, s);
+    if (divi) dibujarAbajo(e, t, s, key);
   }
   // stickers: encima de lo que se ve, debajo de la franja azul y del título (como en el video final)
-  if (dibujarStickers(pctx, t, W, H) && (e.tipo === "dividida" || (e.tipo === "contenida" && e.ex[6] === 1))) dibujarFranja(s);
+  if (dibujarStickers(pctx, t, W, H) && (e.tipo === "dividida" || (e.tipo === "contenida" && e.ex[6] === 1))) dibujarFranja(s, gansoEn(t) ? "ganso" : "dividida");
   dibujarCortinilla(pctx, t, W, H);
   if (tituloImg && tituloImg.complete && tituloImg.naturalWidth && (E.estilo !== "motivacional" || t < E.armado.titulo_fin))
     pctx.drawImage(tituloImg, 0, 0, W, H);
@@ -945,30 +958,24 @@ function dibujarDifuminar(t, s, d) {   // franja difuminada (morada): se mueve y
 // ---------- línea de tiempo (tiempo del video editado) ----------
 function colorOp(op) { return getComputedStyle(document.documentElement).getPropertyValue("--c-" + op).trim() || "#666"; }
 const REGLA = 26;   // alto de la regla de tiempo (arriba de los carriles)
-const CARRILES = { p: [REGLA + 6, 24], m: [REGLA + 34, 24], en: [REGLA + 62, 14], ep: [REGLA + 80, 14], df: [REGLA + 98, 14], st: [REGLA + 116, 39], au: [REGLA + 160, 40] };
+// carriles más altos para que las orillas se agarren fácil; «Imágenes 2» = la imagen de arriba (en lugar de Nacho)
+const CARRILES = { p: [REGLA + 6, 24], m: [REGLA + 34, 22], m2: [REGLA + 60, 22], en: [REGLA + 86, 20], ep: [REGLA + 110, 20],
+                   df: [REGLA + 134, 20], st: [REGLA + 158, 39], au: [REGLA + 201, 44] };
 let ratonX = null;   // tiempo bajo el ratón (línea guía), o null
 function itemsLinea() {
   const it = [];
   for (const x of P.tramos) {
-    if (x.k[0] === "m") it.push({ carril: "m", tipo: "m", a: x.ini_s, b: x.fin_s, ref: x, mov: true,
+    if (x.k[0] === "m") it.push({ carril: x.pantalla === "arriba" ? "m2" : "m", tipo: "m", a: x.ini_s, b: x.fin_s, ref: x, mov: true,
                                   op: x.pantalla === "quitar" ? "quitar" : x.pantalla === "arriba" ? "arriba" : "imagen" });
     else it.push({ carril: "p", tipo: x.k[0], a: x.ini_s, b: x.fin_s, op: x.pantalla, ref: x, mov: x.k[0] === "p" || x.k[0] === "e" });
-  }
-  // imágenes «arriba» en la mitad de arriba del carril; las de abajo que se enciman con ellas, en la mitad de abajo
-  const arrs = it.filter(x => x.carril === "m" && x.op === "arriba");
-  if (arrs.length) {
-    const [my, mh] = CARRILES.m;
-    for (const x of it) {
-      if (x.carril !== "m") continue;
-      if (x.op === "arriba") x.yh = [my, mh / 2 - 1];
-      else if (arrs.some(y => y.a < x.b && x.a < y.b)) x.yh = [my + mh / 2, mh / 2];
-    }
   }
   if (X.titulo_fin != null)   // estilo motivacional: hasta cuándo se ve el título (se estira su orilla derecha)
     it.push({ carril: "m", tipo: "ti", a: 0, b: aEditado(X.titulo_fin), op: "titulo", ref: { k: "titulo" }, mov: true });
   E.ajustes.forEach(a => it.push({ carril: "en", tipo: "en", a: aEditado(a.inicio), b: aEditado(a.fin), op: "manual", ref: a, mov: true }));
   (E.ajustes_pantalla || []).forEach(a => it.push({ carril: "ep", tipo: "ep", a: aEditado(a.inicio), b: aEditado(a.fin), op: "pantallaman", ref: a, mov: true }));
   (E.difuminar || []).forEach(a => it.push({ carril: "df", tipo: "df", a: aEditado(a.inicio), b: aEditado(a.fin), op: "difuminar", ref: a, mov: true }));
+  (E.audio_tramos || []).forEach(a => it.push({ carril: "au", tipo: "au", a: aEditado(a.inicio), b: aEditado(a.fin), ref: a, mov: true,
+                                                op: a.ganancia <= 0.001 ? "silencio" : "audio" }));
   // stickers: si se enciman en el tiempo, van en renglones (hasta 3) para que se vean y se puedan agarrar todos
   const filasSt = [], itsSt = (E.stickers || []).map(a => ({ carril: "st", tipo: "st", a: aEditado(a.inicio), b: aEditado(a.fin), op: "sticker", ref: a, mov: true }));
   itsSt.sort((x, y) => x.a - y.a).forEach(x => {
@@ -1080,7 +1087,7 @@ function dibujarLinea(te) {
   pintarDeslizador();
   const W = linea.width, H = linea.height, d = devicePixelRatio;
   lctx.clearRect(0, 0, W, H);
-  const nombres = { p: "Pantalla", m: "Imágenes", en: "Encuadre Nacho", ep: "Encuadre pantalla", df: "Difuminar subtítulos", st: "Stickers", au: "Audio" };
+  const nombres = { p: "Pantalla", m: "Imágenes", m2: "Imágenes 2 (arriba)", en: "Encuadre Nacho", ep: "Encuadre pantalla", df: "Difuminar subtítulos", st: "Stickers", au: "Audio" };
   // regla: marcas grandes con su tiempo y chicas entre ellas; bandas alternas para ubicarse a simple vista
   const seg = vista[1] - vista[0], pxs = W / Math.max(0.001, seg);
   const pasos = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
@@ -1112,7 +1119,7 @@ function dibujarLinea(te) {
     if (b < vista[0] || a > vista[1]) continue;
     const [y, h] = it.yh || CARRILES[it.carril];
     const x0 = xDe(a), x1 = xDe(b);
-    const contorno = it.op === "manual" || it.op === "pantallaman" || it.op === "difuminar";   // ajustes: solo contorno
+    const contorno = it.op === "manual" || it.op === "pantallaman" || it.op === "difuminar" || it.tipo === "au";   // ajustes: solo contorno
     const r = Math.min(5 * d, (x1 - x0) / 2, h * d / 2), bw = Math.max(2, x1 - x0 - 2 * d);
     lctx.beginPath();
     if (lctx.roundRect) lctx.roundRect(x0 + d, y * d + (contorno ? 0.75 * d : 0), bw, h * d - (contorno ? 1.5 * d : 0), r); else lctx.rect(x0 + d, y * d, bw, h * d);
@@ -1128,6 +1135,10 @@ function dibujarLinea(te) {
     if (it.tipo === "st" && x1 - x0 > 50 * d && h >= 9) {
       lctx.fillStyle = "#111"; lctx.font = `600 ${Math.min(10, h - 3) * d}px Geist, system-ui`; lctx.textAlign = "left";
       lctx.fillText(nombreSticker(it.ref.tipo), x0 + 6 * d, (y + h - Math.max(2, (h - Math.min(10, h - 3)) / 2) - 1) * d, x1 - x0 - 10 * d);
+    }
+    if (it.tipo === "au" && x1 - x0 > 30 * d) {   // sección de audio: su volumen
+      lctx.fillStyle = colorOp(it.op); lctx.font = `700 ${10 * d}px Geist, system-ui`; lctx.textAlign = "left";
+      lctx.fillText(it.ref.ganancia <= 0.001 ? "🔇 silencio" : Math.round(it.ref.ganancia * 100) + "%", x0 + 5 * d, (y + 11) * d, x1 - x0 - 8 * d);
     }
     if (it.tipo === "ti" && x1 - x0 > 40 * d) {
       lctx.fillStyle = "#111"; lctx.font = `700 ${10 * d}px Geist, system-ui`; lctx.textAlign = "left";
@@ -1150,6 +1161,11 @@ function dibujarLinea(te) {
     }
   }
   dibujarOnda();
+  if (creaAud && creaAud.t1 != null) {   // sección de audio que se está separando
+    const [y, h] = CARRILES.au, a = Math.min(creaAud.t0, creaAud.t1), b = Math.max(creaAud.t0, creaAud.t1);
+    lctx.fillStyle = "rgba(251,191,36,.18)"; lctx.fillRect(xDe(a), y * d, xDe(b) - xDe(a), h * d);
+    lctx.strokeStyle = "#fbbf24"; lctx.lineWidth = 1.5 * d; lctx.strokeRect(xDe(a), y * d, xDe(b) - xDe(a), h * d);
+  }
   dibujarMarcasCortes();
   lctx.fillStyle = "rgba(255,255,255,.55)"; lctx.font = `${10 * d}px Geist, system-ui`; lctx.textAlign = "left";
   for (const [c, [y, h]] of Object.entries(CARRILES)) lctx.fillText(nombres[c], 4 * d, (y + h - 3) * d);
@@ -1240,8 +1256,10 @@ function iman(t, excluir) {   // el punto más cercano dentro de ~10 px (o null)
   return mejor;
 }
 const aCuadro = (t) => { const f = E.video.fps || 30; return Math.round(t * f) / f; };   // cuadro exacto
+// los bloques de todos los carriles se mueven y se estiran de 0.10 en 0.10 s (con Alt: libre, al cuadro)
+const decimaT = (t, ev) => ev && ev.altKey ? aCuadro(t) : Math.max(0, Math.min(durE(), Math.round(t * 10) / 10));
 // ---------- selección y atajos de teclado ----------
-const NOMBRE_TIPO = { m: "Imagen", p: "Pantalla", e: "Encuadre", g: "Pantalla", n: "Nacho", en: "Encuadre de Nacho", ep: "Encuadre de la pantalla", df: "Difuminado", st: "Sticker" };
+const NOMBRE_TIPO = { au: "Sección de audio", m: "Imagen", p: "Pantalla", e: "Encuadre", g: "Pantalla", n: "Nacho", en: "Encuadre de Nacho", ep: "Encuadre de la pantalla", df: "Difuminado", st: "Sticker" };
 function claveDe(it) { return it.ref && it.ref.k ? it.ref.k : it.tipo + "@" + it.a.toFixed(2); }
 function itemSel() {
   if (!sel) return null;
@@ -1253,6 +1271,7 @@ function seleccionar(it, aviso = true) {
   sel = it ? { tipo: it.tipo, clave: claveDe(it), a: it.a, b: it.b } : null;
   if (it && it.tipo === "st") stSel = it.ref;
   if (it && it.tipo === "m" && it.ref && it.ref.k) { momPreferido = parseInt(it.ref.k.slice(1)); momSucio = false; }
+  setTimeout(pintarAudbar, 0);
   const tab = it && { st: "Stickers", m: "Imagen", p: "Pantalla", e: "Pantalla", en: "Encuadre", ep: "Encuadre" }[it.tipo];
   if (tab && window.irPestana) irPestana(tab);
   if (it && aviso) estado(`Seleccionado: ${NOMBRE_TIPO[it.tipo] || "bloque"} ${mmss(it.a)} – ${mmss(it.b)} (Ctrl+C, Supr, Ctrl+B…)`, "");
@@ -1304,6 +1323,7 @@ async function borrar(it) {
     return enviar(it.tipo === "en" ? "/enc/guardar" : "/enc/guardar_pantalla", { t: T, ajustes: lista }, "Encuadre borrado (vuelve al automático).");
   }
   if (it.tipo === "df") { seleccionar(null, false); return guardarDifuminar(E.difuminar.filter(x => x !== it.ref), "Difuminado quitado."); }
+  if (it.tipo === "au") { seleccionar(null, false); return guardarAudio(E.audio_tramos.filter(x => x !== it.ref), "Sección de audio quitada (vuelve al volumen normal)."); }
   if (it.tipo === "st") { seleccionar(null, false); stSel = null; return guardarStickers(E.stickers.filter(x => x !== it.ref), "Sticker quitado."); }
   if (it.tipo === "p" && it.ref.opciones.includes("nacho"))
     return enviar("/pant/guardar", { t: T, cambios: [{ k: it.ref.k, pantalla: "nacho", inicio: it.ref.inicio, fin: it.ref.fin }] }, "Ese tramo queda en Solo Nacho.");
@@ -1321,6 +1341,11 @@ async function partir(it, te) {
     const tc = aOriginal(te), lista = E.stickers.filter(x => x !== it.ref);
     lista.push({ ...it.ref, fin: tc }, { ...it.ref, inicio: tc });
     return guardarStickers(lista, "Sticker partido en dos.");
+  }
+  if (it.tipo === "au") {
+    const tc = aOriginal(te), lista = E.audio_tramos.filter(x => x !== it.ref);
+    lista.push({ ...it.ref, fin: tc }, { ...it.ref, inicio: tc });
+    return guardarAudio(lista, "Sección de audio partida en dos.");
   }
   if (it.tipo === "df") {
     const tc = aOriginal(te), lista = E.difuminar.filter(x => x !== it.ref);
@@ -1414,8 +1439,51 @@ function atajos(ev) {
   if (k === "home") { hecho(); return mover(-1e9); }
   if (k === "end") { hecho(); return mover(1e9); }
 }
+// ---------- secciones de audio (silenciar / volumen) ----------
+let creaAud = null;
+const enCarrilAu = (ev) => { const r = linea.getBoundingClientRect(), y = ev.clientY - r.top; const [cy, ch] = CARRILES.au; return y >= cy - 2 && y <= cy + ch + 2; };
+function gananciaAudio(tO) {   // volumen de la sección de audio en t (tiempo original); 1 = normal
+  const a = (E && E.audio_tramos || []).find(x => x.inicio <= tO && tO < x.fin);
+  return a ? a.ganancia : 1;
+}
+async function guardarAudio(lista, msg, elegir) {
+  const r = await enviar("/edi/audio_tramos", { t: T, tramos: lista }, msg);
+  if (elegir != null) {
+    const it = itemsLinea().find(x => x.tipo === "au" && Math.abs(x.ref.inicio - elegir) < 0.01);
+    if (it) seleccionar(it, false);
+  }
+  pintarAudbar();
+  return r;
+}
+function audSel() { const it = sel && sel.tipo === "au" ? itemSel() : null; return it ? it.ref : null; }
+function pintarAudbar() {
+  const a = audSel();
+  for (const id of ["aud_mute", "aud_vol", "aud_quitar"]) $(id).disabled = !a;
+  if (!a) {
+    $("aud_info").textContent = "Shift + arrastrar en «Audio» separa una sección para silenciarla o cambiarle el volumen.";
+    $("aud_mute").textContent = "🔇 Silenciar"; return;
+  }
+  $("aud_info").textContent = `Sección ${mmss(aEditado(a.inicio))} – ${mmss(aEditado(a.fin))}`;
+  $("aud_mute").textContent = a.ganancia <= 0.001 ? "🔊 Con sonido" : "🔇 Silenciar";
+  $("aud_vol").value = Math.round(a.ganancia * 100); $("aud_vol_txt").textContent = Math.round(a.ganancia * 100) + "%";
+}
+function iniciarAudbar() {
+  const cambiar = (g, msg) => {
+    const a = audSel(); if (!a) return;
+    const ini = a.inicio;
+    guardarAudio(E.audio_tramos.map(x => x === a ? { ...x, ganancia: g } : x), msg, ini);
+  };
+  $("aud_mute").onclick = () => { const a = audSel(); if (a) cambiar(a.ganancia <= 0.001 ? 1 : 0, a.ganancia <= 0.001 ? "Sección con sonido." : "Sección silenciada."); };
+  $("aud_vol").oninput = () => { $("aud_vol_txt").textContent = $("aud_vol").value + "%"; };
+  $("aud_vol").onchange = () => cambiar(+$("aud_vol").value / 100, `Volumen de la sección: ${$("aud_vol").value}%.`);
+  $("aud_quitar").onclick = () => { const it = itemSel(); if (it && it.tipo === "au") borrar(it); };
+}
 async function guardarBloque(d) {
   const it = d.it, a = Math.max(0, d.a), b = Math.min(durE(), d.b);
+  if (it.tipo === "au") {
+    const nuevo = { ...it.ref, inicio: aOriginal(a), fin: aOriginal(b) };
+    return guardarAudio(E.audio_tramos.map(x => x === it.ref ? nuevo : x), "Sección de audio ajustada.", nuevo.inicio);
+  }
   if (it.tipo === "ti") return enviar("/edi/titulo_fin", { t: T, fin: aOriginal(b) }, "El título ahora se quita en ese punto.");
   if (it.tipo === "p" || it.tipo === "e")
     return enviar("/pant/guardar", { t: T, cambios: [{ k: it.ref.k, pantalla: it.ref.pantalla, inicio: mmss(a), fin: mmss(b) }] }, "Tramo de pantalla ajustado.");
@@ -1579,6 +1647,7 @@ function bucle() {
 }
 function pasoBucle() {
   saltarPausas();
+  if (E.audio_tramos && E.audio_tramos.length && gananciaAudio(ahoraO()) !== ultimaGanancia) aplicarVolumen();
   const t = ahoraO(), te = aEditado(t), e = muestra(t), v = ventanaActual(t, e);
   const pe = pvEn(t), vp = ventanaPActual(t, pe);
   vpActual = vp;
@@ -1781,9 +1850,14 @@ async function aplicarEncuadre() {   // aplica los tiempos escritos (al cambio p
   const tr = leerTramo("e_ini", "e_fin");
   if (!tr) { estado("Revisa los tiempos del tramo.", "err"); return; }
   clearTimeout(timerN);
-  const a = ajusteEn(ahoraO());
-  const base = edit ? { ...edit } : (a ? { ...a } : null);
-  if (!base) return;
+  // el recuadro: el que estás moviendo, o el corregido de ese tramo, o el del punto donde empieza
+  const a = ajusteEn(ahoraO()) || ajusteEn(tr[0] + 0.001) || E.ajustes.find(x => x.inicio < tr[1] && tr[0] < x.fin);
+  let base = edit ? { ...edit } : (a ? { ...a } : null);
+  if (!base) {
+    const e0 = muestra(tr[0] + 0.001), v0 = ventanaActual(tr[0] + 0.001, e0);
+    if (!v0) { estado("En ese tramo no hay recuadro de Nacho que corregir.", "err"); return; }
+    base = aParametros(v0.r, e0, modo);
+  }
   delete base.inicio; delete base.fin;
   const lista = recortarFuera(E.ajustes.filter(x => edit || x !== a), tr[0], tr[1]);
   lista.push({ ...base, inicio: tr[0], fin: tr[1] });
@@ -1989,7 +2063,7 @@ const stHojas = {};        // hojas base (Image)
 const stMedida = {};       // hojas de stickers de línea dibujadas a la medida (canvas), por «tipo@prop»
 const stSubidas = new Set();
 const STK_COLORES = ["#e6231b", "#f97316", "#ffd400", "#22c55e", "#0ea5e9", "#a855f7", "#ffffff", "#111111"];
-const STK_LINEA = ["circulo", "ovalo", "rectangulo", "enfoque", "subrayado", "tachado"];
+const STK_LINEA = ["circulo", "ovalo", "rectangulo", "marco", "enfoque", "subrayado", "tachado"];
 let stTmpA = null, stTmpB = null;
 const propDe = (s) => Math.round(Math.max(0.1, Math.min(10, s.prop || 1)) * 100) / 100;
 function nombreSticker(tipo) { const c = (E.catalogo_stickers || []).find(x => x.tipo === tipo); return c ? c.nombre : tipo; }
@@ -2419,7 +2493,7 @@ async function recargar() {
   cargarOnda();
   reelegirCorte();
   if (E.titulo) { tituloImg = new Image(); tituloImg.src = `/enc/titulo?${q}&v=${version}`; } else tituloImg = null;
-  if (document.activeElement !== $("titulo")) $("titulo").value = X.titulo || "";
+  if (document.activeElement !== $("titulo")) { $("titulo").value = X.titulo || ""; if ($("titulo")._ajustar) $("titulo")._ajustar(); }
   pintarListas();
   ponerFuente();
   if (E.preparando) setTimeout(vigilarProxy, 5000);
@@ -2437,7 +2511,7 @@ function medir() {
 }
 
 // ---------- música de fondo y volúmenes (vista previa en vivo; el render usa los mismos valores) ----------
-let musica = null, actx = null, gVoz = null, gMus = null, guardarVolT = null;
+let musica = null, actx = null, gVoz = null, gMus = null, guardarVolT = null, ultimaGanancia = 1;
 function prepararAudio() {   // la primera vez que se reproduce (el navegador lo pide tras un clic)
   if (actx) { if (actx.state === "suspended") actx.resume(); return; }
   try {
@@ -2450,7 +2524,9 @@ function prepararAudio() {   // la primera vez que se reproduce (el navegador lo
 function aplicarVolumen() {
   const a = X.audio || {}, vf = +$("vol_fondo").value / 100, vv = +$("vol_voz").value / 100;
   $("vol_fondo_txt").textContent = $("vol_fondo").value + "%"; $("vol_voz_txt").textContent = $("vol_voz").value + "%";
-  if (gVoz) gVoz.gain.value = vv; else video.volume = Math.min(1, vv);
+  const gs = gananciaAudio(ahoraO());   // sección de audio separada (silenciada o con otro volumen)
+  ultimaGanancia = gs;
+  if (gVoz) gVoz.gain.value = vv * gs; else video.volume = Math.min(1, vv * gs);
   const vm = (a.base || 0.9) * vf;
   if (gMus) gMus.gain.value = vm; else if (musica) musica.volume = Math.min(1, vm);
 }
@@ -2530,9 +2606,10 @@ async function iniciar() {
   previa.style.height = "auto";   // alto según su ancho (proporción del video vertical)
   $("escenario").style.aspectRatio = `${E.video.ancho} / ${E.video.alto}`;
   vista = [0, durE()];
-  if (E.armado.dividida.franja_fondo) { franjaImg = new Image(); franjaImg.src = `/enc/franja?t=${encodeURIComponent(T)}`; }
+  for (const key of ["dividida", "ganso"])
+    if (E.armado[key] && E.armado[key].franja_fondo) { franjaImgs[key] = new Image(); franjaImgs[key].src = `/enc/franja?t=${encodeURIComponent(T)}&lay=${key}`; }
   if (E.titulo) { tituloImg = new Image(); tituloImg.src = `/enc/titulo?t=${encodeURIComponent(T)}&v=${version}`; }
-  $("titulo").value = X.titulo || "";
+  $("titulo").value = X.titulo || ""; if ($("titulo")._ajustar) $("titulo")._ajustar();
   $("version").textContent = X.version ? "v " + X.version : "";
   ponerFuente();
   if (E.preparando) setTimeout(vigilarProxy, 5000);
@@ -2554,6 +2631,7 @@ async function iniciar() {
   $("b_play").onclick = () => video.paused ? video.play() : video.pause();
   iniciarStickers();
   iniciarCortes();
+  iniciarAudbar();
   cargarOnda();
   linea.addEventListener("pointerleave", () => { corteRaton = null; });
   $("b_m1").onclick = () => mover(-1); $("b_p1").onclick = () => mover(1);
@@ -2570,6 +2648,7 @@ async function iniciar() {
     if (mc) { elegirCorte(mc, true); return; }
     const fr = X.estilo !== "solo_subtitulos" && fronteraEn(ev);
     if (fr) { movFrontera = { ...fr, t0: fr.t, movido: false }; return; }
+    if (ev.shiftKey && enCarrilAu(ev)) { creaAud = { t0: tCursor(ev), t1: null }; return; }
     // las orillas de un bloque (estirar / acortar) tienen prioridad sobre mover el pedazo de video
     const hb = tocarLinea(ev);
     if (hb && hb.modo !== "mover") {
@@ -2603,6 +2682,7 @@ async function iniciar() {
   linea.addEventListener("pointermove", (ev) => {
     corteRaton = marcaCorteEn(ev);
     linea.style.cursor = corteRaton ? "pointer" : "";
+    if (creaAud) { creaAud.t1 = tCursor(ev); ratonX = creaAud.t1; return; }
     if (movFrontera) {   // recorriendo el corte entre dos bloques grises
       const t = Math.min(movFrontera.max, Math.max(movFrontera.min, tCursor(ev)));
       if (Math.abs(t - movFrontera.t0) > 0.001) movFrontera.movido = true;
@@ -2639,18 +2719,18 @@ async function iniciar() {
           if (ia && (!ib || ia.d <= ib.d)) { a = ia.t; arrLinea.guia = ia; }
           else if (ib) { a = ib.t - largo; arrLinea.guia = ib; }
         }
-        a = Math.min(Math.max(0, aCuadro(a)), D - largo);
+        a = Math.min(Math.max(0, arrLinea.guia ? aCuadro(a) : decimaT(a, ev)), D - largo);
         arrLinea.a = a; arrLinea.b = a + largo;
       } else if (arrLinea.modo === "ini") {
         let a = Math.min(Math.max(0, arrLinea.a0 + dt), arrLinea.b0 - MIN);
         const im = usarIman ? iman(a, ref) : null;
         if (im && im.t <= arrLinea.b0 - MIN) { a = im.t; arrLinea.guia = im; }
-        arrLinea.a = aCuadro(a);
+        arrLinea.a = arrLinea.guia ? aCuadro(a) : Math.min(decimaT(a, ev), arrLinea.b0 - MIN);
       } else {
         let b = Math.max(Math.min(D, arrLinea.b0 + dt), arrLinea.a0 + MIN);
         const im = usarIman ? iman(b, ref) : null;
         if (im && im.t >= arrLinea.a0 + MIN) { b = im.t; arrLinea.guia = im; }
-        arrLinea.b = aCuadro(b);
+        arrLinea.b = arrLinea.guia ? aCuadro(b) : Math.max(decimaT(b, ev), arrLinea.a0 + MIN);
       }
       return;
     }
@@ -2670,6 +2750,20 @@ async function iniciar() {
     irE(tCursor(ev));
   });
   linea.addEventListener("pointerup", async (ev) => {
+    if (creaAud) {
+      const c = creaAud; creaAud = null;
+      if (c.t1 == null || Math.abs(c.t1 - c.t0) < 0.1) return;
+      const a = aOriginal(Math.min(c.t0, c.t1)), b = aOriginal(Math.max(c.t0, c.t1));
+      // la sección nueva recorta las que tenía debajo
+      const lista = [];
+      for (const x of E.audio_tramos || []) {
+        if (x.fin <= a || x.inicio >= b) { lista.push(x); continue; }
+        if (x.inicio < a) lista.push({ ...x, fin: a });
+        if (x.fin > b) lista.push({ ...x, inicio: b });
+      }
+      lista.push({ inicio: a, fin: b, ganancia: 1 });
+      return guardarAudio(lista, "Sección de audio separada: silénciala o cambia su volumen abajo.", a);
+    }
     if (movFrontera) {
       const f = movFrontera; movFrontera = null;
       if (f.movido) await enviar("/edi/mover_toma", { t: T, de: aOriginal(f.t0), a: aOriginal(f.t) }, `Corte recorrido a ${mmss(f.t)}.`);
@@ -2710,6 +2804,7 @@ async function iniciar() {
   }, { passive: false });
 
   // título y deshacer
+  dosRenglones($("titulo"));
   $("b_titulo").onclick = () => enviar("/edi/titulo", { t: T, titulo: $("titulo").value }, "Título guardado.");
   $("b_guardar_todo").onclick = guardarTodo;
   $("b_render").onclick = renderizarDeNuevo;
@@ -2839,8 +2934,13 @@ async function iniciar() {
   });
   // «aquí»: toma el tiempo del cursor; si aún no estabas corrigiendo un encuadre, empieza uno en este punto
   const asegurarTramoE = () => {
-    if (tramoE) return true;
+    if (tramoE && edit) return true;
     const t = ahoraO(), e = muestra(t);
+    if (tramoE && !edit) {   // había tiempos escritos pero no un recuadro en edición: se toma el de aquí
+      const v = ventanaActual(t, e);
+      if (v) edit = aParametros(v.r, e, modo);
+      return true;
+    }
     if (!ventanaActual(t, e)) { avisar("Aquí no hay recuadro de Nacho que corregir (se ve una imagen o la pantalla completa)."); return false; }
     empezarEdicion(t, e);
     return !!tramoE;
@@ -2909,6 +3009,16 @@ iniciar().then(() => {
       document.querySelectorAll("video, audio").forEach(m => { if (!m.paused) m.pause(); });
   }, 1000);
 })();
+function dosRenglones(el) {   // título: máximo dos renglones; la caja crece al segundo
+  const ajustar = () => { el.style.height = "34px"; if (el.value.includes("\n")) el.style.height = Math.max(34, el.scrollHeight) + "px"; };
+  el.addEventListener("input", () => {
+    const ls = el.value.split("\n");
+    if (ls.length > 2) { const p = el.selectionStart; el.value = ls[0] + "\n" + ls.slice(1).join(" "); el.selectionStart = el.selectionEnd = Math.min(p, el.value.length); }
+    ajustar();
+  });
+  el.addEventListener("keydown", (e) => { if (e.key === "Enter" && el.value.includes("\n")) e.preventDefault(); });
+  el._ajustar = ajustar;
+}
 </script>
 </body>
 </html>

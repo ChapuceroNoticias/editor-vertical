@@ -69,20 +69,22 @@
   "zoom_video": 1.25
  },
  "titulo": {
-  "barra": "assets/barra_titulo.png",
-  "fuente": "assets/Balinese_Culture.ttf",
+  "barra": "assets/barra_titulo_degradado.png",
+  "fuente": "assets/AkuKamu.otf",
+  "modo": "ancho",
   "caja_texto": [
-   135,
-   72,
-   820,
-   88
+   24,
+   40,
+   1032,
+   276
   ],
-  "escala": 1.17,
+  "margen_v": 22,
+  "interlineado": 0.2,
   "color": "#FFFFFF",
-  "contorno": 4,
-  "color_contorno": "#000000",
-  "tam_max": 80,
-  "mayusculas": true
+  "contorno": 0,
+  "tam_max": 400,
+  "mayusculas": true,
+  "_nota": "Título grande (Aku&Kamu) en la barra roja en degradado: a un renglón llena el ancho de la barra; si se pone un salto de línea, los dos renglones caben en la barra con la misma letra."
  },
  "subtitulos": {
   "fuente": "assets/AkuKamu.otf",
@@ -109,7 +111,7 @@
     ],
     "zoom": 1.0,
     "cara_y": 0.35,
-    "margen_sup": 200,
+    "margen_sup": 340,
     "nitidez": 0.5
    },
    "subtitulos": {
@@ -131,11 +133,11 @@
     ],
     "zoom": 1.0,
     "cara_y": 0.4,
-    "margen_sup": 200,
+    "margen_sup": 340,
     "nitidez": 0.4,
     "ajuste": "contener",
     "ancho_panel": 0.593,
-    "margen_sup_panel": 110,
+    "margen_sup_panel": 300,
     "desenfoque": 22,
     "oscurecer_fondo": 0.85,
     "_nota": "ajuste=contener: el recuadro de Nacho (angosto) se ve completo al centro, sin acercarlo de más, con los lados rellenos con la misma imagen desenfocada. ancho_panel: qué fracción del ancho ocupa; margen_sup_panel: dónde queda la cabeza."
@@ -167,6 +169,54 @@
     "ajuste": "cubrir",
     "foco_y": 0.5
    }
+  },
+  "ganso": {
+   "persona": {
+    "area": [
+     0,
+     0,
+     1080,
+     1055
+    ],
+    "zoom": 1.0,
+    "cara_y": 0.4,
+    "margen_sup": 340,
+    "nitidez": 0.4,
+    "ajuste": "contener",
+    "ancho_panel": 0.593,
+    "margen_sup_panel": 300,
+    "desenfoque": 22,
+    "oscurecer_fondo": 0.85,
+    "_nota": "ajuste=contener: el recuadro de Nacho (angosto) se ve completo al centro, sin acercarlo de más, con los lados rellenos con la misma imagen desenfocada. ancho_panel: qué fracción del ancho ocupa; margen_sup_panel: dónde queda la cabeza."
+   },
+   "franja": {
+    "area": [
+     0,
+     1055,
+     1080,
+     200
+    ],
+    "fondo": "assets/franja_ganso.jpg"
+   },
+   "subtitulos": {
+    "area": [
+     30,
+     1055,
+     880,
+     200
+    ]
+   },
+   "inferior": {
+    "area": [
+     0,
+     1255,
+     1080,
+     665
+    ],
+    "ajuste": "cubrir",
+    "foco_y": 0.5
+   },
+   "_nota": "Dividida Ganso: franja azul más arriba para que quepan dos cámaras (arriba la de Nacho, abajo la de la pantalla)."
   }
  },
  "momentos": {

@@ -53,6 +53,24 @@ const ST = {
     for (const [a, b] of lados) for (let i = 0; i <= 50; i++) { const u = i / 50; pts.push([a[0] + (b[0] - a[0]) * u + Math.sin(u * 3.1) * 3 * m, a[1] + (b[1] - a[1]) * u + Math.sin(u * 3.1) * 4 * m]); }
     trazo(c, pts, ease(k / (INTRO - 1)), MN * 0.04, "#fff");
   },
+  marco(f, c, k, q) {   // rectángulo recto y delgado (esquinas en ángulo), se dibuja alrededor desde la esquina de arriba
+    const g = MN * 0.028, x0 = FW * 0.05 + g, y0 = FH * 0.2 + g, x1 = FW * 0.95 - g, y1 = FH * 0.8 - g;
+    const pts = [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
+    const fr = Math.min(1, Math.max(0, ease(k / (INTRO - 1))));
+    let total = 0; const lados = [];
+    for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); lados.push(d); total += d; }
+    if (fr <= 0) return;
+    c.strokeStyle = "#fff"; c.lineWidth = g; c.lineJoin = "miter"; c.lineCap = "square";
+    c.beginPath(); c.moveTo(x0, y0);
+    let falta = total * fr;
+    for (let i = 1; i < pts.length && falta > 0; i++) {
+      const u = Math.min(1, falta / lados[i - 1]);
+      c.lineTo(pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * u, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * u);
+      falta -= lados[i - 1];
+    }
+    if (fr >= 1) c.closePath();
+    c.stroke();
+  },
   subrayado(f, c, k, q) {
     const pts = [], ondas = 4 * Math.max(1, Math.round(FW / FH * 2) / 2), n = Math.round(100 * Math.max(1, FW / FH));
     for (let i = 0; i <= n; i++) { const u = i / n; pts.push([FW * 0.05 + u * FW * 0.9, FH / 2 + Math.sin(u * Math.PI * ondas) * FH * 0.035 + (u - 0.5) * -FH * 0.04]); }
@@ -199,7 +217,7 @@ function signo(f, c, k, q, ch) {
   }
 }
 
-const LINEA = ["circulo", "ovalo", "rectangulo", "enfoque", "subrayado", "tachado"];
+const LINEA = ["circulo", "ovalo", "rectangulo", "marco", "enfoque", "subrayado", "tachado"];
 let FW = S, FH = S, MN = S;   // medida del cuadro de los stickers de línea
 // arma la hoja de un sticker: izquierda = capa fija, derecha = capa de color.
 // prop = alto / ancho (solo los de línea se dibujan a la medida; los demás son cuadrados)
