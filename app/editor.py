@@ -125,7 +125,7 @@ def ajuste_aprendido(x0, y0, w, h, region, cfg):
         e = min(rw / nw, rh / nh)
         nw, nh = nw * e, nh * e
     nx = min(max(cx - nw / 2, rx), rx + rw - nw)
-    ny = min(max(cy - nh / 2, ry), ry + rh - nh)
+    ny = min(max(cy - nh / 2, min(ry, y0)), ry + rh - nh)   # puede salirse por arriba como el automático
     return nx, ny, nw, nh
 
 
@@ -2310,7 +2310,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-09c v1.8.2"
+VERSION = "2026-11-09d v1.8.3"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3031,15 +3031,36 @@ def recorte_persona(region, cara, area_wh, cfg):
     cx, cy, fh = cara
     x0 = cx - w / 2
     y0 = cy - cfg.get("cara_y", 0.38) * h
-    # la cabeza (pelo incluido) no debe cortarse ni quedar bajo el título
+    # la cabeza (pelo y audífonos incluidos) no debe cortarse ni quedar bajo el título
     tope_cabeza = cy - fh * 1.1
     margen = cfg.get("margen_sup", 0) * (h / ah)
     if tope_cabeza - margen < y0:
         y0 = tope_cabeza - margen
     x0 = min(max(x0, rx), rx + rw - w)
-    y0 = min(max(y0, ry), ry + rh - h)
+    # si la cabeza está pegada al borde de arriba de la toma, la ventana puede salirse por arriba (hasta lo que tapa
+    # el título): esa parte se rellena con la toma difuminada (recortar_persona) y la cabeza baja hasta quedar libre
+    y0 = min(max(y0, ry - margen * 0.95), ry + rh - h)
     x0, y0, w, h = ajuste_aprendido(x0, y0, w, h, region, cfg)
     return int(round(x0)), int(round(y0)), int(round(w)), int(round(h))
+
+
+def recortar_persona(frame, x0, y0, cw, ch, ry, aw, ah):
+    """Recorte de la persona ya a (aw, ah). Si la ventana se sale por arriba de la toma (cabeza pegada al borde), la
+    toma va desde más abajo y lo de arriba (detrás del título) se rellena con ella misma difuminada y oscura."""
+    ry = int(ry)
+    if y0 >= ry or y0 + ch <= ry + 4:
+        y0 = max(0, y0)
+        return cv2.resize(frame[y0:y0 + ch, x0:x0 + cw], (aw, ah), interpolation=cv2.INTER_LANCZOS4)
+    alto_real = y0 + ch - ry
+    hr = max(1, min(ah, int(round(ah * alto_real / ch))))
+    real = cv2.resize(frame[ry:y0 + ch, x0:x0 + cw], (aw, hr), interpolation=cv2.INTER_LANCZOS4)
+    out = np.empty((ah, aw, 3), np.uint8)
+    out[ah - hr:] = real
+    if ah - hr > 0:
+        peq = cv2.resize(real[:max(8, hr // 3)], (max(8, aw // 12), max(4, (ah - hr) // 12)), interpolation=cv2.INTER_AREA)
+        relleno = cv2.resize(cv2.GaussianBlur(peq, (0, 0), 2.5), (aw, ah - hr), interpolation=cv2.INTER_LINEAR)
+        out[:ah - hr] = (relleno.astype(np.float32) * 0.5).astype(np.uint8)
+    return out
 
 
 def persona_contenida(frame, region, cara, aw, ah, cfg):
@@ -4970,7 +4991,7 @@ def cmd_render(args):
                     x0, y0, cw, ch = recorte_persona(region, cara, (aw, ah), cfg["persona"])
                     if manual:
                         x0, y0, cw, ch = ventana_manual(manual, t, region, aw / ah, (x0, y0, cw, ch))
-                    pers = cv2.resize(frame[y0:y0 + ch, x0:x0 + cw], (aw, ah), interpolation=cv2.INTER_LANCZOS4)
+                    pers = recortar_persona(frame, x0, y0, cw, ch, region[1], aw, ah)
                 lienzo[ay:ay + ah, ax:ax + aw] = enfocar(pers, cfg["persona"].get("nitidez", 0))
 
             if lay in ("dividida", "ganso"):

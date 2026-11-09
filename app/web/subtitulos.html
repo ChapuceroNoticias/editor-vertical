@@ -619,6 +619,15 @@ function fuenteDifuminada() {
   difClave = clave;
   return lienzoDif;
 }
+function deVideoTope(r, region, dx, dy, dw, dh) {   // igual que recortar_persona() del editor.py
+  const [x, y, w, h] = r, ry = region ? region[1] : 0;
+  if (!region || y >= ry - 0.5 || y + h <= ry + 4) return deVideo(x, y, w, h, dx, dy, dw, dh);
+  const real = y + h - ry, hr = dh * real / h;
+  actx.save(); actx.beginPath(); actx.rect(dx, dy, dw, dh - hr); actx.clip();
+  actx.filter = "blur(8px) brightness(0.5)"; deVideo(x, ry, w, real / 3, dx - 10, dy - 10, dw + 20, dh - hr + 20);
+  actx.restore();
+  deVideo(x, ry, w, real, dx, dy + dh - hr, dw, hr);
+}
 function deVideo(x, y, w, h, dx, dy, dw, dh) {
   const k = fuenteProxy ? fuenteProxy.ancho / E.video.ancho : 1;   // la copia ligera es más chica
   try { actx.drawImage(fuenteDifuminada(), x * k, y * k, w * k, h * k, dx, dy, dw, dh); } catch (err) {}
@@ -733,12 +742,12 @@ function componer() {
   if (e.tipo === "persona" || e.tipo === "video") {
     const [ax, ay, aw, ah] = e.tipo === "video" ? area(null) : area(E.areas.persona);
     if (arr >= 0 && e.tipo === "persona") dibujarArriba(arr, t, ax, ay, aw, ah, s);
-    else if (e.auto) deVideo(...ventana(t, e), ax, ay, aw, ah);
+    else if (e.auto) deVideoTope(ventana(t, e), e.region, ax, ay, aw, ah);
   } else if (e.tipo === "dividida") {
     const key = gansoEn(t) ? "ganso" : "dividida";
     const [ax, ay, aw, ah] = area(E.areas[key] || E.areas.dividida);
     if (arr >= 0) dibujarArriba(arr, t, ax, ay, aw, ah, s);
-    else if (e.auto) deVideo(...ventana(t, e), ax, ay, aw, ah);
+    else if (e.auto) deVideoTope(ventana(t, e), e.region, ax, ay, aw, ah);
     dibujarAbajo(e, t, s, key);
   } else if (e.tipo === "imagen") {
     const pm = pantallaManual(t);
