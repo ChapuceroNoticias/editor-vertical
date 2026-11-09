@@ -279,6 +279,7 @@
         <div class="fila">
           <button class="btn" id="i_mov">Movimiento de las fotos…</button>
           <button class="btn peligro" id="i_eliminar">Eliminar este momento</button>
+          <button class="btn" id="i_otra" title="Agrega otra imagen en este mismo momento (por ejemplo una arriba en «Imágenes 2» y otra abajo)">＋ Otra imagen aquí</button>
         </div>
         <div class="separador"></div>
         <div class="sub">Agregar más fotos a este momento:</div>
@@ -2864,6 +2865,15 @@ async function iniciar() {
     $("modal").classList.add("abierto");
   };
   $("m_cerrar").onclick = async () => { $("modal").classList.remove("abierto"); $("m_frame").src = "about:blank"; await recargar(); };
+  $("i_otra").onclick = () => {   // segunda imagen al mismo tiempo: si la de aquí va abajo, la nueva va arriba
+    const m = X.momentos.find(x => x.i === momSel);
+    const v = m && m.estilo === "arriba" ? "dividida" : "arriba";
+    momSucio = false;
+    $("i_hay").style.display = "none"; $("i_no").style.display = "flex";
+    const bt = $("n_ops").querySelector(`.op[data-v="${v}"]`); if (bt) bt.click();
+    estado(v === "arriba" ? "Nueva imagen ARRIBA (Imágenes 2) desde el cursor: elige duración y súbela, búscala o captura." :
+                            "Nueva imagen ABAJO desde el cursor: elige duración y súbela, búscala o captura.", "");
+  };
   $("n_ops").querySelectorAll(".op").forEach(b => b.onclick = () => {
     nuevoEstilo = b.dataset.v; $("n_ops").querySelectorAll(".op").forEach(x => x.classList.toggle("activo", x === b));
   });

@@ -219,6 +219,9 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
 - **Dividida Ganso** (Pantalla): dos cámaras, franja azul más alta y más arriba; abajo la pantalla.
 - **Línea de tiempo**: todos los carriles se mueven cada 0.10 s (Alt = cuadro por cuadro); las orillas se estiran.
 - **Imágenes 2 (arriba)**: carril propio para poner una imagen arriba y otra abajo de la franja al mismo tiempo.
+- **Dos imágenes al mismo tiempo**: con una imagen ya puesta, en el panel Imagen → «＋ Otra imagen aquí»; la nueva
+  va arriba (Imágenes 2) desde el cursor. También: en un lugar libre elige «Arriba (en lugar de Nacho)» y luego
+  arrástrala en «Imágenes 2» encima de la otra.
 - **Captura del video**: toma el cuadro completo.
 - **Secciones de audio**: Shift + arrastrar en «Audio» separa una sección; abajo se silencia o se sube/baja su volumen
   (0–300 %). Solo afecta la voz del video, la música de fondo sigue.
