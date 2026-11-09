@@ -777,6 +777,40 @@ TIPOS_ESCENA = {"persona": 0, "dividida": 1, "video": 2, "imagen": 3, "contenida
 _CACHE_ENC = {}
 
 
+def encajables(plan):
+    """Tramos (tiempo original) con un video vertical que puede ir completo bajo el título o recortado:
+    [inicio, fin, encajado ahora (1/0), 'toma' | 'pantalla']."""
+    out = []
+    for s_ in plan.get("tomas", []):
+        if s_.get("layout") != "dividida" and s_.get("util"):
+            out.append([s_["inicio"], s_["fin"], 0 if s_.get("encajar") is False else 1, "toma"])
+    for p in plan.get("proyeccion", []):
+        if ed.encajar_pv(dict(p, encajar=None)):
+            out.append([p["inicio"], p["fin"], 0 if p.get("encajar") is False else 1, "pantalla"])
+    return out
+
+
+def guardar_encajar(t, momento, valor):
+    """«Encajar completo» (True) o «Recortar» (False) para la toma o el video de la pantalla que se ve en 'momento'."""
+    plan, _ = cargar(t)
+    tt = float(momento)
+    respaldar(t)
+    hecho = None
+    for p in plan.get("proyeccion", []):
+        if p["inicio"] <= tt < p["fin"] and ed.encajar_pv(dict(p, encajar=None)):
+            p["encajar"], hecho = bool(valor), "pantalla"
+            break
+    if not hecho:
+        for s_ in plan.get("tomas", []):
+            if s_["inicio"] <= tt < s_["fin"] and s_.get("layout") != "dividida" and s_.get("util"):
+                s_["encajar"], hecho = bool(valor), "toma"
+                break
+    if not hecho:
+        return {"ok": False, "mensaje": "Aquí no hay un video vertical que encajar."}
+    guardar_plan(t, plan)
+    return {"ok": True, "mensaje": "Se ve completo bajo el título." if valor else "Se recorta para llenar la pantalla."}
+
+
 def datos_encuadre(t):
     """Para el editor de encuadre: qué ventana del video original usa el armado automático cada 0.2 s,
     los tramos ya corregidos a mano y los cortes de pausas."""
@@ -786,6 +820,7 @@ def datos_encuadre(t):
     estilo = plan.get("estilo") or pl.get("estilo") or "chapucero"
     if estilo == "solo_subtitulos":
         return {"soportado": False, "motivo": "En «Solo subtítulos» no se recorta el video, no hay encuadre que corregir."}
+    plan = ed.asegurar_util(t, plan, pl)   # tomas que son un video vertical con barras negras (una sola vez)
     info = plan["info"]
     # las muestras no cambian si solo cambian los ajustes a mano
     firma = json.dumps({k: plan.get(k) for k in ("tomas", "proyeccion", "momentos", "cortes", "encuadres", "cara",
@@ -817,7 +852,8 @@ def datos_encuadre(t):
             # para la vista previa armada (subtítulos): qué imagen o qué parte de la pantalla de Nacho se ve
             ex = [e.get("mom", -1), e.get("pv", -1)]
             if e["tipo"] == "contenida":
-                ex += [round(v, 1) for v in e["region"]] + [1 if e.get("lay") == "dividida" else 0]
+                ex += [round(v, 1) for v in e["region"]] + [1 if e.get("lay") == "dividida" else 0,
+                                                            1 if e.get("encajar") else 0]
             extra.append(ex)
             # recuadro de lo que proyecta Nacho (abajo en la dividida o imagen fija a pantalla completa)
             pw = e.get("pv_ventana")
@@ -843,6 +879,7 @@ def datos_encuadre(t):
                       "archivo": Path(plan["video"]).name},
             "ajustes": plan.get("encuadre_manual") or [],
             "ajustes_pantalla": plan.get("encuadre_pantalla") or [],
+            "encajables": encajables(plan),
             "audio_tramos": plan.get("audio_tramos") or [],   # secciones de audio con su volumen (0 = silencio)
             # dónde puede ir el recuadro de la pantalla de Nacho (de su cámara a la orilla derecha, de arriba a abajo)
             "zona_pantalla": zona_de(plan),
@@ -2538,6 +2575,11 @@ def crear_app():
     def edi_captura(d: dict = Body(...)):
         t = validar(d.get("t"))
         return _ok(lambda: captura_pantalla(t, d))
+
+    @app.post("/edi/encajar")
+    def edi_encajar(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        return _ok(lambda: guardar_encajar(t, d["momento"], d.get("valor")))
 
     @app.post("/edi/titulo")
     def edi_titulo(d: dict = Body(...)):

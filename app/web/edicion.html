@@ -351,6 +351,14 @@
         <b style="color:#38bdf8">Azul</b> = lo que proyecta Nacho. Los dos se guardan solos al soltar, para todo ese tramo;
         para otros tiempos escribe desde/hasta y «Aplicar tiempos», o estira su bloque en la línea de tiempo.</div>
       <div><span id="situacion">—</span></div>
+      <div id="enc_bloque" style="display:none;flex-direction:column;gap:6px">
+        <div class="sub"><b style="color:#facc15">Video vertical</b> (con barras negras a los lados):</div>
+        <div class="ops" id="enc_ops">
+          <button class="op" data-v="1">Encajar completo<small>todo el video, bajo el título</small></button>
+          <button class="op" data-v="0">Recortar<small>llena la pantalla (se puede cortar)</small></button>
+        </div>
+        <div class="separador"></div>
+      </div>
       <div class="ops" id="e_modos">
         <button class="op activo" data-modo="fijo">Fijo<small>se queda donde lo pones</small></button>
         <button class="op" data-modo="ajuste">Seguir la toma<small>el automático, con tu corrección</small></button>
@@ -877,6 +885,17 @@ function componer(t, e, v) {
     const [rx, ry, rw, rh] = e.ex.slice(2, 6), divi = e.ex[6] === 1;
     const key = gansoEn(t) ? "ganso" : "dividida";
     const [ax, ay, aw, ah] = area(divi ? (E.areas[key] || E.areas.dividida) : E.areas.persona), C = E.armado.contener;
+    if (e.ex[7] === 1) {   // video vertical con barras negras: completo bajo el título (como encajar_completo)
+      const top = Math.min(ah / 2, Math.max(0, ((E.armado && E.armado.tope_arriba) || 0) * s - ay)), h2 = ah - top;
+      const k = Math.min(aw / rw, h2 / rh), pw = rw * k, ph = rh * k, sf = Math.max(aw / rw, ah / rh) * 1.15;
+      pctx.save(); pctx.beginPath(); pctx.rect(ax, ay, aw, ah); pctx.clip();
+      pctx.filter = `blur(${12 * s}px) brightness(0.6)`;
+      deVideo(rx, ry, rw, rh, ax + (aw - rw * sf) / 2, ay + (ah - rh * sf) * 0.4, rw * sf, rh * sf);
+      pctx.filter = "none";
+      deVideo(rx, ry, rw, rh, ax + (aw - pw) / 2, ay + top + (h2 - ph) / 2, pw, ph);
+      pctx.restore();
+      if (divi) dibujarAbajo(e, t, s, key);
+    } else {
     pctx.save(); pctx.beginPath(); pctx.rect(ax, ay, aw, ah); pctx.clip();
     pctx.filter = `blur(${C.desenfoque * s}px) brightness(${C.oscurecer_fondo})`;
     const esc = Math.max(aw / rw, ah / rh) * 1.15;
@@ -886,6 +905,7 @@ function componer(t, e, v) {
     deVideo(rx, ry, rw, rh, ax + (aw - rw * k) / 2, ay, rw * k, rh * k);
     pctx.restore();
     if (divi) dibujarAbajo(e, t, s, key);
+    }
   }
   // stickers: encima de lo que se ve, debajo de la franja azul y del título (como en el video final)
   if (dibujarStickers(pctx, t, W, H) && (e.tipo === "dividida" || (e.tipo === "contenida" && e.ex[6] === 1))) dibujarFranja(s, gansoEn(t) ? "ganso" : "dividida");
@@ -1617,6 +1637,9 @@ function pintarEncuadre(t, e, v) {
     $("pm_suav").style.display = conMov ? "flex" : "none";
     $("pm_suav").querySelectorAll(".op").forEach(b => b.classList.toggle("activo", conMov && (ajP.suavizado || "suave") === b.dataset.m));
   }
+  const enc = (E.encajables || []).find(x => x[0] <= t && t < x[1]);
+  $("enc_bloque").style.display = enc ? "flex" : "none";
+  if (enc) $("enc_ops").querySelectorAll(".op").forEach(b => b.classList.toggle("activo", +b.dataset.v === enc[2]));
   $("e_quitar").disabled = !!edit || !ajusteEn(t);
   const actual = E.ajustes.indexOf(ajusteEn(t));
   document.querySelectorAll("#e_lista .item").forEach(el => el.classList.toggle("actual", +el.dataset.i === actual));
@@ -2956,6 +2979,11 @@ async function iniciar() {
     } finally { $("n_archivos").value = ""; }
   };
   // encuadre
+  $("enc_ops").querySelectorAll(".op").forEach(b => b.onclick = () => {
+    const v = b.dataset.v === "1";
+    enviar("/edi/encajar", { t: T, momento: ahoraO(), valor: v },
+           v ? "Se ve completo bajo el título." : "Se recorta para llenar la pantalla.");
+  });
   document.querySelectorAll("#e_modos .op").forEach(b => b.onclick = () => {
     const t = ahoraO(), e = muestra(t);
     modo = b.dataset.modo; marcarModo();
