@@ -753,6 +753,14 @@ function deVideoAjustado(r, dx, dy, dw, dh) {
   deVideo(x, y, w, h, dx + (dw - w * k) / 2, dy + (dh - h * k) / 2, w * k, h * k);
   pctx.restore();
 }
+function dibujarArriba(i, t, dx, dy, dw, dh, s) {   // imagen «arriba»: completa debajo de la barra del título
+  const off = Math.max(0, Math.min(dh - 40 * s, ((E.armado && E.armado.tope_arriba) || 0) * s - dy));
+  if (off <= 0) return dibujarMomento(i, t, dx, dy, dw, dh);
+  pctx.save(); pctx.beginPath(); pctx.rect(dx, dy, dw, off); pctx.clip();
+  pctx.filter = "blur(10px) brightness(0.55)"; dibujarMomento(i, t, dx - 20, dy - 20, dw + 40, dh - off + 40);
+  pctx.restore();
+  dibujarMomento(i, t, dx, dy + off, dw, dh - off);
+}
 function dibujarMomento(i, t, dx, dy, dw, dh) {
   const m = E.armado.momentos[i];
   if (!m || !m.n) return;
@@ -768,8 +776,14 @@ function dibujarMomento(i, t, dx, dy, dw, dh) {
   const [a, b, suav] = mv, f = Math.min(1, Math.max(0, (tt - ini - k * dur) / dur));
   const p = suav === "suave" ? 0.5 - 0.5 * Math.cos(Math.PI * f) : f;
   const nw = im.naturalWidth, nh = im.naturalHeight;
-  const x = (a[0] + (b[0] - a[0]) * p) * nw, y = (a[1] + (b[1] - a[1]) * p) * nh;
-  const cw = (a[2] + (b[2] - a[2]) * p) * nw, ch = cw * dh / dw;
+  let x = (a[0] + (b[0] - a[0]) * p) * nw, y = (a[1] + (b[1] - a[1]) * p) * nh;
+  let cw = (a[2] + (b[2] - a[2]) * p) * nw, ch = cw * dh / dw;
+  // el marco se calculó para otra proporción (p. ej. imagen «arriba» con Nacho a pantalla completa): se ajusta
+  // a la del área sin salirse de la foto, con el mismo centro
+  const mx = x + cw / 2, my = y + (a[3] + (b[3] - a[3]) * p) * nh / 2;
+  if (ch > nh) { ch = nh; cw = ch * dw / dh; }
+  if (cw > nw) { cw = nw; ch = cw * dh / dw; }
+  x = Math.min(nw - cw, Math.max(0, mx - cw / 2)); y = Math.min(nh - ch, Math.max(0, my - ch / 2));
   try { pctx.drawImage(im, x, y, cw, ch, dx, dy, dw, dh); } catch (err) {}
 }
 function dibujarPantallaAbajo(i, t, dx, dy, dw, dh) {
@@ -833,12 +847,12 @@ function componer(t, e, v) {
   const arr = arribaEn(t);
   if (e.tipo === "persona" || e.tipo === "video") {
     const [ax, ay, aw, ah] = e.tipo === "video" ? area(null) : area(E.areas.persona);
-    if (arr >= 0 && e.tipo === "persona") dibujarMomento(arr, t, ax, ay, aw, ah);
+    if (arr >= 0 && e.tipo === "persona") dibujarArriba(arr, t, ax, ay, aw, ah, s);
     else if (v) deVideo(...v.r, ax, ay, aw, ah);
   } else if (e.tipo === "dividida") {
     const key = gansoEn(t) ? "ganso" : "dividida";
     const [ax, ay, aw, ah] = area(E.areas[key] || E.areas.dividida);
-    if (arr >= 0) dibujarMomento(arr, t, ax, ay, aw, ah);
+    if (arr >= 0) dibujarArriba(arr, t, ax, ay, aw, ah, s);
     else if (v) deVideo(...v.r, ax, ay, aw, ah);
     dibujarAbajo(e, t, s, key);
   } else if (e.tipo === "imagen") {

@@ -875,8 +875,9 @@ def marcos_momento(m, plan, pl):
     moti = (plan.get("estilo") or pl.get("estilo")) == "motivacional"
     if moti or m.get("estilo") == "completa" or "layouts" not in pl:
         w, h = W, H
-    elif m.get("estilo") == "arriba":   # en el lugar de Nacho
-        w, h = pl["layouts"]["dividida"]["persona"]["area"][2:4]
+    elif m.get("estilo") == "arriba":   # en el lugar de Nacho, debajo de la barra del título
+        ax_, ay_, w, h = pl["layouts"]["dividida"]["persona"]["area"]
+        h -= max(0, min(h - 40, ed.tope_imagen_arriba(plan, pl) - ay_))
     else:
         w, h = pl["layouts"]["dividida"]["inferior"]["area"][2:4]
     cfg_m = pl.get("momentos", {})
@@ -1261,6 +1262,7 @@ def datos_armado(plan, pl):
         return {"persona": d.get("persona", {}).get("area"), "franja": d.get("franja", {}).get("area"),
                 "franja_fondo": bool(d.get("franja", {}).get("fondo")), "inferior": d.get("inferior", {}).get("area")}
     return {
+        "tope_arriba": ed.tope_imagen_arriba(plan, pl),   # la imagen «arriba» empieza debajo del título
         "dividida": acomodo(div),
         **({"ganso": acomodo(L["ganso"])} if "ganso" in L else {}),
         "contener": {k: L.get("persona", {}).get("persona", {}).get(k, v)

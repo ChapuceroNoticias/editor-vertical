@@ -2310,7 +2310,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-09b v1.8.1"
+VERSION = "2026-11-09c v1.8.2"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3634,6 +3634,28 @@ def escena_en(plan, pl, t):
             "auto": list(recorte_persona(region, cara, (aw, ah), cfg["persona"])), **extra}
 
 
+def tope_imagen_arriba(plan, pl):
+    """Hasta dónde llega por arriba la imagen «arriba» (en lugar de Nacho): debajo de la barra del título, para que
+    el título no la tape. 0 si no hay título."""
+    if not (plan.get("titulo") or "").strip():
+        return 0
+    return int((pl.get("titulo") or {}).get("tope_imagenes", 0) or 0)
+
+
+def pegar_arriba(lienzo, img_fn, ax, ay, aw, ah, tope):
+    """Pone la imagen «arriba» en (ax, ay, aw, ah) sin que quede debajo del título: la imagen va completa desde 'tope'
+    y lo que queda encima (detrás de la barra) se rellena con la misma imagen difuminada y oscura."""
+    off = max(0, min(ah - 40, tope - ay)) if tope else 0
+    if off <= 0:
+        lienzo[ay:ay + ah, ax:ax + aw] = img_fn(aw, ah)
+        return
+    img = img_fn(aw, ah - off)
+    lienzo[ay + off:ay + ah, ax:ax + aw] = img
+    peq = cv2.resize(img, (max(8, aw // 12), max(8, (ah - off) // 12)), interpolation=cv2.INTER_AREA)
+    fondo = cv2.resize(cv2.GaussianBlur(peq, (0, 0), 3), (aw, off), interpolation=cv2.INTER_LINEAR)
+    lienzo[ay:ay + off, ax:ax + aw] = (fondo.astype(np.float32) * 0.55).astype(np.uint8)
+
+
 def mezcla_de(plan):
     """Volumen elegido en la pestaña Edición (1 = como viene): {"musica": x, "voz": y}."""
     m = (plan or {}).get("audio_mezcla") or {}
@@ -4786,6 +4808,7 @@ def cmd_render(args):
     momentos = [m for m in plan.get("momentos", []) if m.get("imagenes") and not m.get("oculto")]
     todos_m = list(momentos)
     arribas = [m for m in momentos if m.get("estilo") == "arriba"]   # imagen en el lugar de Nacho
+    tope_arr = tope_imagen_arriba(plan, pl)   # la imagen «arriba» empieza debajo de la barra del título
     momentos = [m for m in momentos if m.get("estilo") != "arriba"]
     cortes = sorted(plan.get("cortes", []), key=lambda c: c["inicio"])
     manual = plan.get("encuadre_manual") or []
@@ -4937,7 +4960,7 @@ def cmd_render(args):
                 dur = (arr["fin"] - arr["inicio"]) / len(imgs)
                 k = min(int((t - arr["inicio"]) // dur), len(imgs) - 1)
                 fase = min(1.0, (t - arr["inicio"] - k * dur) / dur)
-                lienzo[ay:ay + ah, ax:ax + aw] = imagen_momento(arr, k, aw, ah, fase)
+                pegar_arriba(lienzo, lambda w_, h_: imagen_momento(arr, k, w_, h_, fase), ax, ay, aw, ah, tope_arr)
             else:
                 cara = interp_cara(toma["cara"], t)
                 region = caja_p if toma["layout"] == "dividida" else [0, 0, frame.shape[1], frame.shape[0]]

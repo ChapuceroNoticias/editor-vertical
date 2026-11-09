@@ -84,7 +84,9 @@
   "contorno": 0,
   "tam_max": 400,
   "mayusculas": true,
-  "_nota": "Título grande (Aku&Kamu) en la barra roja en degradado: a un renglón llena el ancho de la barra; si se pone un salto de línea, los dos renglones caben en la barra con la misma letra."
+  "_nota": "Título grande (Aku&Kamu) en la barra roja en degradado: a un renglón llena el ancho de la barra; si se pone un salto de línea, los dos renglones caben en la barra con la misma letra.",
+  "tope_imagenes": 322,
+  "_nota_tope": "Las imágenes «arriba» empiezan debajo de la barra del título (y en px); encima va la misma imagen difuminada"
  },
  "subtitulos": {
   "fuente": "assets/AkuKamu.otf",

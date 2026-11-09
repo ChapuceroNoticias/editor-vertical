@@ -222,6 +222,8 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
 - **Dos imágenes al mismo tiempo**: con una imagen ya puesta, en el panel Imagen → «＋ Otra imagen aquí»; la nueva
   va arriba (Imágenes 2) desde el cursor. También: en un lugar libre elige «Arriba (en lugar de Nacho)» y luego
   arrástrala en «Imágenes 2» encima de la otra.
+- **Imagen arriba bajo el título**: la imagen «arriba» empieza debajo de la barra roja del título (no se tapa);
+  detrás de la barra va la misma imagen difuminada. Se ajusta en la plantilla: `titulo.tope_imagenes`.
 - **Captura del video**: toma el cuadro completo.
 - **Secciones de audio**: Shift + arrastrar en «Audio» separa una sección; abajo se silencia o se sube/baja su volumen
   (0–300 %). Solo afecta la voz del video, la música de fondo sigue.
