@@ -1663,10 +1663,46 @@ def captura_pantalla(t, d):
 
 
 def limpiar_titulo(titulo):
-    """Quita espacios sobrantes y deja como máximo un salto de línea (título a dos renglones)."""
-    ls = [" ".join(l.split()) for l in str(titulo or "").replace("\r", "").split("\n")]
-    ls = [l for l in ls if l]
-    return (ls[0] + ("\n" + " ".join(ls[1:]) if len(ls) > 1 else "")) if ls else ""
+    """Quita espacios sobrantes y deja hasta tres renglones (Enter = otro renglón)."""
+    return "\n".join(ed.lineas_titulo(titulo, 3))
+
+
+def guardar_titulo_ajuste(t, tam=None, inter=None):
+    """Tamaño de la letra del título (None = automático) y su interlineado (-100…+100 %, 0 = el normal)."""
+    plan, _ = cargar(t)
+    respaldar(t)
+    if tam in (None, "", 0, "auto"):
+        plan.pop("titulo_tam", None)
+    else:
+        plan["titulo_tam"] = max(12, min(600, int(float(tam))))
+    if inter is not None:
+        v = max(-100, min(100, int(round(float(inter)))))
+        if v:
+            plan["titulo_inter"] = v
+        else:
+            plan.pop("titulo_inter", None)
+    guardar_plan(t, plan)
+    return info_titulo(t)
+
+
+def info_titulo(t):
+    """Tamaño de letra con que sale hoy el título (para mostrarlo en los controles) y los ajustes guardados."""
+    plan, _ = cargar(t)
+    pl = plantilla(plan)
+    usado = None
+    try:
+        cfg = pl.get("titulo")
+        if isinstance(cfg, dict) and plan.get("titulo"):
+            cfg = dict(cfg)
+            pl2 = dict(pl, titulo=cfg)
+            if estilo_de(plan) == "motivacional":
+                ed.estilo_motivacional().capa_titulo(cfg, plan["titulo"], pl["salida"]["ancho"], pl["salida"]["alto"])
+            else:
+                ed.capa_titulo(pl2, plan["titulo"], 1080, 1920)
+            usado = cfg.get("_usado")
+    except Exception:
+        usado = None
+    return {"tam": plan.get("titulo_tam"), "inter": plan.get("titulo_inter", 0), "usado": usado}
 
 
 def guardar_titulo(t, titulo, en_video=None):
@@ -2477,6 +2513,18 @@ def crear_app():
         t = validar(d.get("t"))
         _ok(lambda: guardar_audio_tramos(t, d.get("tramos")))
         return {"ok": True}
+
+    @app.post("/edi/titulo_ajuste")
+    def edi_titulo_ajuste(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        try:
+            return {"ok": True, **guardar_titulo_ajuste(t, d.get("tam"), d.get("inter"))}
+        except Exception as e:
+            return {"ok": False, "mensaje": str(e)}
+
+    @app.get("/edi/titulo_info")
+    def edi_titulo_info(t: str):
+        return info_titulo(validar(t))
 
     @app.post("/edi/partir_escena")
     def edi_partir_escena(d: dict = Body(...)):
@@ -3369,7 +3417,7 @@ def construir():
                                         ruta_video = gr.Dropdown(label="Video", choices=opciones_videos(), value=None,
                                                                  allow_custom_value=True, filterable=True, scale=5)
                                         btn_refrescar = gr.Button("↻", scale=0, min_width=48)
-                                    titulo_nuevo = gr.Textbox(label="Título  ·  Shift+Enter = segundo renglón", lines=1, max_lines=2,
+                                    titulo_nuevo = gr.Textbox(label="Título  ·  Shift+Enter = otro renglón (hasta 3)", lines=1, max_lines=3,
                                                               placeholder="En «Tiktoks Yair»: arriba – abajo (en «Solo subtítulos» no hace falta)")
                                     estilo_edicion = gr.Radio(list(ESTILOS), value="Clips Chapuceros", label="Estilo de edición",
                                                               elem_id="estilo")

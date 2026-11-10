@@ -64,7 +64,17 @@ def plantilla_plan(plan):
     if parche:
         import aprendizaje
         aprendizaje.aplicar_parche(pl, parche)
-    return aplicar_geometria(pl, plan.get("geometria"))
+    pl = aplicar_geometria(pl, plan.get("geometria"))
+    if isinstance(pl.get("titulo"), dict):   # tamaño e interlineado del título elegidos en Edición/Subtítulos
+        tam, inter = plan.get("titulo_tam"), plan.get("titulo_inter")
+        if tam or inter:
+            pl["titulo"] = dict(pl["titulo"], _tam=int(tam) if tam else None, _inter=float(inter or 0))
+    return pl
+
+
+def inter_titulo(cfg, base):
+    """Interlineado del título: el de la plantilla movido por el ajuste del usuario (-100…+100 %)."""
+    return float(base) + float(cfg.get("_inter") or 0) / 100 * 0.6
 
 
 def aplicar_diccionario(palabras, pares):
@@ -2310,7 +2320,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-10b v1.8.8"
+VERSION = "2026-11-10c v1.9.0"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -2707,11 +2717,11 @@ def pegar(lienzo, sup, dx=0, dy=0):
     lienzo[cy0:cy1, cx0:cx1] = (b * a + zona * (1 - a)).astype(np.uint8)
 
 
-def lineas_titulo(titulo):
-    """El título en renglones: el usuario puede poner UN salto de línea (máximo dos renglones)."""
-    ln = [x.strip() for x in str(titulo or "").replace("\r", "").split("\n") if x.strip()]
-    if len(ln) > 2:
-        ln = [ln[0], " ".join(ln[1:])]
+def lineas_titulo(titulo, maximo=3):
+    """El título en los renglones que puso el usuario (Enter = otro renglón), hasta 'maximo'."""
+    ln = [" ".join(x.split()) for x in str(titulo or "").replace("\r", "").split("\n") if x.strip()]
+    if len(ln) > maximo:
+        ln = ln[:maximo - 1] + [" ".join(ln[maximo - 1:])]
     return ln
 
 
@@ -2721,7 +2731,7 @@ def texto_titulo_ancho(capa, cfg, lineas, x, y, w, h):
     fuente = str(ruta(cfg["fuente"]))
     mv = float(cfg.get("margen_v", 16))
     alto_util = h - 2 * mv
-    inter = float(cfg.get("interlineado", 0.18))   # espacio entre renglones (fracción del alto de la letra)
+    inter = inter_titulo(cfg, cfg.get("interlineado", 0.18))   # espacio entre renglones (fracción del alto)
 
     def medir(tam):
         f = ImageFont.truetype(fuente, tam)
@@ -2731,6 +2741,8 @@ def texto_titulo_ancho(capa, cfg, lineas, x, y, w, h):
         total = hl * len(lineas) + hl * inter * (len(lineas) - 1)
         return f, cajas, anchos, hl, total
     lo, hi = 10, int(cfg.get("tam_max", 400))
+    if cfg.get("_tam"):   # tamaño elegido por el usuario (si no cabe en la barra, se achica lo necesario)
+        hi = max(lo, min(hi, int(cfg["_tam"])))
     while lo < hi:   # el tamaño más grande que cabe
         m = (lo + hi + 1) // 2
         _, _, anchos, _, total = medir(m)
@@ -2739,6 +2751,7 @@ def texto_titulo_ancho(capa, cfg, lineas, x, y, w, h):
         else:
             hi = m - 1
     f, cajas, anchos, hl, total = medir(lo)
+    cfg["_usado"] = lo
     d = ImageDraw.Draw(capa)
     color = hex_rgb(cfg["color"])
     sw = int(cfg.get("contorno", 0))
@@ -2783,7 +2796,8 @@ def capa_titulo(pl, titulo, W, H):
     if titulo:
         titulo = " ".join(lineas_titulo(titulo))
         texto = titulo.upper() if cfg.get("mayusculas") else titulo
-        f = fuente_que_quepa(ruta(cfg["fuente"]), texto, w, h, cfg["tam_max"], cfg["contorno"])
+        f = fuente_que_quepa(ruta(cfg["fuente"]), texto, w, h, min(cfg["tam_max"], cfg.get("_tam") or 10 ** 4),
+                             cfg["contorno"])
         d = ImageDraw.Draw(capa)
         d.text((x + w / 2, y + h / 2), texto, font=f, fill=hex_rgb(cfg["color"]), anchor="mm",
                stroke_width=cfg["contorno"], stroke_fill=hex_rgb(cfg["color_contorno"]))

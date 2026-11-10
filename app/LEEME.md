@@ -232,6 +232,9 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
   «Recortar» se cambia para ese rato.
 - **Tramos de 0.10 s**: en todos los carriles (Pantalla, imágenes, encuadres, difuminar, stickers, audio y la
   selección para quitar pedazos) se puede partir y dejar bloques de hasta 0.10 s.
+- **Letra e interlineado del título** (todos los estilos): junto a «Guardar título» (Edición, y Subtítulos en «Solo
+  subtítulos») hay «Letra» (− / número / + / A = automático) e «Interlineado» (− / +, en %). El título va en los
+  renglones que pongas con Enter (hasta 3) y siempre se acomoda dentro de su área (si no cabe, la letra se achica).
 - **Ctrl+B en cualquier línea**: parte, en el cursor rojo, el bloque de la línea en la que hiciste clic (no hace falta
   seleccionarlo). En «Audio» sin secciones, separa el audio en ese punto. Cada parte puede durar desde 0.10 s.
 - **Video largo**: botón ↻ junto a la lista para actualizar los videos disponibles.

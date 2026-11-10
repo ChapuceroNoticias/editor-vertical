@@ -114,6 +114,11 @@
   .fila.oculta { display: none; }
   .titulo_solo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 20px; border-bottom: 1px solid var(--linea); }
   .titulo_solo[hidden] { display: none; }
+  .tit_aj { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--tenue); white-space: nowrap; }
+  .tit_aj > span { margin: 0 2px 0 6px; text-transform: uppercase; letter-spacing: .1em; font-weight: 500; }
+  .tit_aj .btn.mini { height: 28px; min-width: 26px; padding: 0 6px; }
+  .titulo_solo .tit_aj input { flex: 0 0 58px; width: 58px; height: 28px; padding: 0 6px; font-size: 13px; text-align: center; }
+  .tit_aj b { min-width: 34px; text-align: center; color: var(--texto); font: 600 12px "Geist Mono", monospace; }
   .titulo_solo label { font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--tenue); }
   .titulo_solo input, .titulo_solo textarea { flex: 1 1 320px; height: 36px; padding: 0 12px; font-size: 14px; }
   .titulo_solo textarea { border: 1px solid var(--borde); border-radius: 6px; background: var(--fondo); color: var(--texto); resize: none; overflow: hidden; padding: 8px 12px; line-height: 18px; font-family: inherit; }
@@ -149,9 +154,13 @@
   <div class="der">
     <div class="titulo_solo" id="titulo_solo" hidden>
       <label for="titulo_txt">Título</label>
-      <textarea id="titulo_txt" rows="1" placeholder="Título del video (Enter = segundo renglón · con él se nombra el archivo)"></textarea>
+      <textarea id="titulo_txt" rows="1" placeholder="Título del video (Enter = otro renglón, hasta 3 · Ctrl+Enter guarda · con él se nombra el archivo)"></textarea>
       <label class="en_video" title="Pone la barra roja del título encima del clip (se ve aquí en vivo y sale en el video exportado)"><input type="checkbox" id="titulo_en_video"> Ponerlo en el video</label>
       <button class="btn" id="titulo_guardar" disabled>Guardar título</button>
+      <span class="tit_aj" title="Tamaño de la letra del título (vacío = automático; si no cabe en la barra, se achica) y espacio entre renglones">
+        <span>Letra</span><button class="btn mini" id="tt_menos">−</button><input id="tt_tam" type="number" min="12" max="600" placeholder="auto"><button class="btn mini" id="tt_mas">+</button><button class="btn mini" id="tt_auto" title="Volver al tamaño automático">A</button>
+        <span>Interlineado</span><button class="btn mini" id="ti_menos">−</button><b id="ti_val">0</b><button class="btn mini" id="ti_mas">+</button>
+      </span>
       <span class="aviso_titulo" id="titulo_aviso"></span>
     </div>
     <div class="barra">
@@ -888,11 +897,11 @@ $("titulo_txt").addEventListener("input", () => pintarTitulo());
 $("titulo_txt").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   if (e.ctrlKey || e.metaKey) { e.preventDefault(); if (!$("titulo_guardar").disabled) guardarTitulo(); }
-  else if ($("titulo_txt").value.includes("\n")) e.preventDefault();   // máximo dos renglones
+  else if ($("titulo_txt").value.split("\n").length >= 3) e.preventDefault();   // máximo tres renglones
 });
 $("titulo_txt").addEventListener("input", () => {
   const el = $("titulo_txt"), ls = el.value.split("\n");
-  if (ls.length > 2) el.value = ls[0] + "\n" + ls.slice(1).join(" ");
+  if (ls.length > 3) el.value = ls.slice(0, 2).join("\n") + "\n" + ls.slice(2).join(" ");
   el.style.height = "auto"; el.style.height = el.scrollHeight + "px";
 });
 $("titulo_guardar").onclick = guardarTitulo;
@@ -1082,6 +1091,7 @@ async function guardarTitulo() {
     if (!r.ok) throw new Error(await r.text());
     tituloGuardado = titulo; enVideoGuardado = en_video;
     cargarTituloImg();
+    cargarAjusteTitulo();
     pintarTitulo(titulo ? "Título guardado ✓ " + (en_video ? "Se ve encima del clip y saldrá así al exportar." : "El video se exportará con este nombre.") : "");
   } catch (err) { $("titulo_aviso").textContent = "No se pudo guardar el título: " + err.message; $("titulo_aviso").className = "aviso_titulo falta"; }
 }
@@ -1237,6 +1247,40 @@ else $("lista").innerHTML = '<div style="padding:30px;color:var(--suave)">Carga 
     if (performance.now() - ultimo > 1500)
       document.querySelectorAll("video, audio").forEach(m => { if (!m.paused) m.pause(); });
   }, 1000);
+})();
+
+// ---------- tamaño de la letra e interlineado del título ----------
+let TIT = { tam: null, inter: 0, usado: null }, titTimer = null;
+function pintarAjusteTitulo() {
+  $("tt_tam").value = TIT.tam || "";
+  $("tt_tam").placeholder = TIT.usado ? `auto ${TIT.usado}` : "auto";
+  $("ti_val").textContent = (TIT.inter > 0 ? "+" : "") + (TIT.inter || 0) + "%";
+}
+async function cargarAjusteTitulo() {
+  try { TIT = await (await fetch(`/edi/titulo_info?t=${encodeURIComponent(T)}`, { cache: "no-store" })).json(); } catch (e) {}
+  pintarAjusteTitulo();
+}
+function guardarAjusteTitulo() {
+  clearTimeout(titTimer);
+  pintarAjusteTitulo();
+  titTimer = setTimeout(async () => {
+    try {
+      const r = await (await fetch("/edi/titulo_ajuste", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ t: T, tam: TIT.tam || null, inter: TIT.inter || 0 }) })).json();
+      if (r && r.usado) TIT.usado = r.usado;
+      pintarAjusteTitulo(); cargarTituloImg();
+    } catch (e) {}
+  }, 350);
+}
+(function iniciarAjusteTitulo() {
+  const base = () => TIT.tam || TIT.usado || 120;
+  $("tt_menos").onclick = () => { TIT.tam = Math.max(12, base() - 4); guardarAjusteTitulo(); };
+  $("tt_mas").onclick = () => { TIT.tam = Math.min(600, base() + 4); guardarAjusteTitulo(); };
+  $("tt_auto").onclick = () => { TIT.tam = null; guardarAjusteTitulo(); };
+  $("tt_tam").onchange = () => { const v = parseInt($("tt_tam").value); TIT.tam = v >= 12 ? Math.min(600, v) : null; guardarAjusteTitulo(); };
+  $("ti_menos").onclick = () => { TIT.inter = Math.max(-100, (TIT.inter || 0) - 5); guardarAjusteTitulo(); };
+  $("ti_mas").onclick = () => { TIT.inter = Math.min(100, (TIT.inter || 0) + 5); guardarAjusteTitulo(); };
+  setTimeout(cargarAjusteTitulo, 500);
 })();
 </script>
 </body>

@@ -114,6 +114,11 @@
 <style>
   /* ---------- Grafito: disposición de Edición ---------- */
   .barra { background: var(--fondo); border-bottom: 1px solid var(--linea); padding: 10px 14px; gap: 8px; }
+  .tit_aj { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--tenue); white-space: nowrap; }
+  .tit_aj > span { margin: 0 2px 0 6px; text-transform: uppercase; letter-spacing: .1em; font-weight: 500; }
+  .tit_aj .btn.mini { height: 28px; min-width: 26px; padding: 0 6px; }
+  .tit_aj input { width: 58px; height: 28px; padding: 0 6px; font-size: 13px; text-align: center; }
+  .tit_aj b { min-width: 34px; text-align: center; color: var(--texto); font: 600 12px "Geist Mono", monospace; }
   .barra .campo_titulo { flex: 1 1 340px; gap: 10px; font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--tenue); }
   .barra .campo_titulo textarea { resize: none; overflow: hidden; line-height: 16px; min-height: 34px; padding: 8px 12px; font-family: inherit; }
   .barra .campo_titulo input, .barra .campo_titulo textarea { height: 34px; padding: 0 12px; font-size: 14px; letter-spacing: 0; text-transform: none; flex: 1; }
@@ -164,8 +169,12 @@
 </head>
 <body>
 <div class="barra">
-  <label class="campo_titulo"><span>Título</span><textarea id="titulo" rows="1" placeholder="Título del video (Enter = segundo renglón)"></textarea></label>
+  <label class="campo_titulo"><span>Título</span><textarea id="titulo" rows="1" placeholder="Título del video (Enter = otro renglón, hasta 3)"></textarea></label>
   <button class="btn" id="b_titulo">Guardar título</button>
+  <span class="tit_aj" title="Tamaño de la letra del título (vacío = automático; si no cabe en su área, se achica) y espacio entre renglones">
+    <span>Letra</span><button class="btn mini" id="tt_menos">−</button><input id="tt_tam" type="number" min="12" max="600" placeholder="auto"><button class="btn mini" id="tt_mas">+</button><button class="btn mini" id="tt_auto" title="Volver al tamaño automático">A</button>
+    <span>Interlineado</span><button class="btn mini" id="ti_menos">−</button><b id="ti_val">0</b><button class="btn mini" id="ti_mas">+</button>
+  </span>
   <span id="estado"></span>
   <button class="btn ico" id="b_deshacer" title="Regresa el último cambio guardado (Ctrl+Z)" aria-label="Deshacer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
   <button class="btn ico" id="b_rehacer" title="Vuelve a hacer lo que deshiciste (Ctrl+Y)" aria-label="Rehacer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
@@ -2881,7 +2890,8 @@ async function iniciar() {
 
   // título y deshacer
   dosRenglones($("titulo"));
-  $("b_titulo").onclick = () => enviar("/edi/titulo", { t: T, titulo: $("titulo").value }, "Título guardado.");
+  $("b_titulo").onclick = () => enviar("/edi/titulo", { t: T, titulo: $("titulo").value }, "Título guardado.").then(cargarAjusteTitulo);
+  iniciarAjusteTitulo();
   $("b_guardar_todo").onclick = guardarTodo;
   $("b_render").onclick = renderizarDeNuevo;
   $("dif_aqui").onclick = difuminarAqui;
@@ -3099,15 +3109,46 @@ iniciar().then(() => {
       document.querySelectorAll("video, audio").forEach(m => { if (!m.paused) m.pause(); });
   }, 1000);
 })();
-function dosRenglones(el) {   // título: máximo dos renglones; la caja crece al segundo
+function dosRenglones(el) {   // título: hasta tres renglones; la caja crece con ellos
   const ajustar = () => { el.style.height = "34px"; if (el.value.includes("\n")) el.style.height = Math.max(34, el.scrollHeight) + "px"; };
   el.addEventListener("input", () => {
     const ls = el.value.split("\n");
-    if (ls.length > 2) { const p = el.selectionStart; el.value = ls[0] + "\n" + ls.slice(1).join(" "); el.selectionStart = el.selectionEnd = Math.min(p, el.value.length); }
+    if (ls.length > 3) { const p = el.selectionStart; el.value = ls.slice(0, 2).join("\n") + "\n" + ls.slice(2).join(" "); el.selectionStart = el.selectionEnd = Math.min(p, el.value.length); }
     ajustar();
   });
-  el.addEventListener("keydown", (e) => { if (e.key === "Enter" && el.value.includes("\n")) e.preventDefault(); });
+  el.addEventListener("keydown", (e) => { if (e.key === "Enter" && el.value.split("\n").length >= 3) e.preventDefault(); });
   el._ajustar = ajustar;
+}
+
+// ---------- tamaño de la letra e interlineado del título ----------
+let TIT = { tam: null, inter: 0, usado: null }, titTimer = null;
+function pintarAjusteTitulo() {
+  $("tt_tam").value = TIT.tam || "";
+  $("tt_tam").placeholder = TIT.usado ? `auto ${TIT.usado}` : "auto";
+  $("ti_val").textContent = (TIT.inter > 0 ? "+" : "") + (TIT.inter || 0) + "%";
+}
+async function cargarAjusteTitulo() {
+  try { TIT = await (await fetch(`/edi/titulo_info?t=${encodeURIComponent(T)}`, { cache: "no-store" })).json(); } catch (e) {}
+  pintarAjusteTitulo();
+}
+function guardarAjusteTitulo() {
+  clearTimeout(titTimer);
+  pintarAjusteTitulo();
+  titTimer = setTimeout(async () => {
+    const r = await enviar("/edi/titulo_ajuste", { t: T, tam: TIT.tam || null, inter: TIT.inter || 0 },
+      `Título: letra ${TIT.tam || "automática"}, interlineado ${(TIT.inter > 0 ? "+" : "") + (TIT.inter || 0)}%.`);
+    if (r && r.usado) { TIT.usado = r.usado; pintarAjusteTitulo(); }
+  }, 350);
+}
+function iniciarAjusteTitulo() {
+  const base = () => TIT.tam || TIT.usado || 120;
+  $("tt_menos").onclick = () => { TIT.tam = Math.max(12, base() - 4); guardarAjusteTitulo(); };
+  $("tt_mas").onclick = () => { TIT.tam = Math.min(600, base() + 4); guardarAjusteTitulo(); };
+  $("tt_auto").onclick = () => { TIT.tam = null; guardarAjusteTitulo(); };
+  $("tt_tam").onchange = () => { const v = parseInt($("tt_tam").value); TIT.tam = v >= 12 ? Math.min(600, v) : null; guardarAjusteTitulo(); };
+  $("ti_menos").onclick = () => { TIT.inter = Math.max(-100, (TIT.inter || 0) - 5); guardarAjusteTitulo(); };
+  $("ti_mas").onclick = () => { TIT.inter = Math.min(100, (TIT.inter || 0) + 5); guardarAjusteTitulo(); };
+  cargarAjusteTitulo();
 }
 </script>
 </body>

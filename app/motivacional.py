@@ -646,10 +646,21 @@ def lineas_titulo_gaby(cfg, titulo, W, H):
     ancho = cfg.get("ancho", 1010)
     contorno = cfg.get("contorno", 7)
     lineas = None
+    tam0 = int(cfg.get("_tam") or cfg.get("tam", 124))
+    propias = ed.lineas_titulo(texto)
+    if len(propias) > 1:   # el usuario partió el título en renglones: se respetan (se achica si no cabe)
+        tam = tam0
+        while tam > 20:
+            f = ImageFont.truetype(fuente, tam)
+            if all(f.getbbox(l, stroke_width=contorno)[2] - f.getbbox(l, stroke_width=contorno)[0] <= ancho - 2 * contorno
+                   for l in propias):
+                break
+            tam -= 2
+        lineas = propias
     # primero en 2 renglones achicando la letra si hace falta; solo si no cabe, en 3
-    for max_l in sorted({min(2, cfg.get("max_lineas", 3)), cfg.get("max_lineas", 3)}):
-        tam = cfg.get("tam", 124)
-        while tam >= cfg.get("tam_min", 64):
+    for max_l in ([] if lineas else sorted({min(2, cfg.get("max_lineas", 3)), cfg.get("max_lineas", 3)})):
+        tam = tam0
+        while tam >= min(tam0, cfg.get("tam_min", 64)):
             f = ImageFont.truetype(fuente, tam)
             ls, _ = repartir_lineas(texto.split(), f, ancho - 2 * contorno, max_l)
             if ls:
@@ -660,8 +671,9 @@ def lineas_titulo_gaby(cfg, titulo, W, H):
             break
     if not lineas:
         tam, lineas = cfg.get("tam_min", 64), [texto]
+    cfg["_usado"] = tam
     f = ImageFont.truetype(fuente, tam)
-    paso = tam * cfg.get("interlineado", 1.04)
+    paso = tam * ed.inter_titulo(cfg, cfg.get("interlineado", 1.04))
     cap = f.getbbox("H")[3] - f.getbbox("H")[1]
     alto_txt = paso * (len(lineas) - 1) + cap
     centro = max(cfg.get("centro_y", 178), alto_txt / 2 + cfg.get("margen_arriba", 40))
@@ -743,6 +755,9 @@ def partes_titulo(titulo):
     """«TIEMBLA SALINAS – VAN CONTRA GRANJAS DE BOTS» -> ("TIEMBLA SALINAS", "VAN CONTRA GRANJAS DE BOTS").
     Sirve el guion largo (–, —) o el corto (-) con espacios. Sin guion, todo va en el cuadro de arriba."""
     t = (titulo or "").strip()
+    if "\n" in t:   # Enter también separa el cuadro de arriba del de abajo
+        a_, b_ = t.split("\n", 1)
+        return " ".join(a_.split()), " ".join(b_.split())
     m = re.search(r"\s+[–—-]+\s+|[–—]", t)
     if not m:
         return t, ""
@@ -760,7 +775,7 @@ def _cuadro_titulo(cfg, caja, texto, W, H):
     # tamaño para que las mayúsculas midan alto_letra; si no cabe a lo ancho, más chico
     prueba = ImageFont.truetype(fuente, 100)
     cap100 = prueba.getbbox("H")[3] - prueba.getbbox("H")[1]
-    tam = max(20, int(round(100 * cfg.get("alto_letra", 76) / max(1, cap100))))
+    tam = int(cfg["_tam"]) if cfg.get("_tam") else max(20, int(round(100 * cfg.get("alto_letra", 76) / max(1, cap100))))
     libre = ancho - 2 * cfg.get("relleno_x", 34)
     ex = cfg.get("escala_x", 1.04)   # en Photoshop la letra sale un poco más ancha
     while tam > 20:
@@ -770,6 +785,7 @@ def _cuadro_titulo(cfg, caja, texto, W, H):
             break
         tam -= 2
     f = ImageFont.truetype(fuente, tam)
+    cfg["_usado"] = tam
     cap = f.getbbox("H")[3] - f.getbbox("H")[1]
     capa = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(capa)
@@ -897,22 +913,30 @@ def capa_titulo(cfg, titulo, W, H):
     x0, x1 = cfg["caja_x"]
     pad_x, pad_y = cfg.get("relleno", [60, 100])
     ancho_txt = (x1 - x0) - 2 * pad_x
-    tam, primera = cfg["tam"], None
-    while tam > 60:
+    tam0 = int(cfg.get("_tam") or cfg["tam"])
+    tam, primera = tam0, None
+    propias = ed.lineas_titulo(texto)
+    if len(propias) > 1:   # renglones que puso el usuario: se respetan (la letra se achica si alguno no cabe)
+        while tam > 20 and max(ImageFont.truetype(fuente, tam).getbbox(l)[2] - ImageFont.truetype(fuente, tam).getbbox(l)[0]
+                               for l in propias) > ancho_txt:
+            tam -= 2
+        primera = (tam, propias)
+    while tam > min(60, tam0 - 1) and len(propias) <= 1:
         f = ImageFont.truetype(fuente, tam)
         lineas, fea = repartir_lineas(texto.split(), f, ancho_txt, cfg.get("max_lineas", 4))
         if lineas and primera is None:
             primera = (tam, lineas)
         # un poco más chico si así ningún renglón termina en "a", "de", "el"...
-        if lineas and (not fea or tam < cfg["tam"] * 0.7):
+        if lineas and (not fea or tam < tam0 * 0.7):
             if fea:
                 tam, lineas = primera
             break
         tam -= 4
     else:
         tam, lineas = primera if primera else (tam, [texto])
+    cfg["_usado"] = tam
     f = ImageFont.truetype(fuente, tam)
-    paso = tam * cfg.get("interlineado", 1.08)
+    paso = tam * ed.inter_titulo(cfg, cfg.get("interlineado", 1.08))
     cap = f.getbbox("H")[3] - f.getbbox("H")[1]
     alto_txt = paso * (len(lineas) - 1) + cap
     alto = alto_txt + 2 * pad_y
