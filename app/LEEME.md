@@ -230,6 +230,11 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
   barras negras a los lados, se ve completo debajo del título, con los lados rellenos del mismo video difuminado.
   Se detecta solo por ratos (aunque la toma mezcle estudio y video vertical); en Encuadre → «Encajar completo» /
   «Recortar» se cambia para ese rato.
+- **Tramos de 0.10 s**: en todos los carriles (Pantalla, imágenes, encuadres, difuminar, stickers, audio y la
+  selección para quitar pedazos) se puede partir y dejar bloques de hasta 0.10 s.
+- **Video largo**: botón ↻ junto a la lista para actualizar los videos disponibles.
+- **Cambio de escena exacto**: la vista previa cambia de escena en el cuadro justo (antes hasta 0.2 s tarde), y una
+  imagen/pantalla que termina donde empieza un encuadre hecho a mano ya no se estira por encima de él.
 - **Captura del video**: toma el cuadro completo.
 - **Secciones de audio**: Shift + arrastrar en «Audio» separa una sección; abajo se silencia o se sube/baja su volumen
   (0–300 %). Solo afecta la voz del video, la música de fondo sigue.

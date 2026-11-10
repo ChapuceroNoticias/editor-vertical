@@ -2310,7 +2310,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-09g v1.8.6"
+VERSION = "2026-11-10a v1.8.7"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -2971,15 +2971,21 @@ def sin_saltos(plan, pl, hueco_max=1.0, pegar=0.3):
     vis = [p for p in proy if pantalla_de(p, cfg_p) != "nacho"] + \
           [m for m in moms if m.get("imagenes") and not m.get("oculto")]
     vis.sort(key=lambda x: x["inicio"])
+    # orillas de los encuadres acomodados a mano: si una pantalla/imagen termina (o empieza) justo ahí, el usuario
+    # alineó las dos cosas y no se estira por encima (antes la escena anterior seguía 0.1-0.2 s con el encuadre nuevo)
+    bordes = [float(v) for a_ in (plan.get("encuadre_manual") or []) + (plan.get("encuadre_pantalla") or [])
+              for v in (a_.get("inicio"), a_.get("fin")) if v is not None]
+    cruza = lambda t0, t1: any(min(t0, t1) - 0.15 < b < max(t0, t1) for b in bordes) if t0 < t1 else \
+        any(min(t0, t1) < b < max(t0, t1) + 0.15 for b in bordes)  # noqa: E731
     for a, b in zip(vis, vis[1:]):
-        if a["fin"] < b["inicio"] and ae(b["inicio"]) - ae(a["fin"]) < hueco_max:
+        if a["fin"] < b["inicio"] and ae(b["inicio"]) - ae(a["fin"]) < hueco_max and not cruza(a["fin"], b["inicio"]):
             a["fin"] = b["inicio"]
     for x in vis:
         for c in cortes:
-            if 0 < x["inicio"] - c["fin"] and ae(x["inicio"]) - ae(c["fin"]) < pegar \
+            if 0 < x["inicio"] - c["fin"] and ae(x["inicio"]) - ae(c["fin"]) < pegar and not cruza(x["inicio"], c["fin"]) \
                     and not any(y is not x and y["inicio"] < c["fin"] + 1e-6 and y["fin"] > c["inicio"] for y in vis):
                 x["inicio"] = c["fin"]
-            if 0 < c["inicio"] - x["fin"] and ae(c["inicio"]) - ae(x["fin"]) < pegar:
+            if 0 < c["inicio"] - x["fin"] and ae(c["inicio"]) - ae(x["fin"]) < pegar and not cruza(x["fin"], c["inicio"]):
                 x["fin"] = c["inicio"]
     plan["proyeccion"], plan["momentos"] = proy, moms
     return plan

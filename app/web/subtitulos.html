@@ -529,7 +529,11 @@ function bucle() {
 
 // ---------- armado en vivo (misma lógica que el render, sin movimiento de las fotos) ----------
 const TIPOS = ["persona", "dividida", "video", "imagen", "contenida"];
-function indice(t) { return Math.min(E.muestras.length - 1, Math.max(0, Math.floor(t / E.paso))); }
+function indice(t) {
+  const i = Math.min(E.muestras.length - 1, Math.max(0, Math.floor(t / E.paso)));
+  const c = E.cambios && E.cambios[i];   // la escena cambia entre esta muestra y la siguiente: en qué instante
+  return c !== undefined && t >= c ? Math.min(E.muestras.length - 1, i + 1) : i;
+}
 function muestra(t) {
   const i = indice(t), a = E.muestras[i], b = E.muestras[Math.min(E.muestras.length - 1, i + 1)];
   const e = { tipo: TIPOS[a[1]], ex: E.extra[i] };

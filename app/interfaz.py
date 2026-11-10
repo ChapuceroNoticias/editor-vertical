@@ -259,7 +259,7 @@ def tramos_pantalla(t):
 
     def add(k, a, b, tipo, pantalla, opciones):
         a_e, b_e = ed_t(max(0.0, a), plan), ed_t(min(dur, b), plan)
-        if b_e - a_e < 0.2:
+        if b_e - a_e < 0.09:
             return
         out.append({"k": k, "inicio": mmss(a_e), "fin": mmss(b_e), "ini_s": round(a_e, 3), "fin_s": round(b_e, 3),
                     "tipo": tipo, "pantalla": pantalla, "opciones": opciones})
@@ -378,7 +378,7 @@ def aplicar_pantalla(t, cambios):
         a, b = seg(c.get("inicio")), seg(c.get("fin"))
         a = orig_t(a, plan) if a is not None and mmss(a) != mmss(ed_t(ini0, plan)) else ini0
         b = orig_t(b, plan) if b is not None and mmss(b) != mmss(ed_t(fin0, plan)) else fin0
-        return round(a, 3), round(max(b, a + 0.3), 3)
+        return round(a, 3), round(max(b, a + 0.1), 3)
 
     for c in cambios:
         k, op = str(c.get("k", "")), c.get("pantalla")
@@ -412,7 +412,7 @@ def aplicar_pantalla(t, cambios):
             sg = tomas[i]
             a, b = tiempos(c, sg["inicio"], sg["fin"])
             a, b = max(a, sg["inicio"]), min(b, sg["fin"])
-            if b - a < 0.3:
+            if b - a < 0.099:
                 continue
             partes = []
             if a - sg["inicio"] >= 0.05:
@@ -836,12 +836,19 @@ def datos_encuadre(t):
             ed.escalar_cajas(pl, info["ancho"], info["alto"])
             plan_fijo = ed.fijar_plan(plan, pl)
             escena = lambda tt: ed.escena_en(plan_fijo, pl, tt)  # noqa: E731
+        # cambios de escena exactos: las muestras van cada 0.2 s y la vista previa cambiaba de escena hasta
+        # 0.2 s tarde (se veía la escena anterior con el encuadre de la siguiente); se busca el cuadro del cambio
+        def llave(e):
+            return (e["tipo"], e.get("mom", -1), e.get("pv", -1), e.get("arr", -1), bool(e.get("ganso")),
+                    bool(e.get("encajar")), tuple(round(v) for v in e.get("region") or ()))
         paso = 0.2
         muestras, extra, pvwin, arriba, ganso = [], [], [], [], []
+        llaves = []
         n = int(info["duracion"] / paso) + 1
         for i in range(n):
             tt = round(i * paso, 3)
             e = escena(tt)
+            llaves.append(llave(e))
             fila = [tt, TIPOS_ESCENA[e["tipo"]]]
             arriba.append(e.get("arr", -1))
             ganso.append(1 if e.get("ganso") else 0)
@@ -858,6 +865,17 @@ def datos_encuadre(t):
             pw = e.get("pv_ventana")
             pvwin.append([round(v, 1) for v in pw["region"]] + [round(pw["aspect"], 5)] +
                          [round(v, 1) for v in pw["auto"]] if pw else 0)
+        cambios, fps_v = {}, float(info.get("fps") or 30.0)
+        for i in range(n - 1):
+            if llaves[i] != llaves[i + 1]:
+                a_, b_ = i * paso, (i + 1) * paso
+                while b_ - a_ > 0.5 / fps_v:
+                    m_ = (a_ + b_) / 2
+                    if llave(escena(m_)) == llaves[i]:
+                        a_ = m_
+                    else:
+                        b_ = m_
+                cambios[i] = round(b_, 4)
         W, H = pl["salida"]["ancho"], pl["salida"]["alto"]
         areas = {"persona": [0, 0, W, H], "video": [0, 0, W, H]}
         if "layouts" in pl:
@@ -867,7 +885,7 @@ def datos_encuadre(t):
             if "ganso" in pl["layouts"]:
                 areas["ganso"] = pl["layouts"]["ganso"]["persona"]["area"]
         _CACHE_ENC.clear()
-        _CACHE_ENC[clave] = {"paso": paso, "muestras": muestras, "extra": extra, "pvwin": pvwin,
+        _CACHE_ENC[clave] = {"paso": paso, "muestras": muestras, "extra": extra, "pvwin": pvwin, "cambios": cambios,
                              "arriba": arriba if any(a >= 0 for a in arriba) else None,
                              "ganso": ganso if any(ganso) else None,
                              "salida": [W, H], "areas": areas,
@@ -1071,7 +1089,7 @@ def guardar_difuminar(t, lista):
             continue
         x, y = max(0.0, min(x, W - 8)), max(0.0, min(y, H - 8))
         w, h = max(8.0, min(w, W - x)), max(8.0, min(h, H - y))
-        if b - a < 0.2:
+        if b - a < 0.099:
             continue
         limpios.append({"inicio": round(a, 3), "fin": round(b, 3), "caja": [int(x), int(y), int(w), int(h)],
                         "auto": bool(d.get("auto"))})
@@ -1096,7 +1114,7 @@ def guardar_stickers(t, lista):
             rot = float(d.get("rot", 0) or 0)
         except (KeyError, TypeError, ValueError):
             continue
-        if tipo not in tipos or b - a < 0.2:
+        if tipo not in tipos or b - a < 0.099:
             continue
         color = str(d.get("color") or tipos[tipo])
         if not (len(color) == 7 and color.startswith("#") and all(ch in "0123456789abcdefABCDEF" for ch in color[1:])):
@@ -1418,7 +1436,7 @@ def accion_momento_http(t, d):
     acc = d.get("accion")
     if acc == "agregar":
         ini, fin = float(d["inicio"]), float(d["fin"])
-        if fin - ini < 0.3:
+        if fin - ini < 0.099:
             raise ValueError("El momento es muy corto")
         busq = (d.get("busqueda") or "").strip()
         m = {"inicio": round(ini, 3), "fin": round(fin, 3),
@@ -1438,7 +1456,7 @@ def accion_momento_http(t, d):
         # momento copiado (Ctrl+V): mismas fotos, movimiento y estilo, en otro lugar
         datos = d.get("datos") or {}
         ini, fin = float(d["inicio"]), float(d["fin"])
-        if fin - ini < 0.3:
+        if fin - ini < 0.099:
             raise ValueError("El momento es muy corto")
         imgs = [str(x) for x in (datos.get("imagenes") or []) if Path(str(x)).exists()]
         m = {k: json.loads(json.dumps(v)) for k, v in datos.items()
@@ -1458,7 +1476,7 @@ def accion_momento_http(t, d):
     if acc == "dividir":
         # partir el momento en dos en el tiempo t (Ctrl+B)
         tc = float(d["t_corte"])
-        if not (m["inicio"] + 0.3 <= tc <= m["fin"] - 0.3):
+        if not (m["inicio"] + 0.099 <= tc <= m["fin"] - 0.099):
             raise ValueError("Pon el cursor dentro de la imagen (no tan cerca de sus orillas) para partirla")
         respaldar(t)
         m2 = json.loads(json.dumps(m))
@@ -1508,7 +1526,7 @@ def dividir_pantalla(t, i, tc):
     if not 0 <= i < len(proy):
         raise ValueError("Ese tramo no existe")
     p = proy[i]
-    if not (p["inicio"] + 0.3 <= tc <= p["fin"] - 0.3):
+    if not (p["inicio"] + 0.099 <= tc <= p["fin"] - 0.099):
         raise ValueError("Pon el cursor dentro del tramo (no tan cerca de sus orillas) para partirlo")
     respaldar(t)
     p2 = json.loads(json.dumps(p))
@@ -1523,7 +1541,7 @@ def partir_toma(t, tc):
     plan, _ = cargar(t)
     tomas = plan.get("tomas", [])
     for k, sg in enumerate(tomas):
-        if sg["inicio"] + 0.3 <= tc <= sg["fin"] - 0.3:
+        if sg["inicio"] + 0.099 <= tc <= sg["fin"] - 0.099:
             respaldar(t)
             s2 = json.loads(json.dumps(sg))
             sg["fin"], s2["inicio"] = round(tc, 3), round(tc, 3)
@@ -1559,7 +1577,7 @@ def mover_frontera_toma(t, de, a):
     tomas = plan.get("tomas", [])
     for k in range(len(tomas) - 1):
         if abs(tomas[k]["fin"] - de) < 0.08 and abs(tomas[k + 1]["inicio"] - de) < 0.08:
-            a = min(max(a, tomas[k]["inicio"] + 0.3), tomas[k + 1]["fin"] - 0.3)
+            a = min(max(a, tomas[k]["inicio"] + 0.1), tomas[k + 1]["fin"] - 0.1)
             respaldar(t)
             tomas[k]["fin"] = tomas[k + 1]["inicio"] = round(a, 3)
             guardar_plan(t, plan)

@@ -551,7 +551,11 @@ async function vigilarProxy() {   // mientras se prepara la copia ligera, revisa
 const durE = () => aEditado(E.video.duracion);
 
 // ---------- muestras del armado ----------
-function indice(t) { return Math.min(E.muestras.length - 1, Math.max(0, Math.floor(t / E.paso))); }
+function indice(t) {
+  const i = Math.min(E.muestras.length - 1, Math.max(0, Math.floor(t / E.paso)));
+  const c = E.cambios && E.cambios[i];   // la escena cambia entre esta muestra y la siguiente: en qué instante
+  return c !== undefined && t >= c ? Math.min(E.muestras.length - 1, i + 1) : i;
+}
 function muestra(t) {
   const i = indice(t), a = E.muestras[i], b = E.muestras[Math.min(E.muestras.length - 1, i + 1)];
   const e = { tipo: TIPOS[a[1]], ex: E.extra[i] };
@@ -1041,7 +1045,7 @@ function pintarSegbar() {
   const hay = !!segSel, pp = X && X.portapapeles;
   for (const id of ["seg_cortar", "seg_copiar", "seg_duplicar", "seg_quitar"]) $(id).disabled = !hay;
   $("seg_pegar").disabled = !pp;
-  $("seg_info").textContent = hay ? `${mmss(segSel[0])} – ${mmss(segSel[1])} (${(segSel[1] - segSel[0]).toFixed(1)} s)`
+  $("seg_info").textContent = hay ? `${mmss(segSel[0])} – ${mmss(segSel[1])} (${(segSel[1] - segSel[0]).toFixed(2)} s)`
     : (pp ? `Hay un pedazo copiado (${pp.duracion.toFixed(1)} s). Shift + arrastrar en «Pantalla» selecciona otro.`
           : "Clic en un bloque gris (o Shift + arrastrar en «Pantalla») para seleccionar un pedazo del video.");
   $("segbar").style.display = X && X.estilo === "solo_subtitulos" ? "none" : "";
@@ -1262,7 +1266,7 @@ function fronteraEn(ev) {
   for (let k = 0; k + 1 < grises.length; k++) {
     const A = grises[k], B = grises[k + 1];
     if (Math.abs(A.b - B.a) > 0.05) continue;
-    if (Math.abs(x - xDe(A.b)) <= 6 * d) return { t: A.b, min: A.a + 0.3, max: B.b - 0.3 };
+    if (Math.abs(x - xDe(A.b)) <= 6 * d) return { t: A.b, min: A.a + 0.1, max: B.b - 0.1 };
   }
   return null;
 }
@@ -1336,7 +1340,7 @@ function copiar(it) {
 async function pegar(te) {
   if (!porta) return avisar("No hay nada copiado (selecciona un bloque y Ctrl+C).");
   const a = te, b = Math.min(durE(), te + porta.dur);
-  if (b - a < 0.3) return avisar("No cabe aquí: estás al final del video.");
+  if (b - a < 0.1) return avisar("No cabe aquí: estás al final del video.");
   if (porta.tipo !== "p" && porta.tipo !== "e") sel = { tipo: porta.tipo, clave: "", a, b };   // queda seleccionado lo pegado
   if (porta.tipo === "m")
     return enviar("/edi/momento", { t: T, accion: "pegar", datos: porta.datos, inicio: aOriginal(a), fin: aOriginal(b) }, "Imagen pegada.");
@@ -1377,7 +1381,7 @@ async function partir(it, te) {
   if (it && !(it.a < te && te < it.b)) it = null;   // si el seleccionado no está bajo el cursor, se parte el que sí
   if (!it) it = itemsLinea().find(x => x.tipo === "m" && x.a < te && te < x.b) || itemsLinea().find(x => x.carril === "p" && x.a < te && te < x.b);
   if (!it) return avisar("Pon el cursor sobre un bloque (o selecciónalo) para partirlo.");
-  if (!(it.a + 0.3 <= te && te <= it.b - 0.3)) return avisar("Pon el cursor dentro del bloque (no tan cerca de sus orillas).");
+  if (!(it.a + 0.1 <= te && te <= it.b - 0.1)) return avisar("Pon el cursor dentro del bloque (no tan cerca de sus orillas).");
   if (it.tipo === "m") return enviar("/edi/momento", { t: T, accion: "dividir", i: parseInt(it.ref.k.slice(1)), t_corte: aOriginal(te) }, "Imagen partida en dos.");
   if (it.tipo === "p") return enviar("/edi/dividir_pantalla", { t: T, i: parseInt(it.ref.k.slice(1)), t_corte: aOriginal(te) }, "Tramo partido en dos.");
   if (it.tipo === "n" || it.tipo === "g") { segSel = null; return enviar("/edi/partir_toma", { t: T, t_corte: aOriginal(te) }, "Bloque partido en dos."); }
@@ -1407,7 +1411,7 @@ async function ajustarSel(it, a, b, msg) {
   if (!it) return avisar("Primero haz clic en un bloque de la línea de tiempo.");
   if (!it.mov) return avisar("Ese bloque no se puede mover.");
   a = Math.max(0, aCuadro(a)); b = Math.min(durE(), aCuadro(b));
-  if (b - a < 0.3) return avisar("El bloque quedaría muy corto.");
+  if (b - a < 0.1 - 1e-6) return avisar("El bloque quedaría muy corto.");
   sel = { ...sel, a, b };
   await guardarBloque({ it, a, b });
   if (msg) estado(msg, "ok");
@@ -2220,7 +2224,7 @@ function guardarStickers(lista, msg) {
 }
 function agregarSticker(c) {
   const te = ahoraE(), a = aOriginal(te), b = aOriginal(Math.min(durE(), te + 2.5));
-  if (b - a < 0.3) return avisar("No cabe aquí: estás al final del video.");
+  if (b - a < 0.1) return avisar("No cabe aquí: estás al final del video.");
   const nuevo = { tipo: c.tipo, inicio: a, fin: b, x: 0.5, y: 0.36, tam: c.tam, prop: 1, rot: 0, color: c.color, espejo: false };
   stSel = nuevo; sel = null;
   guardarStickers([...(E.stickers || []), nuevo], `Sticker «${c.nombre}» puesto: muévelo en la vista previa.`);
@@ -2753,7 +2757,7 @@ async function iniciar() {
       mueveSeg.nuevo = nuevo; mueveSeg.p = p; return;
     }
     if (arrLinea) {
-      const dt = tLinea(ev) - arrLinea.t0, D = durE(), MIN = 0.3;
+      const dt = tLinea(ev) - arrLinea.t0, D = durE(), MIN = 0.1;
       if (Math.abs(ev.clientX - arrLinea.x0) > 3) arrLinea.movido = true;
       if (!arrLinea.movido) return;
       const usarIman = !ev.altKey, ref = arrLinea.it.ref;
@@ -2818,7 +2822,7 @@ async function iniciar() {
     }
     if (creaSeg) {
       creaSeg = null;
-      if (segSel[1] - segSel[0] < 0.2) segSel = null;
+      if (segSel[1] - segSel[0] < 0.1 - 1e-6) segSel = null;
       pintarSegbar();
       if (segSel) estado("Pedazo seleccionado ✓", "ok");
       return;
@@ -3009,13 +3013,13 @@ async function iniciar() {
   $("e_ini_aqui").onclick = () => {
     if (!asegurarTramoE()) return;
     const t = ahoraO();
-    tramoE = [t, Math.max(tramoE[1], t + 0.3)];
+    tramoE = [t, Math.max(tramoE[1], t + 0.1)];
     escribirTramoE(); estado("Desde: " + mmss(aEditado(t)) + ". Ahora ve al final y presiona «aquí» en Hasta; luego «Aplicar tiempos».", "pend");
   };
   $("e_fin_aqui").onclick = () => {
     if (!asegurarTramoE()) return;
     const t = ahoraO();
-    tramoE = [Math.min(tramoE[0], t - 0.3), t];
+    tramoE = [Math.min(tramoE[0], t - 0.1), t];
     escribirTramoE(); estado("Hasta: " + mmss(aEditado(t)) + ". Presiona «Aplicar tiempos» para guardar.", "pend");
   };
   $("e_toma").onclick = () => { if (!asegurarTramoE()) return; const g = grupoEn(ahoraO()); tramoE = [g.inicio, g.fin]; escribirTramoE(); };

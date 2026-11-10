@@ -100,6 +100,7 @@
 <body>
 <div class="barra">
   <select id="video" style="min-width:260px"></select>
+  <button class="btn" id="b_refrescar" title="Actualizar la lista de videos (si acabas de copiar uno a la carpeta)">↻</button>
   <button class="btn" id="b_abrir">Abrir</button>
   <span class="sp"></span>
   <label class="ayuda">Estilo para nuevos <select id="estilo"></select></label>
@@ -187,7 +188,7 @@ const tituloGrupo = (g) => { const m = miembros(g); return (m.find(f => (f.titul
 
 // ---------------- carga ----------------
 async function cargarVideos() {
-  const vs = await (await fetch("/frag/videos")).json();
+  const vs = await (await fetch("/frag/videos", { cache: "no-store" })).json();
   const ant = $("video").value;
   $("video").innerHTML = vs.map(v => `<option value="${esc(v.nombre)}">${esc(v.etiqueta)}${v.duracion ? " · " + fmt(v.duracion) : ""}${v.fragmentado ? " · ✂ con fragmentos" : ""}</option>`).join("");
   if (ant) $("video").value = ant;
@@ -652,6 +653,12 @@ async function refrescar(forzar) {
 }
 setInterval(refrescar, 3000);
 
+$("b_refrescar").onclick = async () => {
+  const n0 = $("video").options.length;
+  await cargarVideos();
+  const n = $("video").options.length;
+  estado(n > n0 ? `Lista actualizada: ${n - n0} video(s) nuevo(s).` : "Lista actualizada.", "ok");
+};
 $("b_abrir").onclick = abrir;
 $("video").onchange = abrir;
 $("estilo").onchange = () => guardar();
