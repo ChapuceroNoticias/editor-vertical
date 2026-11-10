@@ -1536,6 +1536,22 @@ def dividir_pantalla(t, i, tc):
     guardar_plan(t, plan)
 
 
+def partir_escena(t, i, tc):
+    """Parte en dos un tramo de Nacho (cerca/lejos) del estilo motivacional en el tiempo tc (original)."""
+    plan, _ = cargar(t)
+    es = plan.get("encuadres", [])
+    if not 0 <= i < len(es):
+        raise ValueError("Ese tramo no existe")
+    e = es[i]
+    if not (e["inicio"] + 0.099 <= tc <= e["fin"] - 0.099):
+        raise ValueError("Pon el cursor dentro del tramo (cada parte de al menos 0.10 s) para partirlo")
+    respaldar(t)
+    e2 = json.loads(json.dumps(e))
+    e["fin"], e2["inicio"] = round(tc, 3), round(tc, 3)
+    es.insert(i + 1, e2)
+    guardar_plan(t, plan)
+
+
 def partir_toma(t, tc):
     """Parte en dos el bloque gris (la toma) en el tiempo tc (original), para mover o cambiar cada parte por separado."""
     plan, _ = cargar(t)
@@ -2460,6 +2476,12 @@ def crear_app():
     def edi_audio_tramos(d: dict = Body(...)):
         t = validar(d.get("t"))
         _ok(lambda: guardar_audio_tramos(t, d.get("tramos")))
+        return {"ok": True}
+
+    @app.post("/edi/partir_escena")
+    def edi_partir_escena(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        _ok(lambda: partir_escena(t, int(d["i"]), float(d["t_corte"])))
         return {"ok": True}
 
     @app.post("/edi/mover_toma")

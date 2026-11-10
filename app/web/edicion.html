@@ -1378,13 +1378,23 @@ async function borrar(it) {
   avisar("Ese bloque no se puede borrar.");
 }
 async function partir(it, te) {
-  if (it && !(it.a < te && te < it.b)) it = null;   // si el seleccionado no está bajo el cursor, se parte el que sí
-  if (!it) it = itemsLinea().find(x => x.tipo === "m" && x.a < te && te < x.b) || itemsLinea().find(x => x.carril === "p" && x.a < te && te < x.b);
-  if (!it) return avisar("Pon el cursor sobre un bloque (o selecciónalo) para partirlo.");
-  if (!(it.a + 0.1 <= te && te <= it.b - 0.1)) return avisar("Pon el cursor dentro del bloque (no tan cerca de sus orillas).");
+  // Ctrl+B parte en el cursor rojo el bloque de la línea en la que se trabaja: el seleccionado si está bajo el
+  // cursor; si no, el de la última línea en que se hizo clic; si no, imagen y luego pantalla
+  te = Math.round(te * 100) / 100;   // al centésimo (el marcador va de 0.10 en 0.10 s)
+  const bajo = (x) => x.a + 1e-4 < te && te < x.b - 1e-4;
+  if (it && !bajo(it)) it = null;
+  if (!it && stSel) it = itemsLinea().find(x => x.ref === stSel && bajo(x)) || null;
+  const todos = itemsLinea().filter(x => x.mov !== false && x.tipo !== "ti" && bajo(x));
+  if (!it && carrilActivo) it = todos.find(x => x.carril === carrilActivo) || null;
+  if (!it && carrilActivo === "au") return partirAudioLibre(te);   // sin sección: se crea el corte en el audio
+  if (!it) it = todos.find(x => x.tipo === "m") || todos.find(x => x.carril === "p") || todos[0] || null;
+  if (!it) return avisar("Pon el cursor rojo sobre un bloque (o haz clic en su línea) para partirlo.");
+  if (!(it.a + 0.1 - 1e-3 <= te && te <= it.b - 0.1 + 1e-3))
+    return avisar("Cada parte debe durar al menos 0.10 s: mueve el cursor un poco más adentro del bloque.");
   if (it.tipo === "m") return enviar("/edi/momento", { t: T, accion: "dividir", i: parseInt(it.ref.k.slice(1)), t_corte: aOriginal(te) }, "Imagen partida en dos.");
   if (it.tipo === "p") return enviar("/edi/dividir_pantalla", { t: T, i: parseInt(it.ref.k.slice(1)), t_corte: aOriginal(te) }, "Tramo partido en dos.");
   if (it.tipo === "n" || it.tipo === "g") { segSel = null; return enviar("/edi/partir_toma", { t: T, t_corte: aOriginal(te) }, "Bloque partido en dos."); }
+  if (it.tipo === "e") return enviar("/edi/partir_escena", { t: T, i: parseInt(it.ref.k.slice(1)), t_corte: aOriginal(te) }, "Tramo partido en dos.");
   if (it.tipo === "st") {
     const tc = aOriginal(te), lista = E.stickers.filter(x => x !== it.ref);
     lista.push({ ...it.ref, fin: tc }, { ...it.ref, inicio: tc });
@@ -1406,6 +1416,14 @@ async function partir(it, te) {
     return enviar(it.tipo === "en" ? "/enc/guardar" : "/enc/guardar_pantalla", { t: T, ajustes: lista }, "Encuadre partido en dos.");
   }
   avisar("Ese bloque no se puede partir.");
+}
+function partirAudioLibre(te) {   // Ctrl+B en el audio donde no hay sección: separa el audio en ese punto
+  const tc = aOriginal(te), D = E.video.duracion, lista = (E.audio_tramos || []).slice();
+  const antes = lista.filter(x => x.fin <= tc + 1e-6).reduce((m, x) => Math.max(m, x.fin), 0);
+  const despues = lista.filter(x => x.inicio >= tc - 1e-6).reduce((m, x) => Math.min(m, x.inicio), D);
+  if (tc - antes < 0.1 - 1e-3 || despues - tc < 0.1 - 1e-3) return avisar("Cada parte del audio debe durar al menos 0.10 s.");
+  lista.push({ inicio: antes, fin: tc, ganancia: 1 }, { inicio: tc, fin: despues, ganancia: 1 });
+  return guardarAudio(lista, "Audio partido: cada parte se puede silenciar o cambiar de volumen.");
 }
 async function ajustarSel(it, a, b, msg) {
   if (!it) return avisar("Primero haz clic en un bloque de la línea de tiempo.");
@@ -1489,6 +1507,12 @@ function atajos(ev) {
 }
 // ---------- secciones de audio (silenciar / volumen) ----------
 let creaAud = null;
+let carrilActivo = null;   // última línea de la línea de tiempo en la que se hizo clic (para Ctrl+B)
+function carrilEn(ev) {
+  const r = linea.getBoundingClientRect(), y = ev.clientY - r.top;
+  for (const [c, [cy, ch]] of Object.entries(CARRILES)) if (y >= cy - 2 && y <= cy + ch + 2) return c;
+  return null;
+}
 const enCarrilAu = (ev) => { const r = linea.getBoundingClientRect(), y = ev.clientY - r.top; const [cy, ch] = CARRILES.au; return y >= cy - 2 && y <= cy + ch + 2; };
 function gananciaAudio(tO) {   // volumen de la sección de audio en t (tiempo original); 1 = normal
   const a = (E && E.audio_tramos || []).find(x => x.inicio <= tO && tO < x.fin);
@@ -2694,6 +2718,7 @@ async function iniciar() {
   // el cursor y la línea guía van de 0.10 en 0.10 s (con Alt: libre)
   const tCursor = (ev, t) => { t = Math.min(durE(), Math.max(0, t ?? tLinea(ev))); return ev && ev.altKey ? t : Math.min(durE(), Math.round(t * 10) / 10); };
   linea.addEventListener("pointerdown", (ev) => {
+    carrilActivo = carrilEn(ev);
     linea.setPointerCapture(ev.pointerId); video.pause();
     const mc = marcaCorteEn(ev);
     if (mc) { elegirCorte(mc, true); return; }
