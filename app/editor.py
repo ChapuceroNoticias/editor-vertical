@@ -2310,7 +2310,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-09f v1.8.5"
+VERSION = "2026-11-09g v1.8.6"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -2643,6 +2643,13 @@ def _cmd_analizar(args):
                    "estilo dividida|completa, imagenes: rutas), 'cortes' (borrar los que no quieras) "
                    "y volver a correr 'render'. O usa interfaz.py para pedirlo por chat."),
     }
+    if "layouts" in pl and pl.get("estilo") not in ("motivacional", "solo_subtitulos"):
+        try:   # ratos en que «Nacho a pantalla completa» es un video vertical con barras negras
+            plan["verticales"] = tramos_verticales(plan["video"], segs, plan["info"])
+            if plan["verticales"]:
+                log(f"Videos verticales con barras negras: {len(plan['verticales'])} tramo(s); se encajan completos")
+        except Exception as e:
+            log(f"No pude revisar los videos verticales ({e})")
     guardar_json(trabajo / "plan.json", plan)
     log(f"Plan guardado en {trabajo / 'plan.json'}")
     Progreso.paso(1.0, "Análisis terminado")
@@ -3063,55 +3070,136 @@ def recortar_persona(frame, x0, y0, cw, ch, ry, aw, ah):
     return out
 
 
-def caja_util_toma(cap, s, W, H):
-    """Si la toma es un video vertical metido en el 16:9 (barras negras a los lados), el recuadro con imagen;
-    si no, 0. Se miran 5 cuadros de la toma."""
-    cols = filas = None
-    for f in (0.1, 0.3, 0.5, 0.7, 0.9):
-        cap.set(cv2.CAP_PROP_POS_MSEC, (s["inicio"] + (s["fin"] - s["inicio"]) * f) * 1000)
+def caja_vertical(fr, gris=None, tam=None):
+    """Si el cuadro es un video vertical metido en el 16:9 (barras NEGRAS parejas a los dos lados), el recuadro con
+    imagen [x, y, w, h]; si no, None. Una captura de pantalla oscura no cuenta: las barras deben ser negras de verdad.
+    'gris': el cuadro ya en gris a 480x270 (entonces 'tam' = (ancho, alto) del video)."""
+    if gris is None:
+        g = cv2.cvtColor(cv2.resize(fr, (480, 270), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY).astype(np.float32)
+        tam = (fr.shape[1], fr.shape[0])
+    else:
+        g = gris.astype(np.float32)
+    negra = (g.mean(0) < 10) & (np.percentile(g, 97, axis=0) < 28)
+    negra[:3] = negra[3]; negra[-3:] = negra[-4]   # una orilla de 1-2 px con ruido no cuenta
+    W = g.shape[1]
+    a = 0
+    while a < W and negra[a]:
+        a += 1
+    b = W
+    while b > a and negra[b - 1]:
+        b -= 1
+    if a < W * 0.08 or W - b < W * 0.08 or b - a < W * 0.15:
+        return None
+    filas = np.where(g[:, a:b].mean(1) > 9)[0]
+    if len(filas) < 20:
+        return None
+    y0, y1 = int(filas.min()), int(filas.max()) + 1
+    if (b - a) / max(1, y1 - y0) > 0.8:
+        return None   # lo que queda en medio no es vertical
+    sx, sy = tam[0] / 480, tam[1] / 270
+    return [int(a * sx), int(y0 * sy), int((b - a) * sx), int((y1 - y0) * sy)]
+
+
+def tramos_verticales(video, tomas, info):
+    """Tramos (tiempo original) en que lo que se ve de Nacho a pantalla completa es en realidad un video vertical con
+    barras negras: [{"inicio", "fin", "caja"}]. Se revisa cada ~0.5 s y los bordes se afinan al cuadro."""
+    cap = cv2.VideoCapture(str(video))
+    fps = info.get("fps") or 30.0
+
+    def caja_en(tt):
+        cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, tt) * 1000)
         ok, fr = cap.read()
-        if not ok or fr is None:
-            continue
-        g = cv2.cvtColor(cv2.resize(fr, (W, H)) if fr.shape[1] != W else fr, cv2.COLOR_BGR2GRAY)
-        c, r = g.mean(0) > 14, g.mean(1) > 14
-        cols = c if cols is None else (cols | c)
-        filas = r if filas is None else (filas | r)
-    if cols is None or cols.sum() < 20 or filas.sum() < 20:
-        return 0
-    xs, ys = np.where(cols)[0], np.where(filas)[0]
-    x0, x1, y0, y1 = int(xs.min()), int(xs.max()) + 1, int(ys.min()), int(ys.max()) + 1
-    if x0 < W * 0.08 or W - x1 < W * 0.08 or (x1 - x0) / max(1, y1 - y0) > 0.8:
-        return 0   # no hay barras a los dos lados o no es vertical
-    return [x0, y0, x1 - x0, y1 - y0]
+        return caja_vertical(fr) if ok and fr is not None else None
+
+    def parecida(c1, c2):
+        return c1 is not None and c2 is not None and all(abs(u - v) <= 24 for u, v in zip(c1, c2))
+
+    def borde(t_si, t_no, caja):   # busca el cambio entre un tiempo con el vertical y uno sin él
+        while abs(t_no - t_si) > 1.5 / fps:
+            m = (t_si + t_no) / 2
+            if parecida(caja_en(m), caja):
+                t_si = m
+            else:
+                t_no = m
+        return (t_si + t_no) / 2
+
+    # muestreo rápido: ffmpeg entrega el video completo a 2 cuadros por segundo, chico y en gris
+    tam = (int(info["ancho"]), int(info["alto"]))
+    fps_m = 2.0 if info.get("duracion", 0) < 3600 else 1.0
+    muestras = {}
+    try:
+        pr = subprocess.run(["ffmpeg", "-v", "error", "-i", str(video), "-an", "-vf",
+                             f"fps={fps_m},scale=480:270,format=gray", "-f", "rawvideo", "-"],
+                            capture_output=True, timeout=1800, **({"creationflags": 0x08000000} if os.name == "nt" else {}))
+        n = len(pr.stdout) // (480 * 270)
+        cuadros = np.frombuffer(pr.stdout[:n * 480 * 270], np.uint8).reshape(n, 270, 480)
+        for k in range(n):
+            muestras[round((k + 0.5) / fps_m, 3)] = caja_vertical(None, cuadros[k], tam)
+    except Exception as e:
+        log(f"Videos verticales: muestreo con ffmpeg falló ({e}); uso OpenCV")
+    out = []
+    try:
+        for s in tomas:
+            if s.get("layout") == "dividida":
+                continue
+            a, b = float(s["inicio"]), float(s["fin"])
+            if muestras:
+                ts = [tt for tt in sorted(muestras) if a <= tt < b]
+                cajas = [muestras[tt] for tt in ts]
+            else:
+                paso = max(0.5, (b - a) / 1500)
+                ts = [a + k * paso for k in range(int((b - a) / paso) + 1)]
+                cajas = [caja_en(tt) for tt in ts]
+            if not ts:
+                continue
+            k = 0
+            while k < len(ts):
+                if cajas[k] is None:
+                    k += 1
+                    continue
+                c, j = cajas[k], k
+                while j + 1 < len(ts) and parecida(cajas[j + 1], c):
+                    j += 1
+                if j > k or (ts[j] - ts[k]) >= 0:   # al menos una muestra
+                    ini = a if k == 0 else borde(ts[k], ts[k - 1], c)
+                    fin = b if j == len(ts) - 1 else borde(ts[j], ts[j + 1], c)
+                    if fin - ini >= 0.8:
+                        out.append({"inicio": round(ini, 3), "fin": round(fin, 3), "caja": c})
+                k = j + 1
+    finally:
+        cap.release()
+    return out
 
 
 def asegurar_util(trabajo, plan, pl):
-    """Marca (una sola vez) las tomas de Nacho a pantalla completa que en realidad son un video vertical con barras
-    negras: esas se «encajan» completas bajo el título en lugar de recortarse. Guarda el plan si cambió."""
+    """Busca (una sola vez) los ratos en que la toma de Nacho a pantalla completa es en realidad un video vertical
+    con barras negras: esos se «encajan» completos bajo el título en lugar de recortarse. Guarda el plan."""
     if "layouts" not in pl or plan.get("estilo") in ("motivacional", "solo_subtitulos") or \
             pl.get("estilo") in ("motivacional", "solo_subtitulos"):
         return plan
-    faltan = [s for s in plan.get("tomas", []) if s.get("layout") != "dividida" and "util" not in s]
-    if not faltan or not Path(plan["video"]).exists():
+    if "verticales" in plan or not Path(plan["video"]).exists():
         return plan
-    cap = cv2.VideoCapture(str(plan["video"]))
-    W, H = int(plan["info"]["ancho"]), int(plan["info"]["alto"])
     try:
-        for s in faltan:
-            s["util"] = caja_util_toma(cap, s, W, H)
-    finally:
-        cap.release()
+        plan["verticales"] = tramos_verticales(plan["video"], plan.get("tomas", []), plan["info"])
+    except Exception as e:
+        log(f"No pude revisar los videos verticales ({e})")
+        return plan
     try:
         (Path(trabajo) / "plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=1), encoding="utf-8")
     except Exception as e:
-        log(f"No pude guardar las tomas verticales en el plan ({e})")
+        log(f"No pude guardar los videos verticales en el plan ({e})")
     return plan
 
 
-def encajar_toma(toma):
-    """Recuadro a encajar completo de una toma de Nacho, o None (encajar=None: automático; True/False: a mano)."""
-    u = toma.get("util") if toma.get("layout") != "dividida" else None
-    return [float(v) for v in u] if u and toma.get("encajar") is not False else None
+def encajar_toma(plan, toma, t):
+    """Recuadro del video vertical a encajar completo en el tiempo t (toma de Nacho a pantalla completa), o None.
+    Cada tramo: «encajar» ausente = automático (sí), False = recortar como antes."""
+    if toma.get("layout") == "dividida":
+        return None
+    for v in plan.get("verticales") or []:
+        if v["inicio"] <= t < v["fin"]:
+            return [float(x) for x in v["caja"]] if v.get("encajar") is not False else None
+    return None
 
 
 def encajar_pv(pv):
@@ -3733,8 +3821,8 @@ def escena_en(plan, pl, t):
                                "auto": list(ventana_pantalla(pv, t, iw / ih, False, cfg_p))}
     if arr:   # arriba se ve la imagen: no hay recuadro de Nacho que mover
         return {"tipo": "persona" if lay == "persona" else "dividida", **extra}
-    if encajar_toma(toma):   # video vertical con barras negras: completo bajo el título
-        return {"tipo": "contenida", "region": encajar_toma(toma), "lay": "dividida" if lay == "ganso" else lay,
+    if encajar_toma(plan, toma, t):   # video vertical con barras negras: completo bajo el título
+        return {"tipo": "contenida", "region": encajar_toma(plan, toma, t), "lay": "dividida" if lay == "ganso" else lay,
                 "encajar": 1, **extra}
     if cfg["persona"].get("ajuste") == "contener" and region[2] / region[3] < (aw / ah) * 0.8:
         return {"tipo": "contenida", "region": region, "lay": "dividida" if lay == "ganso" else lay, **extra}
@@ -5079,8 +5167,8 @@ def cmd_render(args):
             else:
                 cara = interp_cara(toma["cara"], t)
                 region = caja_p if toma["layout"] == "dividida" else [0, 0, frame.shape[1], frame.shape[0]]
-                if encajar_toma(toma):   # video vertical con barras negras: completo bajo el título
-                    pers = encajar_completo(frame, encajar_toma(toma), aw, ah, max(0, tope_tit - ay))
+                if encajar_toma(plan, toma, t):   # video vertical con barras negras: completo bajo el título
+                    pers = encajar_completo(frame, encajar_toma(plan, toma, t), aw, ah, max(0, tope_tit - ay))
                 elif cfg["persona"].get("ajuste") == "contener" and region[2] / region[3] < (aw / ah) * 0.8:
                     pers = persona_contenida(frame, region, cara, aw, ah, cfg["persona"])
                 else:

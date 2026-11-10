@@ -781,9 +781,8 @@ def encajables(plan):
     """Tramos (tiempo original) con un video vertical que puede ir completo bajo el título o recortado:
     [inicio, fin, encajado ahora (1/0), 'toma' | 'pantalla']."""
     out = []
-    for s_ in plan.get("tomas", []):
-        if s_.get("layout") != "dividida" and s_.get("util"):
-            out.append([s_["inicio"], s_["fin"], 0 if s_.get("encajar") is False else 1, "toma"])
+    for v in plan.get("verticales") or []:
+        out.append([v["inicio"], v["fin"], 0 if v.get("encajar") is False else 1, "toma"])
     for p in plan.get("proyeccion", []):
         if ed.encajar_pv(dict(p, encajar=None)):
             out.append([p["inicio"], p["fin"], 0 if p.get("encajar") is False else 1, "pantalla"])
@@ -801,9 +800,9 @@ def guardar_encajar(t, momento, valor):
             p["encajar"], hecho = bool(valor), "pantalla"
             break
     if not hecho:
-        for s_ in plan.get("tomas", []):
-            if s_["inicio"] <= tt < s_["fin"] and s_.get("layout") != "dividida" and s_.get("util"):
-                s_["encajar"], hecho = bool(valor), "toma"
+        for v in plan.get("verticales") or []:
+            if v["inicio"] <= tt < v["fin"]:
+                v["encajar"], hecho = bool(valor), "toma"
                 break
     if not hecho:
         return {"ok": False, "mensaje": "Aquí no hay un video vertical que encajar."}
@@ -824,7 +823,7 @@ def datos_encuadre(t):
     info = plan["info"]
     # las muestras no cambian si solo cambian los ajustes a mano
     firma = json.dumps({k: plan.get(k) for k in ("tomas", "proyeccion", "momentos", "cortes", "encuadres", "cara",
-                                                 "titulo", "titulo_fin", "plantilla", "transiciones_camara")}, sort_keys=True, default=str)
+                                                 "titulo", "titulo_fin", "plantilla", "transiciones_camara", "verticales")}, sort_keys=True, default=str)
     clave = (str(p_plan), hash(firma))
     if clave not in _CACHE_ENC:
         if estilo == "motivacional":

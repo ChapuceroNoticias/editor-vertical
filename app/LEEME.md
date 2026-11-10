@@ -228,7 +228,8 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
   para que el título no le tape el pelo; lo que queda detrás de la barra se rellena con la toma difuminada.
 - **Videos verticales completos**: si una toma (o un video proyectado a pantalla completa) es un video vertical con
   barras negras a los lados, se ve completo debajo del título, con los lados rellenos del mismo video difuminado.
-  Se detecta solo; en Encuadre → «Encajar completo» / «Recortar» se cambia para esa toma.
+  Se detecta solo por ratos (aunque la toma mezcle estudio y video vertical); en Encuadre → «Encajar completo» /
+  «Recortar» se cambia para ese rato.
 - **Captura del video**: toma el cuadro completo.
 - **Secciones de audio**: Shift + arrastrar en «Audio» separa una sección; abajo se silencia o se sube/baja su volumen
   (0–300 %). Solo afecta la voz del video, la música de fondo sigue.
