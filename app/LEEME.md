@@ -232,6 +232,11 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
   «Recortar» se cambia para ese rato.
 - **Tramos de 0.10 s**: en todos los carriles (Pantalla, imágenes, encuadres, difuminar, stickers, audio y la
   selección para quitar pedazos) se puede partir y dejar bloques de hasta 0.10 s.
+- **Nuevo acomodo (1.9.1)**: en Edición la vista previa «Así se verá» es grande a la derecha, las herramientas van
+  junto al video y la línea de tiempo abajo; el título y sus controles comparten renglón con las pestañas; la leyenda
+  de colores y los atajos están en el menú de la izquierda (igual la ayuda de Subtítulos). Arriba solo queda
+  «Cancelar todo» (se exporta desde la pestaña Exportar). En Subtítulos, al reproducir solo se recorre la lista,
+  ya no se mueve la página.
 - **Letra e interlineado del título** (todos los estilos): junto a «Guardar título» (Edición, y Subtítulos en «Solo
   subtítulos») hay «Letra» (− / número / + / A = automático) e «Interlineado» (− / +, en %). El título va en los
   renglones que pongas con Enter (hasta 3) y siempre se acomoda dentro de su área (si no cabe, la letra se achica).

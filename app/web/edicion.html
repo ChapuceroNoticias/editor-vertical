@@ -161,10 +161,37 @@
   .pestanas button.activa { color: #fff; box-shadow: inset 0 -2px 0 var(--acento); }
   .inspector .card { background: transparent; border: 0; border-radius: 0; padding: 18px; gap: 14px; display: none; }
   .inspector .card.visible { display: flex; }
-  @media (max-width: 1100px) {
-    .mesa { flex-direction: column; }
-    .inspector { position: static; max-width: none; width: 100%; flex-basis: auto; border-left: 0; border-top: 1px solid var(--linea); min-height: 0; max-height: none; }
+  /* ---------- acomodo: vista previa grande a la derecha; herramientas junto al video; línea de tiempo abajo ---------- */
+  .mesa { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; min-height: 0; }
+  .principal { min-width: 0; padding-bottom: 10px; }
+  .zona { display: flex !important; flex-wrap: nowrap !important; gap: 12px; padding: 12px 12px 8px 14px; align-items: flex-start; justify-content: flex-start !important; }
+  /* el video se achica si hace falta para que la línea de tiempo quepa completa en la pantalla */
+  .escenario { flex: 0 0 auto; width: min(calc(100% - 292px), max(460px, calc((100vh - 470px) * 16 / 9))); min-width: 300px; max-width: none; }
+  .inspector { position: static !important; flex: 1 1 300px; width: auto; min-width: 280px; max-width: 520px; min-height: 0 !important; max-height: none;
+    border: 1px solid var(--linea) !important; border-radius: 12px; overflow-y: auto; overflow-x: hidden; align-self: start; }
+  .pestanas button { font-size: 11.5px; padding: 0 2px; height: 40px; }
+  .inspector .card { padding: 14px; gap: 12px; }
+  .stk_lib { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .lado { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 14px 12px 4px; position: sticky; top: 0; }
+  .lado .rotulo { order: 0; }
+  #previa { height: calc(100vh - 104px); min-height: 420px; width: auto; aspect-ratio: 9 / 16; border-radius: 12px; }
+  .controles { padding: 0 12px 0 14px; }
+  @media (max-width: 1000px) {
+    .mesa { grid-template-columns: 1fr; }
+    .zona { flex-direction: column; }
+    .escenario { width: 100%; }
+    .inspector { width: 100%; max-width: none; height: auto !important; }
+    .lado { position: static; align-items: center; }
+    #previa { height: auto; width: 320px; }
   }
+  /* dentro de la plataforma: la fila de arriba comparte renglón con las pestañas Edición/Subtítulos/Exportar,
+     el aviso y la versión van en la cabecera y la leyenda en el menú de la izquierda */
+  body.incrustado .barra { padding-left: 300px; min-height: 54px; }
+  @media (max-width: 1500px) {   /* pantallas chicas: la barra de arriba más compacta */
+    .barra .campo_titulo { flex: 1 1 200px; } .barra .campo_titulo > span, .tit_aj > span { display: none; }
+    #b_render { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  }
+  body.incrustado #estado, body.incrustado #version, body.incrustado .leyenda { display: none !important; }
 </style>
 </head>
 <body>
@@ -194,66 +221,7 @@
       <video id="video" preload="auto" playsinline></video>
       <canvas id="capa"></canvas>
     </div>
-    <div class="lado">
-      <canvas id="previa" width="500" height="888"></canvas>
-      <span class="rotulo">Así se verá</span>
-    </div>
-  </div>
-  <div class="controles">
-    <button class="btn clara" id="b_play">▶ Reproducir</button>
-    <button class="btn fant" id="b_m1" title="1 segundo atrás (Shift + ←)">−1 s</button>
-    <button class="btn fant" id="b_mf" title="Un cuadro atrás (←)">◀ cuadro</button>
-    <button class="btn fant" id="b_pf" title="Un cuadro adelante (→)">cuadro ▶</button>
-    <button class="btn fant" id="b_p1" title="1 segundo adelante (Shift + →)">+1 s</button>
-    <span class="tiempo" id="tiempo">00:00:00</span>
-    <span id="fluida" style="color:var(--suave);font-size:12px"></span>
-    <span class="sp" style="flex:1"></span>
-    <span class="volumenes" id="volumenes">
-      <label id="vol_fondo_caja" title="Volumen de la música de fondo (fijo: ya no baja sola cuando hablan). 100% = como viene en la plantilla. Se usa en la vista previa y en el video final.">Fondo
-        <input type="range" id="vol_fondo" min="0" max="200" step="5" value="100"> <b id="vol_fondo_txt">100%</b></label>
-      <label title="Volumen del audio del video (la voz). 100% = como viene. Se usa en la vista previa y en el video final.">Voz
-        <input type="range" id="vol_voz" min="0" max="200" step="5" value="100"> <b id="vol_voz_txt">100%</b></label>
-    </span>
-  </div>
-  <div class="linea"><canvas id="linea"></canvas>
-    <div class="desliza" id="desliza" title="Arrastra para moverte por el video cuando la línea de tiempo está acercada (Ctrl + rueda)"><div id="desliza_p"></div></div></div>
-  <div class="segbar" id="audbar">
-    <b>Audio:</b>
-    <span id="aud_info" class="sub">Shift + arrastrar en «Audio» separa una sección para silenciarla o cambiarle el volumen.</span>
-    <button class="btn" id="aud_mute" disabled title="Silencia (o regresa el sonido de) la sección seleccionada">🔇 Silenciar</button>
-    <span class="sub">Volumen</span><input type="range" id="aud_vol" min="0" max="300" step="5" value="100" disabled style="width:140px">
-    <span id="aud_vol_txt" class="sub">100%</span>
-    <button class="btn" id="aud_quitar" disabled title="Quita la sección (vuelve al volumen normal) (Supr)">Quitar sección</button>
-  </div>
-  <div class="segbar" id="segbar">
-    <b>Segmento del video:</b>
-    <span id="seg_info" class="sub">Clic en un bloque gris (o Shift + arrastrar en «Pantalla») para seleccionar un pedazo del video.</span>
-    <button class="btn" id="seg_cortar" title="Quita ese pedazo del video y lo guarda para pegarlo en otro lugar (Ctrl+X)">Cortar</button>
-    <button class="btn" id="seg_copiar" title="Lo guarda para pegarlo en otro lugar sin quitarlo (Ctrl+C)">Copiar</button>
-    <button class="btn" id="seg_pegar" title="Pega el pedazo copiado donde está el cursor; lo que sigue se recorre (Ctrl+V)">Pegar en el cursor</button>
-    <button class="btn" id="seg_duplicar" title="Lo repite justo después (Ctrl+D)">Duplicar</button>
-    <button class="btn" id="seg_quitar" title="Quita ese pedazo del video sin guardarlo (como «Quitar tramo»; se puede restaurar) (Supr)">Quitar</button>
-    <span class="sub">· Arrástralo para moverlo (con <b>Ctrl</b> al soltar deja una copia)</span>
-  </div>
-  <div class="leyenda">
-    <span><i style="background:var(--c-completa)"></i>Pantalla completa</span>
-    <span><i style="background:var(--c-dividida)"></i>Dividida</span>
-    <span><i style="background:var(--c-ganso)"></i>Dividida Ganso</span>
-    <span><i style="background:var(--c-nacho)"></i>Solo Nacho</span>
-    <span><i style="background:var(--c-916)"></i>9:16 (vista vertical de todo el video)</span>
-    <span><i style="background:var(--c-imagen)"></i>Imagen</span>
-    <span><i style="background:var(--c-arriba)"></i>Imagen arriba (en lugar de Nacho)</span>
-    <span><i style="background:var(--c-manual)"></i>Encuadre de Nacho corregido</span>
-    <span><i style="background:var(--c-pantallaman)"></i>Pantalla de Nacho acomodada</span>
-    <span><i style="background:var(--c-titulo)"></i>Título (motivacional: estira su orilla)</span>
-    <span><i style="background:var(--c-difuminar)"></i>Difuminar subtítulos del video</span>
-    <span><i style="background:var(--c-sticker)"></i>Sticker</span>
-    <span class="ayuda">Clic: seleccionar · arrastra o estira las orillas (con <b>Alt</b>, sin imán) · <b>Ctrl + rueda</b>: acercar · <b>Doble clic</b>: llevar el cursor (de 0.10 en 0.10 s · con <b>Alt</b>: libre)</span>
-  </div>
-
- </div>
-
-  <aside class="inspector" id="panel">
+    <aside class="inspector" id="panel">
     <nav class="pestanas" id="pestanas" aria-label="Herramientas"></nav>
     <!-- Pantalla -->
     <div class="card" data-tab="Pantalla">
@@ -451,6 +419,65 @@
   </div>
     </div>
   </aside>
+  </div>
+  <div class="controles">
+    <button class="btn clara" id="b_play">▶ Reproducir</button>
+    <button class="btn fant" id="b_m1" title="1 segundo atrás (Shift + ←)">−1 s</button>
+    <button class="btn fant" id="b_mf" title="Un cuadro atrás (←)">◀ cuadro</button>
+    <button class="btn fant" id="b_pf" title="Un cuadro adelante (→)">cuadro ▶</button>
+    <button class="btn fant" id="b_p1" title="1 segundo adelante (Shift + →)">+1 s</button>
+    <span class="tiempo" id="tiempo">00:00:00</span>
+    <span id="fluida" style="color:var(--suave);font-size:12px"></span>
+    <span class="sp" style="flex:1"></span>
+    <span class="volumenes" id="volumenes">
+      <label id="vol_fondo_caja" title="Volumen de la música de fondo (fijo: ya no baja sola cuando hablan). 100% = como viene en la plantilla. Se usa en la vista previa y en el video final.">Fondo
+        <input type="range" id="vol_fondo" min="0" max="200" step="5" value="100"> <b id="vol_fondo_txt">100%</b></label>
+      <label title="Volumen del audio del video (la voz). 100% = como viene. Se usa en la vista previa y en el video final.">Voz
+        <input type="range" id="vol_voz" min="0" max="200" step="5" value="100"> <b id="vol_voz_txt">100%</b></label>
+    </span>
+  </div>
+  <div class="linea"><canvas id="linea"></canvas>
+    <div class="desliza" id="desliza" title="Arrastra para moverte por el video cuando la línea de tiempo está acercada (Ctrl + rueda)"><div id="desliza_p"></div></div></div>
+  <div class="segbar" id="audbar">
+    <b>Audio:</b>
+    <span id="aud_info" class="sub">Shift + arrastrar en «Audio» separa una sección para silenciarla o cambiarle el volumen.</span>
+    <button class="btn" id="aud_mute" disabled title="Silencia (o regresa el sonido de) la sección seleccionada">🔇 Silenciar</button>
+    <span class="sub">Volumen</span><input type="range" id="aud_vol" min="0" max="300" step="5" value="100" disabled style="width:140px">
+    <span id="aud_vol_txt" class="sub">100%</span>
+    <button class="btn" id="aud_quitar" disabled title="Quita la sección (vuelve al volumen normal) (Supr)">Quitar sección</button>
+  </div>
+  <div class="segbar" id="segbar">
+    <b>Segmento del video:</b>
+    <span id="seg_info" class="sub">Clic en un bloque gris (o Shift + arrastrar en «Pantalla») para seleccionar un pedazo del video.</span>
+    <button class="btn" id="seg_cortar" title="Quita ese pedazo del video y lo guarda para pegarlo en otro lugar (Ctrl+X)">Cortar</button>
+    <button class="btn" id="seg_copiar" title="Lo guarda para pegarlo en otro lugar sin quitarlo (Ctrl+C)">Copiar</button>
+    <button class="btn" id="seg_pegar" title="Pega el pedazo copiado donde está el cursor; lo que sigue se recorre (Ctrl+V)">Pegar en el cursor</button>
+    <button class="btn" id="seg_duplicar" title="Lo repite justo después (Ctrl+D)">Duplicar</button>
+    <button class="btn" id="seg_quitar" title="Quita ese pedazo del video sin guardarlo (como «Quitar tramo»; se puede restaurar) (Supr)">Quitar</button>
+    <span class="sub">· Arrástralo para moverlo (con <b>Ctrl</b> al soltar deja una copia)</span>
+  </div>
+  <div class="leyenda">
+    <span><i style="background:var(--c-completa)"></i>Pantalla completa</span>
+    <span><i style="background:var(--c-dividida)"></i>Dividida</span>
+    <span><i style="background:var(--c-ganso)"></i>Dividida Ganso</span>
+    <span><i style="background:var(--c-nacho)"></i>Solo Nacho</span>
+    <span><i style="background:var(--c-916)"></i>9:16 (vista vertical de todo el video)</span>
+    <span><i style="background:var(--c-imagen)"></i>Imagen</span>
+    <span><i style="background:var(--c-arriba)"></i>Imagen arriba (en lugar de Nacho)</span>
+    <span><i style="background:var(--c-manual)"></i>Encuadre de Nacho corregido</span>
+    <span><i style="background:var(--c-pantallaman)"></i>Pantalla de Nacho acomodada</span>
+    <span><i style="background:var(--c-titulo)"></i>Título (motivacional: estira su orilla)</span>
+    <span><i style="background:var(--c-difuminar)"></i>Difuminar subtítulos del video</span>
+    <span><i style="background:var(--c-sticker)"></i>Sticker</span>
+    <span class="ayuda">Clic: seleccionar · arrastra o estira las orillas (con <b>Alt</b>, sin imán) · <b>Ctrl + rueda</b>: acercar · <b>Doble clic</b>: llevar el cursor (de 0.10 en 0.10 s · con <b>Alt</b>: libre)</span>
+  </div>
+
+ </div>
+
+  <div class="lado">
+    <span class="rotulo">Así se verá</span>
+    <canvas id="previa" width="540" height="960"></canvas>
+  </div>
  </div>
 </template>
 
@@ -506,7 +533,19 @@ let sel = null, porta = null;
 // selección de pantalla e imagen
 let tramoP = null, cambioP = null, momSel = -1, nuevoEstilo = "dividida", estiloMom = null, prioMom = "pantalla";
 
-function estado(txt, cls) { const e = $("estado"); e.textContent = txt || ""; e.title = txt || ""; e.className = cls || ""; }
+function estado(txt, cls) {
+  const e = $("estado"); e.textContent = txt || ""; e.title = txt || ""; e.className = cls || "";
+  if (INCRUSTADO) try { parent.postMessage({ tipo: "estado_edi", txt: txt || "", cls: cls || "" }, "*"); } catch (err) {}
+}
+const INCRUSTADO = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+if (INCRUSTADO) document.body.classList.add("incrustado");
+// el panel de herramientas mide lo mismo que el video (lo que no quepa se recorre dentro del panel)
+function igualarPanel() {
+  const es = document.getElementById("escenario"), pn = document.getElementById("panel");
+  if (!es || !pn) return;
+  pn.style.height = window.innerWidth <= 1000 ? "auto" : Math.max(300, es.offsetHeight) + "px";
+}
+window.addEventListener("resize", igualarPanel);
 
 // ---------- tiempos ----------
 function aEditado(t) {
@@ -2687,8 +2726,10 @@ async function iniciar() {
   linea = $("linea"); lctx = linea.getContext("2d");
   const [W, H] = E.salida;
   previa.height = Math.round(previa.width * H / W);
-  previa.style.height = "auto";   // alto según su ancho (proporción del video vertical)
+  previa.style.aspectRatio = `${W} / ${H}`;   // el alto lo pone la pantalla; el ancho sale de la proporción
   $("escenario").style.aspectRatio = `${E.video.ancho} / ${E.video.alto}`;
+  try { new ResizeObserver(igualarPanel).observe($("escenario")); } catch (err) {}
+  setTimeout(igualarPanel, 50);
   vista = [0, durE()];
   for (const key of ["dividida", "ganso"])
     if (E.armado[key] && E.armado[key].franja_fondo) { franjaImgs[key] = new Image(); franjaImgs[key].src = `/enc/franja?t=${encodeURIComponent(T)}&lay=${key}`; }

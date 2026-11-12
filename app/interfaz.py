@@ -3294,7 +3294,49 @@ button.secondary { background: #1D1D22 !important; border: 1px solid #2A2A30 !im
 #aviso_video { margin: 16px 44px 0 !important; padding: 18px 20px !important; border: 1px solid #5A4520 !important; border-radius: 12px !important;
   background: #17140D !important; gap: 12px !important; }
 #aviso_video p { margin: 0 0 4px; color: #EDEDF0; }
+/* ---------- acomodo: cabecera de una sola fila, pestañas junto a la barra del editor, ayudas en el menú ---------- */
+#contenido { position: relative; }
+#progreso_caja { position: absolute !important; top: 0; right: 0; width: min(44%, 620px); z-index: 6; border-bottom: 0 !important;
+  padding: 10px 20px !important; background: #0B0B0D; flex-wrap: nowrap !important; }
+#cabeza_trabajo { flex-wrap: nowrap !important; padding-right: calc(min(44%, 620px) + 20px) !important; min-height: 62px; }
+#trabajo_actual { flex: 0 1 auto !important; min-width: 0; }
+#estado_edi_caja { flex: 1 1 auto !important; min-width: 0; background: transparent !important; border: 0 !important; padding: 0 !important; }
+#estado_edi { font: 400 13px "Geist", sans-serif; color: #9A9AA3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#estado_edi.ok { color: #3DD68C; } #estado_edi.pend { color: #F2A33A; } #estado_edi.err { color: #FF6B6F; }
+#pasos { position: relative; }
+#pasos > .tab-wrapper { position: absolute !important; top: 0; left: 0; z-index: 5; padding: 33px 20px 0 !important; background: transparent; }
+#pasos > .tabitem { padding: 0 !important; }
+#pasos > .tabitem#tab_exportar { padding: 28px 0 0 !important; }
+#pasos iframe { height: calc(100vh - 100px) !important; min-height: 640px; }
+#nav .ayuda-lat { display: none; padding: 14px 10px 0; font: 400 11.5px/1.45 "Geist", sans-serif; color: #6E6E78; }
+#nav .ayuda-lat .ley { display: flex; align-items: center; gap: 7px; margin: 0 0 5px; color: #9A9AA3; }
+#nav .ayuda-lat i { flex: 0 0 10px; width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+#nav .ayuda-lat p { margin: 10px 0 0; } #nav .ayuda-lat b { color: #C9C9CF; font-weight: 500; }
+body.ver-edi #nav .ayuda-lat#ayuda_edi, body.ver-subs #nav .ayuda-lat#ayuda_subs { display: block; }
+#nav.mini .ayuda-lat { display: none !important; }
+#nav .carpeta .ver { display: block; margin-bottom: 8px; font: 400 11px "Geist Mono", monospace; color: #6E6E78; }
+#nav.mini .carpeta { display: none; }
 #caja_registro textarea { font: 12.5px/1.5 "Geist Mono", monospace !important; background: #0B0B0D !important; }
+"""
+
+AYUDA_LATERAL = """
+<div class="ayuda-lat" id="ayuda_edi">
+  <div class="ley"><i style="background:#D9484E"></i>Pantalla completa</div><div class="ley"><i style="background:#3B82F6"></i>Dividida</div>
+  <div class="ley"><i style="background:#6366f1"></i>Dividida Ganso</div><div class="ley"><i style="background:#3A3A42"></i>Solo Nacho</div>
+  <div class="ley"><i style="background:#8B5CF6"></i>9:16 (vista vertical de todo el video)</div>
+  <div class="ley"><i style="background:#2FB873"></i>Imagen</div><div class="ley"><i style="background:#14b8a6"></i>Imagen arriba (en lugar de Nacho)</div>
+  <div class="ley"><i style="background:#C9C9CF"></i>Encuadre de Nacho corregido</div><div class="ley"><i style="background:#60A5FA"></i>Pantalla de Nacho acomodada</div>
+  <div class="ley"><i style="background:#E5E7EB"></i>Título (motivacional: estira su orilla)</div>
+  <div class="ley"><i style="background:#C084FC"></i>Difuminar subtítulos del video</div><div class="ley"><i style="background:#F2A33A"></i>Sticker</div>
+  <p><b>Clic</b>: seleccionar · arrastra o estira las orillas (con <b>Alt</b>, sin imán)<br><b>Ctrl + rueda</b>: acercar<br>
+  <b>Doble clic</b>: llevar el cursor (de 0.10 en 0.10 s · con <b>Alt</b>: libre)<br><b>Ctrl + B</b>: partir en el cursor (la línea en que hiciste clic)</p>
+</div>
+<div class="ayuda-lat" id="ayuda_subs">
+  <p><b>Enter</b> siguiente<br><b>Shift+Enter</b> cortar renglón<br><b>＋</b> agregar debajo<br>
+  <b>☑</b> marca varios para subirlos o bajarlos juntos<br><b>▲▼</b> altura (Shift = 50 px) o arrastrándolo en el video<br>
+  <b>Alt+↑↓</b> mover el que se ve</p>
+  <p>Texto vacío = quitar · tiempos en min:seg:centésimas del video editado</p>
+</div>
 """
 
 TEMA_JS = """() => {
@@ -3311,6 +3353,23 @@ TEMA_JS = """() => {
   poner(mini);
   // por si la página vuelve a dibujar el menú
   setInterval(() => { const n = document.getElementById('nav'); if (n && n.classList.contains('mini') !== MINI) poner(MINI); }, 700);
+  // aviso del editor (va en la cabecera, junto al título del trabajo)
+  window.addEventListener('message', (ev) => {
+    const d = ev.data || {};
+    if (d.tipo !== 'estado_edi') return;
+    const e = document.getElementById('estado_edi'); if (!e) return;
+    e.textContent = d.txt; e.title = d.txt; e.className = d.cls || '';
+  });
+  // ayuda del menú: la de Edición o la de Subtítulos, según lo que se ve
+  setInterval(() => {
+    const area = document.getElementById('area');
+    const ve = area && area.offsetParent !== null;
+    const sel = document.querySelector('#pasos [role=tablist] button.selected, #pasos [role=tablist] button[aria-selected=true]');
+    const tab = ve && sel ? sel.textContent.trim() : '';
+    document.body.classList.toggle('ver-edi', tab === 'Edición');
+    document.body.classList.toggle('ver-subs', tab === 'Subtítulos');
+    if (tab !== 'Edición') { const e = document.getElementById('estado_edi'); if (e && e.textContent) e.textContent = ''; }
+  }, 400);
   document.addEventListener('click', (ev) => {
     if (!ev.target.closest('#nav .plegar')) return;
     const m = !MINI; poner(m);
@@ -3387,7 +3446,9 @@ def construir():
                         '<button class="plegar" type="button" title="Ocultar menú"></button></div>')
                 botones_nav = [gr.Button(txt, elem_id=f"nav_{k}", elem_classes=["nav"] + (["activo"] if k == "editor" else []),
                                          size="sm") for k, txt in NAV]
-                gr.HTML(f'<div class="relleno"></div><div class="carpeta">Carpeta<b>{CARPETA_VIDEOS}</b></div>')
+                gr.HTML(AYUDA_LATERAL)
+                gr.HTML(f'<div class="relleno"></div><div class="carpeta"><span class="ver">v {ed.VERSION}</span>'
+                        f'Carpeta<b>{CARPETA_VIDEOS}</b></div>')
                 btn_cerrar = gr.Button("Cerrar", elem_id="btn_cerrar", size="sm")
             # Cerrar: detiene todo lo que esté trabajando, apaga la plataforma y deja la pestaña en blanco
             btn_cerrar.click(None, None, None, js=JS_CERRAR)
@@ -3437,13 +3498,16 @@ def construir():
                             with gr.Row(elem_id="cabeza_trabajo", equal_height=True):
                                 btn_volver = gr.Button("←", elem_id="btn_volver", scale=0, min_width=40)
                                 actual = gr.Markdown(elem_id="trabajo_actual")
-                                btn_exportar = gr.Button("Exportar", variant="primary", elem_id="btn_exportar", scale=0, min_width=120)
+                                gr.HTML('<div id="estado_edi"></div>', elem_id="estado_edi_caja")
+                                # (el botón «Exportar» de arriba se quitó: se exporta desde la pestaña Exportar)
+                                btn_exportar = gr.Button("Exportar", variant="primary", elem_id="btn_exportar", scale=0,
+                                                         min_width=120, visible=False)
                             with gr.Tabs(elem_id="pasos", selected="edicion") as pasos:
                                 with gr.Tab("Edición", id="edicion"):
                                     editor_edi = gr.HTML(iframe_edi(None))
                                 with gr.Tab("Subtítulos", id="subtitulos"):
                                     editor_subs = gr.HTML(iframe_subs(None))
-                                with gr.Tab("Exportar", id="exportar"):
+                                with gr.Tab("Exportar", id="exportar", elem_id="tab_exportar"):
                                     with gr.Column(elem_classes=["seccion"]):
                                         gr.Markdown("Arma el video final (MP4 1080×1920) cuando termines de revisar **Edición** y "
                                                     "**Subtítulos**. Mientras revisas no hace falta: las vistas previas ya muestran "
