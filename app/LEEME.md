@@ -232,6 +232,9 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
   «Recortar» se cambia para ese rato.
 - **Tramos de 0.10 s**: en todos los carriles (Pantalla, imágenes, encuadres, difuminar, stickers, audio y la
   selección para quitar pedazos) se puede partir y dejar bloques de hasta 0.10 s.
+- **Liberar memoria** (menú de la izquierda): si después de horas la plataforma se alenta, un clic suelta la memoria
+  que fue guardando, cierra ffmpeg que quedaron colgados y borra temporales viejos; luego recarga la página. No toca
+  el trabajo ni lo que se esté exportando o analizando en ese momento.
 - **Nuevo acomodo (1.9.1)**: en Edición la vista previa «Así se verá» es grande a la derecha, las herramientas van
   junto al video y la línea de tiempo abajo; el título y sus controles comparten renglón con las pestañas; la leyenda
   de colores y los atajos están en el menú de la izquierda (igual la ayuda de Subtítulos). Arriba solo queda

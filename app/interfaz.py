@@ -1208,6 +1208,122 @@ def cancelar_todo():
     return len(vivos), en_cola
 
 
+def liberar_memoria():
+    """«Liberar memoria»: suelta lo que la plataforma fue guardando en memoria, cierra los ffmpeg que quedaron
+    colgados (nunca los de una exportación o análisis en curso) y borra temporales viejos. No toca el trabajo."""
+    import gc
+    try:
+        import psutil
+    except Exception:
+        psutil = None
+    yo = psutil.Process() if psutil else None
+    antes = yo.memory_info().rss if yo else 0
+    # 1) lo que está trabajando ahora no se toca (ni sus hijos)
+    with _ACTIVOS_LOCK:
+        vivos = [x for x in _ACTIVOS if x.poll() is None]
+    protegidos = set()
+    if psutil:
+        for x in vivos:
+            try:
+                pp = psutil.Process(x.pid)
+                protegidos |= {pp.pid} | {c.pid for c in pp.children(recursive=True)}
+            except Exception:
+                pass
+    # 2) ffmpeg / ffprobe / editor.py colgados: hijos de la plataforma que ya nadie espera, o huérfanos de ella
+    cerrados = 0
+    if psutil:
+        mios = {c.pid for c in yo.children(recursive=True)}
+        carpeta = str(CARPETA_VIDEOS).lower()
+        for pr in psutil.process_iter(["pid", "name", "ppid", "cmdline", "create_time"]):
+            try:
+                nombre = (pr.info["name"] or "").lower()
+                cmd = " ".join(pr.info["cmdline"] or []).lower()
+                es_ff = nombre.startswith(("ffmpeg", "ffprobe"))
+                es_editor = nombre.startswith("python") and "editor.py" in cmd and str(BASE).lower() in cmd
+                if not (es_ff or es_editor) or pr.pid in protegidos or time.time() - pr.info["create_time"] < 20:
+                    continue
+                huerfano = not psutil.pid_exists(pr.info["ppid"]) or pr.info["ppid"] in (0, 1)
+                if pr.pid in mios or (huerfano and (carpeta in cmd or "_trabajo" in cmd or "editor.py" in cmd)):
+                    for h in pr.children(recursive=True):
+                        h.kill()
+                    pr.kill()
+                    cerrados += 1
+            except Exception:
+                pass
+    # 3) memoria guardada de la plataforma (se vuelve a calcular sola cuando haga falta)
+    _CACHE_ENC.clear()
+    _CACHE_MARCOS.clear()
+    _GPU_CACHE.update(t=0, datos=None)
+    for d in (_PROXY_TRABAJOS, _RENDER_EDI, _DIF_PROC, _SUGERIR, _CORTINILLA):
+        for k in list(d):
+            v = d.get(k)
+            pr = v.get("proc") if isinstance(v, dict) else v
+            if pr is None or not hasattr(pr, "poll") or pr.poll() is not None:
+                try:
+                    if isinstance(v, dict) and v.get("archivo"):
+                        v["archivo"].close()
+                except Exception:
+                    pass
+                d.pop(k, None)
+    for nombre in ("_PROBE_CACHE", "_GANANCIA_VOZ"):
+        try:
+            getattr(ed, nombre).clear()
+        except Exception:
+            pass
+    # 4) temporales viejos (más de 1 hora) que quedaron de vistas previas o exportaciones canceladas
+    borrado, n_arch = 0, 0
+    if not vivos:
+        hace = time.time() - 3600
+        try:
+            trabajos = [p for p in CARPETA_VIDEOS.glob("*_trabajo") if p.is_dir()]
+        except Exception:
+            trabajos = []
+        for tdir in trabajos:
+            for f in list(tdir.glob("*_tmp.mp4")) + list(tdir.glob("_tramos/**/*")):
+                try:
+                    if f.is_file() and f.stat().st_mtime < hace:
+                        borrado += f.stat().st_size
+                        f.unlink()
+                        n_arch += 1
+                except Exception:
+                    pass
+            for d in sorted(tdir.glob("_tramos/**/"), key=lambda x: -len(str(x))):
+                try:
+                    d.rmdir()
+                except Exception:
+                    pass
+        import tempfile
+        tg = Path(tempfile.gettempdir()) / "gradio"   # copias que Gradio guarda de cada video subido o mostrado
+        if tg.exists():
+            for f in tg.rglob("*"):
+                try:
+                    if f.is_file() and f.stat().st_mtime < time.time() - 6 * 3600:
+                        borrado += f.stat().st_size
+                        f.unlink()
+                        n_arch += 1
+                except Exception:
+                    pass
+    gc.collect()
+    if os.name == "nt":   # Windows: devuelve al sistema la memoria que el programa ya no usa
+        try:
+            import ctypes
+            ctypes.windll.psapi.EmptyWorkingSet(ctypes.windll.kernel32.GetCurrentProcess())
+        except Exception:
+            pass
+    despues = yo.memory_info().rss if yo else 0
+    liberada = max(0, antes - despues)
+    partes = [f"memoria de la plataforma: {antes / 2**20:.0f} → {despues / 2**20:.0f} MB" if yo else "memoria liberada"]
+    if cerrados:
+        partes.append(f"{cerrados} proceso(s) colgado(s) cerrado(s)")
+    if n_arch:
+        partes.append(f"{n_arch} temporal(es) borrado(s) ({borrado / 2**20:.0f} MB)")
+    if vivos:
+        partes.append(f"{len(vivos)} tarea(s) en curso no se tocaron (temporales se limpian cuando terminen)")
+    msg = "🧹 Liberar memoria: " + " · ".join(partes)
+    registrar(msg)
+    return msg, liberada
+
+
 def estado_proxy(t, plan=None, arrancar=True):
     """{"proxy": {...} o None, "preparando": bool}. Si la copia ligera falta o ya no corresponde a las pausas
     actuales, se prepara sola en segundo plano."""
@@ -3210,6 +3326,15 @@ footer { display: none !important; }
 #nav_largo::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='5'%20width='18'%20height='14'%20rx='2'/%3E%3Cpath%20d='M7%205v14M17%205v14M3%209.5h4M3%2014.5h4M17%209.5h4M17%2014.5h4'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='5'%20width='18'%20height='14'%20rx='2'/%3E%3Cpath%20d='M7%205v14M17%205v14M3%209.5h4M3%2014.5h4M17%209.5h4M17%2014.5h4'/%3E%3C/svg%3E"); }
 #nav_aprendido::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9%2018h6M10%2021h4'/%3E%3Cpath%20d='M12%203a6%206%200%200%200-3.5%2010.9c.6.5%201%201.2%201%202.1h5c0-.9.4-1.6%201-2.1A6%206%200%200%200%2012%203z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9%2018h6M10%2021h4'/%3E%3Cpath%20d='M12%203a6%206%200%200%200-3.5%2010.9c.6.5%201%201.2%201%202.1h5c0-.9.4-1.6%201-2.1A6%206%200%200%200%2012%203z'/%3E%3C/svg%3E"); }
 #nav_registro::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M8%206h12M8%2012h12M8%2018h12'/%3E%3Ccircle%20cx='4'%20cy='6'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='12'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='18'%20r='.6'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M8%206h12M8%2012h12M8%2018h12'/%3E%3Ccircle%20cx='4'%20cy='6'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='12'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='18'%20r='.6'/%3E%3C/svg%3E"); }
+#btn_liberar { justify-content: flex-start !important; height: 38px; padding: 0 10px !important; border: 0 !important;
+  background: transparent !important; color: #9A9AA3 !important; box-shadow: none !important; font-weight: 400 !important;
+  font-size: 14px !important; margin-top: 4px; white-space: nowrap; overflow: hidden; }
+#btn_liberar:hover { color: #3DD68C !important; background: rgba(61,214,140,.08) !important; }
+#btn_liberar::before { content: ''; flex: 0 0 18px; width: 18px; height: 18px; margin-right: 10px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3%2012a9%209%200%200%201%2015.5-6.2L21%208'/%3E%3Cpath%20d='M21%203v5h-5'/%3E%3Cpath%20d='M21%2012a9%209%200%200%201-15.5%206.2L3%2016'/%3E%3Cpath%20d='M3%2021v-5h5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3%2012a9%209%200%200%201%2015.5-6.2L21%208'/%3E%3Cpath%20d='M21%203v5h-5'/%3E%3Cpath%20d='M21%2012a9%209%200%200%201-15.5%206.2L3%2016'/%3E%3Cpath%20d='M3%2021v-5h5'/%3E%3C/svg%3E") center / contain no-repeat; }
+#nav.mini #btn_liberar { font-size: 0 !important; justify-content: center !important; padding: 0 !important; }
+#nav.mini #btn_liberar::before { margin-right: 0; }
 #btn_cerrar::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%203v8'/%3E%3Cpath%20d='M6.3%206.8a8%208%200%201%200%2011.4%200'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%203v8'/%3E%3Cpath%20d='M6.3%206.8a8%208%200%201%200%2011.4%200'/%3E%3C/svg%3E"); }
 #nav button.nav::before, #btn_cerrar::before { content: ''; flex: 0 0 18px; width: 18px; height: 18px; margin-right: 10px; background: currentColor; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
 #nav button.nav, #btn_cerrar { white-space: nowrap; overflow: hidden; }
@@ -3346,13 +3471,27 @@ TEMA_JS = """() => {
   const poner = (mini) => {
     MINI = mini;
     const n = document.getElementById('nav'); if (n) n.classList.toggle('mini', mini);
-    document.querySelectorAll('#nav button.nav, #btn_cerrar').forEach(b => { b.title = mini ? b.textContent.trim() : ''; });
+    document.querySelectorAll('#nav button.nav, #btn_cerrar, #btn_liberar').forEach(b => { b.title = mini ? b.textContent.trim() : ''; });
     const p = document.querySelector('#nav .plegar'); if (p) p.title = mini ? 'Mostrar menú' : 'Ocultar menú';
   };
   let mini = false; try { mini = localStorage.getItem('nav_mini') === '1'; } catch (e) {}
   poner(mini);
   // por si la página vuelve a dibujar el menú
   setInterval(() => { const n = document.getElementById('nav'); if (n && n.classList.contains('mini') !== MINI) poner(MINI); }, 700);
+  // después de «Liberar memoria» la página se recarga: aquí se avisa qué se liberó
+  try {
+    const m = sessionStorage.getItem('liberado');
+    if (m) {
+      sessionStorage.removeItem('liberado');
+      const d = document.createElement('div');
+      d.textContent = m;
+      d.style.cssText = 'position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:9999;background:#141417;' +
+        'border:1px solid #2F6B4F;color:#3DD68C;font:400 13px Geist,sans-serif;padding:10px 16px;border-radius:10px;' +
+        'box-shadow:0 8px 30px rgba(0,0,0,.5);max-width:80vw;transition:opacity .4s';
+      document.body.appendChild(d);
+      setTimeout(() => { d.style.opacity = '0'; setTimeout(() => d.remove(), 500); }, 6000);
+    }
+  } catch (e) {}
   // aviso del editor (va en la cabecera, junto al título del trabajo)
   window.addEventListener('message', (ev) => {
     const d = ev.data || {};
@@ -3446,12 +3585,18 @@ def construir():
                         '<button class="plegar" type="button" title="Ocultar menú"></button></div>')
                 botones_nav = [gr.Button(txt, elem_id=f"nav_{k}", elem_classes=["nav"] + (["activo"] if k == "editor" else []),
                                          size="sm") for k, txt in NAV]
+                btn_liberar = gr.Button("Liberar memoria", elem_id="btn_liberar", size="sm")
                 gr.HTML(AYUDA_LATERAL)
                 gr.HTML(f'<div class="relleno"></div><div class="carpeta"><span class="ver">v {ed.VERSION}</span>'
                         f'Carpeta<b>{CARPETA_VIDEOS}</b></div>')
                 btn_cerrar = gr.Button("Cerrar", elem_id="btn_cerrar", size="sm")
             # Cerrar: detiene todo lo que esté trabajando, apaga la plataforma y deja la pestaña en blanco
             btn_cerrar.click(None, None, None, js=JS_CERRAR)
+            # Liberar memoria: limpia en el servidor y luego recarga la página (el navegador suelta lo suyo)
+            msg_liberar = gr.Textbox(visible=False)
+            btn_liberar.click(lambda: liberar_memoria()[0], None, msg_liberar, queue=False).then(
+                None, msg_liberar, None,
+                js="(m) => { try { sessionStorage.setItem('liberado', m || ''); } catch (e) {} location.reload(); }")
 
             # ======================== contenido ========================
             with gr.Column(elem_id="contenido", scale=1):
