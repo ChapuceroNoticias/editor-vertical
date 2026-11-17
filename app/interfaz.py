@@ -1447,6 +1447,8 @@ def datos_armado(plan, pl):
                       "n": len(m.get("imagenes") or []), "marcos": marcos_momento(m, plan, pl)}
                      for m in plan.get("momentos", [])],
         "titulo_fin": plan.get("titulo_fin", 3.0) if plan.get("titulo") else 0,
+        # «Tiktoks Gaby»: el título y los subtítulos van juntos todo el video (como en el render)
+        "gaby": bool(ed.estilo_motivacional().es_gaby(pl)),
         # transiciones de cambio de cámara de Nacho (tiempo original) y la cortinilla limpia que las tapa
         "transiciones": [[t_["inicio"], t_["fin"]] for t_ in plan.get("transiciones_camara") or []],
         "cortinilla": info_cortinilla(pl),

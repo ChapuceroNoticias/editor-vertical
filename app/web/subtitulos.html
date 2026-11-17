@@ -600,7 +600,9 @@ function ventana(t, e) {
 }
 function disenoVivo() {
   const t = tO();
-  if (E.estilo === "motivacional") return t < E.armado.titulo_fin ? "titulo" : "frases";
+  // mientras se ve el título no hay subtítulos, salvo en «Tiktoks Gaby» (ahí van juntos, como en el video final;
+  // antes, si el título llegaba hasta el final, no se veía ningún subtítulo en el armado en vivo)
+  if (E.estilo === "motivacional") return t < E.armado.titulo_fin && !E.armado.gaby ? "titulo" : "frases";
   const e = muestra(t);
   return (e.tipo === "dividida" || (e.tipo === "contenida" && e.ex[6] === 1)) ? (gansoEn(t) ? "ganso" : "dividida") : "persona";
 }
