@@ -1,0 +1,128 @@
+{
+  "nombre": "Tiktoks Motivacionales",
+  "estilo": "motivacional",
+  "descripcion": "Nacho a pantalla completa con cambios de encuadre (cerca/lejos) en los cortes, título inicial en recuadro negro, subtítulos por frase, pausas acortadas con efecto dramático y muy pocas imágenes a pantalla completa.",
+  "salida": {
+    "ancho": 1080,
+    "alto": 1920,
+    "crf": 20,
+    "audio_kbps": 125
+  },
+  "encuadre": {
+    "_nota": "lejos = toda la altura del video; cerca = acercamiento (zoom_cerca) anclado abajo. Cambia de uno a otro en un corte de pausa cuando pasan los segundos de 'ritmo_seg' (se van alternando). Mientras está el título se usa zoom_titulo con la cara a la altura cara_y_titulo (0 = arriba, 1 = abajo).",
+    "inicial": "cerca",
+    "alto_lejos": 1.0,
+    "zoom_cerca": 1.19,
+    "ancla": "abajo",
+    "desplazamiento_x": 0.05,
+    "nitidez": 0.3,
+    "ritmo_seg": [
+      3.2,
+      5.5,
+      4.0,
+      6.5,
+      4.5,
+      3.5,
+      6.0,
+      5.0
+    ],
+    "zoom_titulo": 1.3,
+    "cara_y_titulo": 0.34
+  },
+  "titulo": {
+    "_nota": "Recuadro negro con borde blanco al inicio. Se quita en el primer corte después de min_seg (máximo max_seg).",
+    "fuente": "assets/AkuKamu.otf",
+    "tam": 132,
+    "interlineado": 1.08,
+    "max_lineas": 4,
+    "color": "#FFFFFF",
+    "color_caja": "#000000",
+    "color_borde": "#FFFFFF",
+    "borde": 7,
+    "radio": 70,
+    "caja_x": [
+      110,
+      968
+    ],
+    "centro_y": 1502,
+    "relleno": [
+      60,
+      100
+    ],
+    "mayusculas": true,
+    "min_seg": 2.7,
+    "max_seg": 5.0
+  },
+  "subtitulos": {
+    "modo": "frases",
+    "fuente": "assets/Staatliches-Regular.ttf",
+    "tam": 74,
+    "tam_min": 58,
+    "interlineado": 1.1,
+    "max_lineas": 2,
+    "ancho_max": 845,
+    "centro": [
+      466,
+      1562
+    ],
+    "color": "#FFFFFF",
+    "contorno": 4,
+    "color_contorno": "#000000",
+    "sombra": [
+      3,
+      5
+    ],
+    "sombra_difusa": 2,
+    "sombra_opacidad": 0.75,
+    "max_caracteres": 42,
+    "mayusculas": true,
+    "caracteres_ideal": 26,
+    "pausa_forzada_seg": 0.7,
+    "puntuar_con_ia": true,
+    "_nota": "Subtítulos por idea: se cortan en la puntuación (cada pregunta aparte), en pausas largas y antes de 'y', 'pero', 'porque'; nunca terminan en 'el', 'de', 'que'. caracteres_ideal/max_caracteres: largo de cada subtítulo. puntuar_con_ia: el modelo local corrige ¿? . , antes de armarlos."
+  },
+  "momentos": {
+    "_nota": "Muy pocas imágenes: solo cuando se nombra a alguien o algo reconocible. Una imagen por persona si se enumeran varias.",
+    "cada_seg": 40,
+    "duracion_min": 2.5,
+    "duracion_max": 3.5,
+    "imagenes_por_momento": 1,
+    "efecto": "zoom_in",
+    "intensidad": 0.1,
+    "max_candidatos": 8,
+    "puntaje_min": 7
+  },
+  "transicion": {
+    "_nota": "La imagen (y luego Nacho de regreso) entra desde la derecha girando.",
+    "duracion_seg": 0.12,
+    "angulo": 40
+  },
+  "cortes": {
+    "_nota": "Pausas menores a pausa_min_seg quedan intactas. En las largas se deja: dejar_antes_seg antes de la siguiente palabra, y después de la última palabra: coma, frase u oración (punto). Las 'dramáticas' (remates elegidos por la IA y el final) dejan más.",
+    "activar": true,
+    "umbral_rel_db": 16,
+    "pausa_min_seg": 0.5,
+    "dejar_antes_seg": 0.1,
+    "dejar_coma_seg": 0.15,
+    "dejar_frase_seg": 0.22,
+    "dejar_oracion_seg": 0.4,
+    "dejar_oracion_larga_seg": 0.6,
+    "dejar_dramatico_seg": 0.95,
+    "dramaticas_cada_seg": 45,
+    "inicio_dejar_seg": 0.08,
+    "final_dejar_seg": 0.5
+  },
+  "audio": {
+    "musica": null,
+    "nivelar_voz": false
+  },
+  "toma_fija": {
+    "_nota": "Tomas fijas: el recuadro NO sigue a la persona. Se queda quieto mientras la cara se mueva dentro del margen; si se sale, salta de golpe (corte) a otra posición fija, de preferencia en una pausa recortada cercana. margen_x: cuánto puede moverse de lado (fracción del ancho del recuadro). margen_y: cuánto arriba/abajo (en altos de cara). margen_tam: cuánto puede acercarse/alejarse (1.35 = 35%). min_seg: duración mínima de cada toma. adelantar_corte: hasta cuántos segundos antes se puede adelantar el salto para que caiga en una pausa recortada. activar=false regresa al seguimiento suave anterior.",
+    "activar": true,
+    "margen_x": 0.35,
+    "margen_y": 0.8,
+    "margen_tam": 1.35,
+    "min_seg": 1.5,
+    "adelantar_corte": 1.5
+  }
+}
