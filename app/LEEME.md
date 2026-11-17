@@ -232,6 +232,20 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
   «Recortar» se cambia para ese rato.
 - **Tramos de 0.10 s**: en todos los carriles (Pantalla, imágenes, encuadres, difuminar, stickers, audio y la
   selección para quitar pedazos) se puede partir y dejar bloques de hasta 0.10 s.
+- **Cámara de Nacho de forma libre en la pantalla dividida** (Clips Chapuceros y Fuera): en Encuadre, estira el
+  recuadro de Nacho desde sus esquinas a lo ancho o a lo alto, como el de la pantalla (con Shift conserva la forma).
+  Se ve completo bajo el título, con los lados difuminados. También aplica cuando Nacho se ve como recuadro completo.
+- **Mover las tomas en «Así se verá»**: arrastra la toma de arriba de la franja (Nacho) o la de abajo (la pantalla)
+  directo en la vista previa para acomodarla; la rueda la acerca o la aleja. Se guarda sola para ese tramo, igual que
+  en Encuadre.
+- **Liberar memoria** (menú de la izquierda): si después de horas la plataforma se alenta, un clic suelta la memoria
+  que fue guardando, cierra ffmpeg que quedaron colgados y borra temporales viejos; luego recarga la página. No toca
+  el trabajo ni lo que se esté exportando o analizando en ese momento.
+- **Nuevo acomodo (1.9.1)**: en Edición la vista previa «Así se verá» es grande a la derecha, las herramientas van
+  junto al video y la línea de tiempo abajo; el título y sus controles comparten renglón con las pestañas; la leyenda
+  de colores y los atajos están en el menú de la izquierda (igual la ayuda de Subtítulos). Arriba solo queda
+  «Cancelar todo» (se exporta desde la pestaña Exportar). En Subtítulos, al reproducir solo se recorre la lista,
+  ya no se mueve la página.
 - **Letra e interlineado del título** (todos los estilos): junto a «Guardar título» (Edición, y Subtítulos en «Solo
   subtítulos») hay «Letra» (− / número / + / A = automático) e «Interlineado» (− / +, en %). El título va en los
   renglones que pongas con Enter (hasta 3) y siempre se acomoda dentro de su área (si no cabe, la letra se achica).

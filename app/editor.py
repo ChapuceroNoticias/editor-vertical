@@ -2320,7 +2320,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-10c v1.9.0"
+VERSION = "2026-11-17c v1.9.5"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3222,6 +3222,15 @@ def encajar_toma(plan, toma, t):
     return None
 
 
+def libre_nacho(manual, t, fw, fh):
+    """Recuadro de Nacho de forma libre (cualquier ancho y alto) puesto a mano en Encuadre o en «Así se verá»:
+    se ve completo, bajo el título, con los lados difuminados (como la pantalla de abajo). None si no hay."""
+    e = dentro(t, manual or []) if t is not None else None
+    if not e or e.get("modo") != "libre":
+        return None
+    return [float(v) for v in ventana_manual(manual, t, [0, 0, fw, fh], 1.0, None)]
+
+
 def encajar_pv(pv):
     """Lo mismo para un video vertical proyectado a pantalla completa."""
     if not pv or not pv.get("caja") or pv.get("encajar") is False:
@@ -3841,6 +3850,10 @@ def escena_en(plan, pl, t):
                                "auto": list(ventana_pantalla(pv, t, iw / ih, False, cfg_p))}
     if arr:   # arriba se ve la imagen: no hay recuadro de Nacho que mover
         return {"tipo": "persona" if lay == "persona" else "dividida", **extra}
+    lib = libre_nacho(plan.get("encuadre_manual"), t, plan["info"]["ancho"], plan["info"]["alto"])
+    if lib:   # recuadro de Nacho de forma libre: completo bajo el título
+        return {"tipo": "contenida", "region": lib, "lay": "dividida" if lay == "ganso" else lay, "encajar": 1,
+                "libre": 1, **extra}
     if encajar_toma(plan, toma, t):   # video vertical con barras negras: completo bajo el título
         return {"tipo": "contenida", "region": encajar_toma(plan, toma, t), "lay": "dividida" if lay == "ganso" else lay,
                 "encajar": 1, **extra}
@@ -5187,7 +5200,10 @@ def cmd_render(args):
             else:
                 cara = interp_cara(toma["cara"], t)
                 region = caja_p if toma["layout"] == "dividida" else [0, 0, frame.shape[1], frame.shape[0]]
-                if encajar_toma(plan, toma, t):   # video vertical con barras negras: completo bajo el título
+                lib = libre_nacho(manual, t, frame.shape[1], frame.shape[0])
+                if lib:   # recuadro de Nacho de forma libre (a mano): completo bajo el título
+                    pers = encajar_completo(frame, lib, aw, ah, max(0, tope_tit - ay))
+                elif encajar_toma(plan, toma, t):   # video vertical con barras negras: completo bajo el título
                     pers = encajar_completo(frame, encajar_toma(plan, toma, t), aw, ah, max(0, tope_tit - ay))
                 elif cfg["persona"].get("ajuste") == "contener" and region[2] / region[3] < (aw / ah) * 0.8:
                     pers = persona_contenida(frame, region, cara, aw, ah, cfg["persona"])

@@ -131,7 +131,7 @@
      0,
      0,
      1080,
-     1070
+     1234
     ],
     "zoom": 1.0,
     "cara_y": 0.4,
@@ -147,26 +147,26 @@
    "franja": {
     "area": [
      0,
-     1070,
+     1234,
      1080,
-     193
+     200
     ],
     "fondo": "assets/franja_subtitulos.jpg"
    },
    "subtitulos": {
     "area": [
      30,
-     1070,
+     1234,
      880,
-     193
+     200
     ]
    },
    "inferior": {
     "area": [
      0,
-     1263,
+     1434,
      1080,
-     657
+     486
     ],
     "ajuste": "cubrir",
     "foco_y": 0.5

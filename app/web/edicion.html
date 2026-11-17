@@ -161,10 +161,37 @@
   .pestanas button.activa { color: #fff; box-shadow: inset 0 -2px 0 var(--acento); }
   .inspector .card { background: transparent; border: 0; border-radius: 0; padding: 18px; gap: 14px; display: none; }
   .inspector .card.visible { display: flex; }
-  @media (max-width: 1100px) {
-    .mesa { flex-direction: column; }
-    .inspector { position: static; max-width: none; width: 100%; flex-basis: auto; border-left: 0; border-top: 1px solid var(--linea); min-height: 0; max-height: none; }
+  /* ---------- acomodo: vista previa grande a la derecha; herramientas junto al video; línea de tiempo abajo ---------- */
+  .mesa { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; min-height: 0; }
+  .principal { min-width: 0; padding-bottom: 10px; }
+  .zona { display: flex !important; flex-wrap: nowrap !important; gap: 12px; padding: 12px 12px 8px 14px; align-items: flex-start; justify-content: flex-start !important; }
+  /* el video se achica si hace falta para que la línea de tiempo quepa completa en la pantalla */
+  .escenario { flex: 0 0 auto; width: min(calc(100% - 292px), max(460px, calc((100vh - 470px) * 16 / 9))); min-width: 300px; max-width: none; }
+  .inspector { position: static !important; flex: 1 1 300px; width: auto; min-width: 280px; max-width: 520px; min-height: 0 !important; max-height: none;
+    border: 1px solid var(--linea) !important; border-radius: 12px; overflow-y: auto; overflow-x: hidden; align-self: start; }
+  .pestanas button { font-size: 11.5px; padding: 0 2px; height: 40px; }
+  .inspector .card { padding: 14px; gap: 12px; }
+  .stk_lib { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .lado { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 14px 12px 4px; position: sticky; top: 0; }
+  .lado .rotulo { order: 0; }
+  #previa { height: calc(100vh - 104px); min-height: 420px; width: auto; aspect-ratio: 9 / 16; border-radius: 12px; }
+  .controles { padding: 0 12px 0 14px; }
+  @media (max-width: 1000px) {
+    .mesa { grid-template-columns: 1fr; }
+    .zona { flex-direction: column; }
+    .escenario { width: 100%; }
+    .inspector { width: 100%; max-width: none; height: auto !important; }
+    .lado { position: static; align-items: center; }
+    #previa { height: auto; width: 320px; }
   }
+  /* dentro de la plataforma: la fila de arriba comparte renglón con las pestañas Edición/Subtítulos/Exportar,
+     el aviso y la versión van en la cabecera y la leyenda en el menú de la izquierda */
+  body.incrustado .barra { padding-left: 300px; min-height: 54px; }
+  @media (max-width: 1500px) {   /* pantallas chicas: la barra de arriba más compacta */
+    .barra .campo_titulo { flex: 1 1 200px; } .barra .campo_titulo > span, .tit_aj > span { display: none; }
+    #b_render { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  }
+  body.incrustado #estado, body.incrustado #version, body.incrustado .leyenda { display: none !important; }
 </style>
 </head>
 <body>
@@ -194,66 +221,7 @@
       <video id="video" preload="auto" playsinline></video>
       <canvas id="capa"></canvas>
     </div>
-    <div class="lado">
-      <canvas id="previa" width="500" height="888"></canvas>
-      <span class="rotulo">Así se verá</span>
-    </div>
-  </div>
-  <div class="controles">
-    <button class="btn clara" id="b_play">▶ Reproducir</button>
-    <button class="btn fant" id="b_m1" title="1 segundo atrás (Shift + ←)">−1 s</button>
-    <button class="btn fant" id="b_mf" title="Un cuadro atrás (←)">◀ cuadro</button>
-    <button class="btn fant" id="b_pf" title="Un cuadro adelante (→)">cuadro ▶</button>
-    <button class="btn fant" id="b_p1" title="1 segundo adelante (Shift + →)">+1 s</button>
-    <span class="tiempo" id="tiempo">00:00:00</span>
-    <span id="fluida" style="color:var(--suave);font-size:12px"></span>
-    <span class="sp" style="flex:1"></span>
-    <span class="volumenes" id="volumenes">
-      <label id="vol_fondo_caja" title="Volumen de la música de fondo (fijo: ya no baja sola cuando hablan). 100% = como viene en la plantilla. Se usa en la vista previa y en el video final.">Fondo
-        <input type="range" id="vol_fondo" min="0" max="200" step="5" value="100"> <b id="vol_fondo_txt">100%</b></label>
-      <label title="Volumen del audio del video (la voz). 100% = como viene. Se usa en la vista previa y en el video final.">Voz
-        <input type="range" id="vol_voz" min="0" max="200" step="5" value="100"> <b id="vol_voz_txt">100%</b></label>
-    </span>
-  </div>
-  <div class="linea"><canvas id="linea"></canvas>
-    <div class="desliza" id="desliza" title="Arrastra para moverte por el video cuando la línea de tiempo está acercada (Ctrl + rueda)"><div id="desliza_p"></div></div></div>
-  <div class="segbar" id="audbar">
-    <b>Audio:</b>
-    <span id="aud_info" class="sub">Shift + arrastrar en «Audio» separa una sección para silenciarla o cambiarle el volumen.</span>
-    <button class="btn" id="aud_mute" disabled title="Silencia (o regresa el sonido de) la sección seleccionada">🔇 Silenciar</button>
-    <span class="sub">Volumen</span><input type="range" id="aud_vol" min="0" max="300" step="5" value="100" disabled style="width:140px">
-    <span id="aud_vol_txt" class="sub">100%</span>
-    <button class="btn" id="aud_quitar" disabled title="Quita la sección (vuelve al volumen normal) (Supr)">Quitar sección</button>
-  </div>
-  <div class="segbar" id="segbar">
-    <b>Segmento del video:</b>
-    <span id="seg_info" class="sub">Clic en un bloque gris (o Shift + arrastrar en «Pantalla») para seleccionar un pedazo del video.</span>
-    <button class="btn" id="seg_cortar" title="Quita ese pedazo del video y lo guarda para pegarlo en otro lugar (Ctrl+X)">Cortar</button>
-    <button class="btn" id="seg_copiar" title="Lo guarda para pegarlo en otro lugar sin quitarlo (Ctrl+C)">Copiar</button>
-    <button class="btn" id="seg_pegar" title="Pega el pedazo copiado donde está el cursor; lo que sigue se recorre (Ctrl+V)">Pegar en el cursor</button>
-    <button class="btn" id="seg_duplicar" title="Lo repite justo después (Ctrl+D)">Duplicar</button>
-    <button class="btn" id="seg_quitar" title="Quita ese pedazo del video sin guardarlo (como «Quitar tramo»; se puede restaurar) (Supr)">Quitar</button>
-    <span class="sub">· Arrástralo para moverlo (con <b>Ctrl</b> al soltar deja una copia)</span>
-  </div>
-  <div class="leyenda">
-    <span><i style="background:var(--c-completa)"></i>Pantalla completa</span>
-    <span><i style="background:var(--c-dividida)"></i>Dividida</span>
-    <span><i style="background:var(--c-ganso)"></i>Dividida Ganso</span>
-    <span><i style="background:var(--c-nacho)"></i>Solo Nacho</span>
-    <span><i style="background:var(--c-916)"></i>9:16 (vista vertical de todo el video)</span>
-    <span><i style="background:var(--c-imagen)"></i>Imagen</span>
-    <span><i style="background:var(--c-arriba)"></i>Imagen arriba (en lugar de Nacho)</span>
-    <span><i style="background:var(--c-manual)"></i>Encuadre de Nacho corregido</span>
-    <span><i style="background:var(--c-pantallaman)"></i>Pantalla de Nacho acomodada</span>
-    <span><i style="background:var(--c-titulo)"></i>Título (motivacional: estira su orilla)</span>
-    <span><i style="background:var(--c-difuminar)"></i>Difuminar subtítulos del video</span>
-    <span><i style="background:var(--c-sticker)"></i>Sticker</span>
-    <span class="ayuda">Clic: seleccionar · arrastra o estira las orillas (con <b>Alt</b>, sin imán) · <b>Ctrl + rueda</b>: acercar · <b>Doble clic</b>: llevar el cursor (de 0.10 en 0.10 s · con <b>Alt</b>: libre)</span>
-  </div>
-
- </div>
-
-  <aside class="inspector" id="panel">
+    <aside class="inspector" id="panel">
     <nav class="pestanas" id="pestanas" aria-label="Herramientas"></nav>
     <!-- Pantalla -->
     <div class="card" data-tab="Pantalla">
@@ -451,6 +419,65 @@
   </div>
     </div>
   </aside>
+  </div>
+  <div class="controles">
+    <button class="btn clara" id="b_play">▶ Reproducir</button>
+    <button class="btn fant" id="b_m1" title="1 segundo atrás (Shift + ←)">−1 s</button>
+    <button class="btn fant" id="b_mf" title="Un cuadro atrás (←)">◀ cuadro</button>
+    <button class="btn fant" id="b_pf" title="Un cuadro adelante (→)">cuadro ▶</button>
+    <button class="btn fant" id="b_p1" title="1 segundo adelante (Shift + →)">+1 s</button>
+    <span class="tiempo" id="tiempo">00:00:00</span>
+    <span id="fluida" style="color:var(--suave);font-size:12px"></span>
+    <span class="sp" style="flex:1"></span>
+    <span class="volumenes" id="volumenes">
+      <label id="vol_fondo_caja" title="Volumen de la música de fondo (fijo: ya no baja sola cuando hablan). 100% = como viene en la plantilla. Se usa en la vista previa y en el video final.">Fondo
+        <input type="range" id="vol_fondo" min="0" max="200" step="5" value="100"> <b id="vol_fondo_txt">100%</b></label>
+      <label title="Volumen del audio del video (la voz). 100% = como viene. Se usa en la vista previa y en el video final.">Voz
+        <input type="range" id="vol_voz" min="0" max="200" step="5" value="100"> <b id="vol_voz_txt">100%</b></label>
+    </span>
+  </div>
+  <div class="linea"><canvas id="linea"></canvas>
+    <div class="desliza" id="desliza" title="Arrastra para moverte por el video cuando la línea de tiempo está acercada (Ctrl + rueda)"><div id="desliza_p"></div></div></div>
+  <div class="segbar" id="audbar">
+    <b>Audio:</b>
+    <span id="aud_info" class="sub">Shift + arrastrar en «Audio» separa una sección para silenciarla o cambiarle el volumen.</span>
+    <button class="btn" id="aud_mute" disabled title="Silencia (o regresa el sonido de) la sección seleccionada">🔇 Silenciar</button>
+    <span class="sub">Volumen</span><input type="range" id="aud_vol" min="0" max="300" step="5" value="100" disabled style="width:140px">
+    <span id="aud_vol_txt" class="sub">100%</span>
+    <button class="btn" id="aud_quitar" disabled title="Quita la sección (vuelve al volumen normal) (Supr)">Quitar sección</button>
+  </div>
+  <div class="segbar" id="segbar">
+    <b>Segmento del video:</b>
+    <span id="seg_info" class="sub">Clic en un bloque gris (o Shift + arrastrar en «Pantalla») para seleccionar un pedazo del video.</span>
+    <button class="btn" id="seg_cortar" title="Quita ese pedazo del video y lo guarda para pegarlo en otro lugar (Ctrl+X)">Cortar</button>
+    <button class="btn" id="seg_copiar" title="Lo guarda para pegarlo en otro lugar sin quitarlo (Ctrl+C)">Copiar</button>
+    <button class="btn" id="seg_pegar" title="Pega el pedazo copiado donde está el cursor; lo que sigue se recorre (Ctrl+V)">Pegar en el cursor</button>
+    <button class="btn" id="seg_duplicar" title="Lo repite justo después (Ctrl+D)">Duplicar</button>
+    <button class="btn" id="seg_quitar" title="Quita ese pedazo del video sin guardarlo (como «Quitar tramo»; se puede restaurar) (Supr)">Quitar</button>
+    <span class="sub">· Arrástralo para moverlo (con <b>Ctrl</b> al soltar deja una copia)</span>
+  </div>
+  <div class="leyenda">
+    <span><i style="background:var(--c-completa)"></i>Pantalla completa</span>
+    <span><i style="background:var(--c-dividida)"></i>Dividida</span>
+    <span><i style="background:var(--c-ganso)"></i>Dividida Ganso</span>
+    <span><i style="background:var(--c-nacho)"></i>Solo Nacho</span>
+    <span><i style="background:var(--c-916)"></i>9:16 (vista vertical de todo el video)</span>
+    <span><i style="background:var(--c-imagen)"></i>Imagen</span>
+    <span><i style="background:var(--c-arriba)"></i>Imagen arriba (en lugar de Nacho)</span>
+    <span><i style="background:var(--c-manual)"></i>Encuadre de Nacho corregido</span>
+    <span><i style="background:var(--c-pantallaman)"></i>Pantalla de Nacho acomodada</span>
+    <span><i style="background:var(--c-titulo)"></i>Título (motivacional: estira su orilla)</span>
+    <span><i style="background:var(--c-difuminar)"></i>Difuminar subtítulos del video</span>
+    <span><i style="background:var(--c-sticker)"></i>Sticker</span>
+    <span class="ayuda">Clic: seleccionar · arrastra o estira las orillas (con <b>Alt</b>, sin imán) · <b>Ctrl + rueda</b>: acercar · <b>Doble clic</b>: llevar el cursor (de 0.10 en 0.10 s · con <b>Alt</b>: libre)</span>
+  </div>
+
+ </div>
+
+  <div class="lado">
+    <span class="rotulo">Así se verá</span>
+    <canvas id="previa" width="540" height="960"></canvas>
+  </div>
  </div>
 </template>
 
@@ -506,7 +533,19 @@ let sel = null, porta = null;
 // selección de pantalla e imagen
 let tramoP = null, cambioP = null, momSel = -1, nuevoEstilo = "dividida", estiloMom = null, prioMom = "pantalla";
 
-function estado(txt, cls) { const e = $("estado"); e.textContent = txt || ""; e.title = txt || ""; e.className = cls || ""; }
+function estado(txt, cls) {
+  const e = $("estado"); e.textContent = txt || ""; e.title = txt || ""; e.className = cls || "";
+  if (INCRUSTADO) try { parent.postMessage({ tipo: "estado_edi", txt: txt || "", cls: cls || "" }, "*"); } catch (err) {}
+}
+const INCRUSTADO = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+if (INCRUSTADO) document.body.classList.add("incrustado");
+// el panel de herramientas mide lo mismo que el video (lo que no quepa se recorre dentro del panel)
+function igualarPanel() {
+  const es = document.getElementById("escenario"), pn = document.getElementById("panel");
+  if (!es || !pn) return;
+  pn.style.height = window.innerWidth <= 1000 ? "auto" : Math.max(300, es.offsetHeight) + "px";
+}
+window.addEventListener("resize", igualarPanel);
 
 // ---------- tiempos ----------
 function aEditado(t) {
@@ -568,6 +607,11 @@ function indice(t) {
 function muestra(t) {
   const i = indice(t), a = E.muestras[i], b = E.muestras[Math.min(E.muestras.length - 1, i + 1)];
   const e = { tipo: TIPOS[a[1]], ex: E.extra[i] };
+  if (e.tipo === "contenida" && e.ex && e.ex.length >= 6) {
+    // recuadro completo de Nacho (o video vertical, o recuadro libre): también se puede mover y estirar a mano
+    const s0 = E.salida, A = e.ex[6] === 1 ? (E.areas.dividida || [0, 0, s0[0], s0[1]]) : (E.areas.persona || [0, 0, s0[0], s0[1]]);
+    e.region = MARCO(); e.auto = e.ex.slice(2, 6); e.aspect = A[2] / A[3];
+  }
   if (a.length > 2) {
     e.region = a.slice(2, 6); e.aspect = a[6]; e.auto = a.slice(7, 11);
     if (b.length > 2 && b[1] === a[1] && b[2] === a[2] && b[3] === a[3]) {
@@ -624,9 +668,9 @@ function ventanaManual(a, e, t) {   // igual que ventana_manual() del editor.py 
 const enTramoE = (t) => tramoE && tramoE[0] <= t && t < tramoE[1];
 function ventanaActual(t, e) {
   if (!e.auto) return null;
-  if (edit && enTramoE(t)) return { r: ventanaManual(edit, e), cual: "edit" };
+  if (edit && enTramoE(t)) return { r: ventanaManual(edit, e), cual: "edit", libre: edit.modo === "libre" };
   const a = ajusteEn(t);
-  if (a) return { r: ventanaManual(a, e), cual: "manual" };
+  if (a) return { r: ventanaManual(a, e, t), cual: "manual", libre: a.modo === "libre" };
   return { r: e.auto, cual: "auto" };
 }
 function pvEn(t) {   // recuadro automático de lo que proyecta Nacho en t (o null)
@@ -869,6 +913,17 @@ function dibujarFondoVideo(cx, t, W, H) {
   else { cx.fillStyle = "#0B2533"; cx.fillRect(0, 0, W, H); }
 }
 const arribaEn = (t) => (E.arriba ? E.arriba[indice(t)] : -1) ?? -1;   // imagen en el lugar de Nacho (o -1)
+function dibujarEncajado(r, ax, ay, aw, ah, s) {   // como encajar_completo() del editor.py
+  const [rx, ry, rw, rh] = r;
+  const top = Math.min(ah / 2, Math.max(0, ((E.armado && E.armado.tope_arriba) || 0) * s - ay)), h2 = ah - top;
+  const k = Math.min(aw / rw, h2 / rh), pw = rw * k, ph = rh * k, sf = Math.max(aw / rw, ah / rh) * 1.15;
+  pctx.save(); pctx.beginPath(); pctx.rect(ax, ay, aw, ah); pctx.clip();
+  pctx.filter = `blur(${12 * s}px) brightness(0.6)`;
+  deVideo(rx, ry, rw, rh, ax + (aw - rw * sf) / 2, ay + (ah - rh * sf) * 0.4, rw * sf, rh * sf);
+  pctx.filter = "none";
+  deVideo(rx, ry, rw, rh, ax + (aw - pw) / 2, ay + top + (h2 - ph) / 2, pw, ph);
+  pctx.restore();
+}
 function componer(t, e, v) {
   const W = previa.width, H = previa.height, s = W / E.salida[0];
   pctx.fillStyle = "#000"; pctx.fillRect(0, 0, W, H);
@@ -878,11 +933,13 @@ function componer(t, e, v) {
   if (e.tipo === "persona" || e.tipo === "video") {
     const [ax, ay, aw, ah] = e.tipo === "video" ? area(null) : area(E.areas.persona);
     if (arr >= 0 && e.tipo === "persona") dibujarArriba(arr, t, ax, ay, aw, ah, s);
+    else if (v && v.libre) dibujarEncajado(v.r, ax, ay, aw, ah, s);
     else if (v) deVideoTope(v.r, e.region, ax, ay, aw, ah);
   } else if (e.tipo === "dividida") {
     const key = gansoEn(t) ? "ganso" : "dividida";
     const [ax, ay, aw, ah] = area(E.areas[key] || E.areas.dividida);
     if (arr >= 0) dibujarArriba(arr, t, ax, ay, aw, ah, s);
+    else if (v && v.libre) dibujarEncajado(v.r, ax, ay, aw, ah, s);
     else if (v) deVideoTope(v.r, e.region, ax, ay, aw, ah);
     dibujarAbajo(e, t, s, key);
   } else if (e.tipo === "imagen") {
@@ -898,7 +955,10 @@ function componer(t, e, v) {
     const [rx, ry, rw, rh] = e.ex.slice(2, 6), divi = e.ex[6] === 1;
     const key = gansoEn(t) ? "ganso" : "dividida";
     const [ax, ay, aw, ah] = area(divi ? (E.areas[key] || E.areas.dividida) : E.areas.persona), C = E.armado.contener;
-    if (e.ex[7] === 1) {   // video vertical con barras negras: completo bajo el título (como encajar_completo)
+    if (v && v.cual && v.cual !== "auto") {   // movido a mano: el recuadro completo bajo el título
+      dibujarEncajado(v.r, ax, ay, aw, ah, s);
+      if (divi) dibujarAbajo(e, t, s, key);
+    } else if (e.ex[7] === 1) {   // video vertical con barras negras: completo bajo el título (como encajar_completo)
       const top = Math.min(ah / 2, Math.max(0, ((E.armado && E.armado.tope_arriba) || 0) * s - ay)), h2 = ah - top;
       const k = Math.min(aw / rw, h2 / rh), pw = rw * k, ph = rh * k, sf = Math.max(aw / rw, ah / rh) * 1.15;
       pctx.save(); pctx.beginPath(); pctx.rect(ax, ay, aw, ah); pctx.clip();
@@ -1756,7 +1816,9 @@ function empezarEdicion(t, e) {
   const a = ajusteEn(t);
   if (a) { tramoE = [a.inicio, a.fin]; modo = a.modo; } else { const g = grupoEn(t); tramoE = [g.inicio, g.fin]; }
   marcarModo();
-  edit = aParametros(ventanaActual(t, e).r, e, modo);
+  const v0 = ventanaActual(t, e);
+  // recuadro libre (cualquier ancho y alto): si ya lo era, o si aquí Nacho se ve completo (no recortado)
+  edit = (v0.libre || e.tipo === "contenida") ? { modo: "libre", r: v0.r.slice(), region: MARCO() } : aParametros(v0.r, e, modo);
   escribirTramoE();
 }
 function zonaDe(p, r) {
@@ -1765,7 +1827,10 @@ function zonaDe(p, r) {
     if (Math.abs(p[0] - ex) < k && Math.abs(p[1] - ey) < k) return n;
   return (p[0] > x && p[0] < x + w && p[1] > y && p[1] < y + h) ? "mover" : null;
 }
-function ponerRect(r, e) { edit = aParametros(r, e, modo); }
+function ponerRect(r, e) {
+  edit = edit && edit.modo === "libre" ? { modo: "libre", r: r.map(v => Math.round(v * 10) / 10), region: MARCO() } : aParametros(r, e, modo);
+}
+function ponerRectLibreN(r) { edit = { modo: "libre", r: r.map(v => Math.round(v * 10) / 10), region: MARCO() }; }
 function objetivo(t, p) {   // qué recuadro está bajo el cursor: el de Nacho o el de la pantalla
   const e = muestra(t), v = ventanaActual(t, e), pe = pvEn(t), vp = ventanaPActual(t, pe);
   for (const x of difEn(t)) { const z = zonaDe(p, x.caja); if (z) return { cual: "dif", z, x }; }   // va encima de los demás
@@ -1820,16 +1885,16 @@ function iniciarEncuadre() {
     const asp = arrastre.e.aspect;
     const poner = arrastre.cual === "nacho" ? ponerRect : (arrastre.cual === "pantallaFin" ? ponerRectPF : ponerRectP);
     if (arrastre.z === "mover") poner([x + p[0] - arrastre.p0[0], y + p[1] - arrastre.p0[1], w, h], arrastre.e);
-    else if (arrastre.cual !== "nacho" && !ev.shiftKey) {
-      // la pantalla de Nacho: forma libre (con Shift conserva la forma)
+    else if (!ev.shiftKey && (arrastre.cual !== "nacho" || arrastre.e.tipo === "dividida" || arrastre.e.tipo === "contenida")) {
+      // forma libre (con Shift conserva la forma): la pantalla de Nacho y, en la pantalla dividida, también Nacho
       const dx = p[0] - arrastre.p0[0], dy = p[1] - arrastre.p0[1];
       let nx = x, ny = y, nw, nh;
       if (arrastre.z.includes("w")) { nx = Math.min(x + w - 40, x + dx); nw = x + w - nx; } else nw = Math.max(40, w + dx);
       if (arrastre.z.includes("n")) { ny = Math.min(y + h - 30, y + dy); nh = y + h - ny; } else nh = Math.max(30, h + dy);
-      poner([nx, ny, nw, nh], arrastre.e);
+      (arrastre.cual === "nacho" ? ponerRectLibreN : poner)([nx, ny, nw, nh], arrastre.e);
     } else {
       const fx = arrastre.z.includes("w") ? x + w : x, fy = arrastre.z.includes("n") ? y + h : y;
-      const ar = arrastre.cual === "nacho" ? asp : w / h;
+      const ar = arrastre.cual === "nacho" && !(edit && edit.modo === "libre") ? asp : w / h;
       const nw = Math.max(Math.abs(p[0] - fx), Math.abs(p[1] - fy) * ar, 40), nh = nw / ar;
       poner([arrastre.z.includes("w") ? fx - nw : fx, arrastre.z.includes("n") ? fy - nh : fy, nw, nh], arrastre.e);
     }
@@ -1873,7 +1938,8 @@ function iniciarEncuadre() {
       programarGuardarP();
     } else {
       clearTimeout(timerN); empezarEdicion(t, e);
-      const r = ventanaManual(edit, e), cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2, w = r[2] * f, h = w / e.aspect;
+      const r = ventanaManual(edit, e), cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2, w = r[2] * f;
+      const h = edit.modo === "libre" ? r[3] * f : w / e.aspect;
       ponerRect([cx - w / 2, cy - h / 2, w, h], e);
       programarGuardarN();
     }
@@ -2142,6 +2208,40 @@ function iniciarCortes() {
 
 // ---------- stickers animados ----------
 let stSel = null;          // sticker seleccionado (objeto de E.stickers)
+let tomaArr = null;        // arrastre de una toma (arriba / abajo de la franja) directo en la vista previa
+// qué toma hay bajo un punto de la vista previa: la de Nacho (arriba, o toda si va solo) o la pantalla (abajo)
+function seccionPrevia(p) {
+  if (!E || !E.salida || !E.areas) return null;
+  const t = ahoraO(), e = muestra(t), s = previa.width / E.salida[0];
+  const area = (a) => (a || [0, 0, E.salida[0], E.salida[1]]).map(x => x * s);
+  const dentro = (r) => p[0] >= r[0] && p[0] <= r[0] + r[2] && p[1] >= r[1] && p[1] <= r[1] + r[3];
+  const arr = arribaEn(t), v = ventanaActual(t, e), pe = pvEn(t), vp = vpActual;
+  if (e.tipo === "persona" && v && arr < 0) {
+    const A = area(E.areas.persona);
+    if (dentro(A)) return { cual: "nacho", A, e, t };
+  }
+  if (e.tipo === "dividida") {
+    const key = gansoEn(t) ? "ganso" : "dividida", A = area(E.areas[key] || E.areas.dividida);
+    if (v && arr < 0 && dentro(A)) return { cual: "nacho", A, e, t };
+    const inf = (E.armado[key] || E.armado.dividida || {}).inferior;
+    if (inf && e.ex[0] < 0 && e.ex[1] >= 0 && vp && pe) {
+      const B = area(inf);
+      if (dentro(B)) return { cual: "pantalla", A: B, pe, t };
+    }
+  }
+  if (e.tipo === "contenida" && v) {
+    const divi = e.ex[6] === 1, key = gansoEn(t) ? "ganso" : "dividida";
+    const A = area(divi ? (E.areas[key] || E.areas.dividida) : E.areas.persona);
+    if (dentro(A)) return { cual: "nacho", A, e, t };
+    const inf = divi && (E.armado[key] || E.armado.dividida || {}).inferior;
+    if (inf && e.ex[0] < 0 && e.ex[1] >= 0 && vp && pe) {
+      const B = area(inf);
+      if (dentro(B)) return { cual: "pantalla", A: B, pe, t };
+    }
+  }
+  if (e.tipo === "imagen" && e.ex[0] < 0 && e.ex[1] >= 0 && vp && pe) return { cual: "pantalla", A: area(null), pe, t };
+  return null;
+}
 let stArr = null;          // arrastre en la vista previa: { modo: mover|tam|ancho|alto|rot, ... }
 const stHojas = {};        // hojas base (Image)
 const stMedida = {};       // hojas de stickers de línea dibujadas a la medida (canvas), por «tipo@prop»
@@ -2359,7 +2459,20 @@ function iniciarStickers() {
   previa.addEventListener("pointerdown", (ev) => {
     const p = puntoPrevia(ev), o = tocarSticker(p);
     clicLibre = !o;
-    if (!o) return;
+    if (!o) {   // sin sticker: se arrastra la toma de esa sección (arriba = Nacho, abajo = pantalla)
+      const sc = seccionPrevia(p);
+      if (!sc) return;
+      video.pause();
+      const nuevo = sc.cual === "nacho" ? !edit : !editP;
+      if (sc.cual === "nacho") { clearTimeout(timerN); empezarEdicion(sc.t, sc.e); sc.r0 = ventanaManual(edit, sc.e).slice(); }
+      else { clearTimeout(timerP); empezarEdicionP(sc.t, sc.pe); sc.r0 = iniRect(editP, sc.pe).slice(); }
+      sc.k = sc.cual === "nacho" && !(edit && edit.modo === "libre") ? sc.r0[2] / sc.A[2]
+        : 1 / Math.min(sc.A[2] / sc.r0[2], sc.A[3] / sc.r0[3]);
+      tomaArr = { ...sc, p0: p, nuevo, movido: false };
+      previa.setPointerCapture(ev.pointerId);
+      ev.preventDefault();
+      return;
+    }
     video.pause();
     previa.setPointerCapture(ev.pointerId);
     stSel = o.s; sel = null;
@@ -2370,7 +2483,19 @@ function iniciarStickers() {
   });
   previa.addEventListener("pointermove", (ev) => {
     const p = puntoPrevia(ev), W = previa.width, H = previa.height;
-    if (!stArr) { const o = tocarSticker(p); previa.style.cursor = o ? CURSOR_ST[o.modo] : "pointer"; return; }
+    if (tomaArr) {
+      const dx = p[0] - tomaArr.p0[0], dy = p[1] - tomaArr.p0[1];
+      if (!tomaArr.movido && Math.hypot(dx, dy) < 4) return;
+      tomaArr.movido = true;
+      const [x, y, w, h] = tomaArr.r0, r = [x - dx * tomaArr.k, y - dy * tomaArr.k, w, h];
+      if (tomaArr.cual === "nacho") ponerRect(r, tomaArr.e); else ponerRectP(r, tomaArr.pe);
+      return;
+    }
+    if (!stArr) {
+      const o = tocarSticker(p);
+      previa.style.cursor = o ? CURSOR_ST[o.modo] : (seccionPrevia(p) ? "grab" : "pointer");
+      return;
+    }
     const s = stSel, g = geomSticker(s, W, H);
     stArr.movido = true;
     if (stArr.modo === "mover") cambiarSticker({ x: stArr.x0 + (p[0] - stArr.p0[0]) / W, y: stArr.y0 + (p[1] - stArr.p0[1]) / H }, false);
@@ -2390,6 +2515,15 @@ function iniciarStickers() {
     }
   });
   const soltar = () => {
+    if (tomaArr) {
+      const fue = tomaArr; tomaArr = null;
+      if (!fue.movido) {   // solo fue un clic: no se crea ningún encuadre
+        if (fue.nuevo) { if (fue.cual === "nacho") { edit = null; tramoE = null; escribirTramoE(); } else { editP = null; tramoPE = null; } }
+        return;
+      }
+      if (fue.cual === "nacho") programarGuardarN(); else programarGuardarP();
+      return;
+    }
     if (!stArr) return;
     const movido = stArr.movido; stArr = null;
     if (movido) guardarStickers(E.stickers, "Sticker acomodado.");
@@ -2399,7 +2533,23 @@ function iniciarStickers() {
   previa.addEventListener("click", () => { if (clicLibre) video.pause(); clicLibre = false; });
   previa.addEventListener("wheel", (ev) => {
     const o = tocarSticker(puntoPrevia(ev));
-    if (!o) return;
+    if (!o) {   // rueda sobre una toma: la acerca o la aleja (arriba = Nacho, abajo = pantalla)
+      const sc = seccionPrevia(puntoPrevia(ev));
+      if (!sc) return;
+      ev.preventDefault(); video.pause();
+      const f = (ev.deltaY || ev.deltaX) > 0 ? 1.06 : 1 / 1.06;
+      if (sc.cual === "nacho") {
+        clearTimeout(timerN); empezarEdicion(sc.t, sc.e);
+        const r = ventanaManual(edit, sc.e), cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2, w = r[2] * f;
+        const h = edit.modo === "libre" ? r[3] * f : w / sc.e.aspect;
+        ponerRect([cx - w / 2, cy - h / 2, w, h], sc.e); programarGuardarN();
+      } else {
+        clearTimeout(timerP); empezarEdicionP(sc.t, sc.pe);
+        const r = iniRect(editP, sc.pe), cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2, w = r[2] * f, h = r[3] * f;
+        ponerRectP([cx - w / 2, cy - h / 2, w, h], sc.pe); programarGuardarP();
+      }
+      return;
+    }
     ev.preventDefault();
     stSel = o.s;
     const k = (ev.deltaY || ev.deltaX) < 0 ? 1 : -1;
@@ -2687,8 +2837,10 @@ async function iniciar() {
   linea = $("linea"); lctx = linea.getContext("2d");
   const [W, H] = E.salida;
   previa.height = Math.round(previa.width * H / W);
-  previa.style.height = "auto";   // alto según su ancho (proporción del video vertical)
+  previa.style.aspectRatio = `${W} / ${H}`;   // el alto lo pone la pantalla; el ancho sale de la proporción
   $("escenario").style.aspectRatio = `${E.video.ancho} / ${E.video.alto}`;
+  try { new ResizeObserver(igualarPanel).observe($("escenario")); } catch (err) {}
+  setTimeout(igualarPanel, 50);
   vista = [0, durE()];
   for (const key of ["dividida", "ganso"])
     if (E.armado[key] && E.armado[key].franja_fondo) { franjaImgs[key] = new Image(); franjaImgs[key].src = `/enc/franja?t=${encodeURIComponent(T)}&lay=${key}`; }

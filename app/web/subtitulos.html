@@ -130,6 +130,12 @@
   .aviso_titulo.ok { color: var(--ok); }
   .pie { padding: 10px 20px; border-top: 1px solid var(--linea); display: flex; gap: 6px 18px; flex-wrap: wrap; font-size: 12px; color: var(--tenue); }
   .pie b { font-family: var(--mono); font-weight: 500; color: var(--suave); }
+  /* dentro de la plataforma: las pestañas Edición/Subtítulos/Exportar quedan arriba de la vista previa, la lista
+     llena el alto (se recorre sola, sin mover la página) y la ayuda va en el menú de la izquierda */
+  body.incrustado .izq { padding-top: 62px; }
+  body.incrustado video { height: calc(100vh - 200px); }
+  body.incrustado .pie { display: none; }
+  @media (min-width: 761px) { .app { overflow: hidden; } .der { min-height: 0; height: 100%; } }
 </style>
 </head>
 <body>
@@ -282,6 +288,8 @@ function filtrar() {
   });
 }
 function estado(txt, cls) { $("estado").textContent = txt; $("estado").className = cls || ""; }
+const INCRUSTADO = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+if (INCRUSTADO) document.body.classList.add("incrustado");
 
 // En vivo se reproduce el video ORIGINAL saltando las pausas recortadas; los subtítulos van en tiempo editado.
 function aEditado(t) {
@@ -998,8 +1006,13 @@ function marcarActiva() {
   document.querySelectorAll(".fila").forEach((el, n) => el.classList.toggle("activa", n === k));
   const editando = document.activeElement && document.activeElement.closest && document.activeElement.closest(".lista");
   if (k >= 0 && !video.paused && !editando) {
-    const el = document.querySelectorAll(".fila")[k];
-    if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+    // se recorre SOLO la lista (antes scrollIntoView movía también toda la página de la plataforma)
+    const el = document.querySelectorAll(".fila")[k], li = $("lista");
+    if (el && li) {
+      const r = el.getBoundingClientRect(), rl = li.getBoundingClientRect();
+      if (r.top < rl.top + 40 || r.bottom > rl.bottom - 40)
+        li.scrollTo({ top: li.scrollTop + (r.top - rl.top) - (rl.height - r.height) / 2, behavior: "smooth" });
+    }
   }
 }
 
