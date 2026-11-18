@@ -175,11 +175,12 @@
       <span class="sp"></span>
       <label class="buscar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>
         <input type="search" id="buscar" placeholder="Buscar en los subtítulos" aria-label="Buscar en los subtítulos"></label>
+      <button class="btn" id="desmarcar" hidden title="Quita la marca ☑ de todos los subtítulos marcados">☐ Desmarcar todos <b id="n_marcados"></b></button>
       <button class="btn" id="descartar" disabled>Descartar</button>
       <button class="btn prim" id="guardar" disabled>Guardar subtítulos</button>
       <div id="estado"></div>
     </div>
-    <div class="encabezado"><span></span><span>Inicio</span><span>Fin</span><span>Texto</span><span title="Sube (▲) o baja (▼) cada subtítulo por separado. También puedes arrastrarlo arriba o abajo sobre el video.">Altura ↕</span><span title="Marca varios: al subir o bajar uno de los marcados, se mueven todos igual">☑</span><span></span></div>
+    <div class="encabezado"><span></span><span>Inicio</span><span>Fin</span><span>Texto</span><span title="Sube (▲) o baja (▼) cada subtítulo por separado. También puedes arrastrarlo arriba o abajo sobre el video.">Altura ↕</span><span title="Marca varios: al subir o bajar uno de los marcados, se mueven todos igual. Clic aquí: desmarcar todos" id="cab_marca" style="cursor:pointer">☑</span><span></span></div>
     <div class="lista" id="lista"></div>
     <div class="pie">
       <span><b>Enter</b> siguiente</span><span><b>Shift+Enter</b> cortar renglón</span><span><b>＋</b> agregar debajo</span><span><b>☑</b> marca varios para subirlos o bajarlos juntos</span>
@@ -904,6 +905,8 @@ $("barra_t").addEventListener("change", () => { arrastrando = false; });
 $("m_vivo").onclick = () => { if (!vivo) ponerModo(true); };
 $("buscar").addEventListener("input", filtrar);
 $("titulo_txt").addEventListener("input", () => pintarTitulo());
+$("desmarcar").onclick = desmarcarTodos;
+$("cab_marca").onclick = () => { if (filas.some(f => f.marcado)) desmarcarTodos(); };
 $("titulo_txt").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   if (e.ctrlKey || e.metaKey) { e.preventDefault(); if (!$("titulo_guardar").disabled) guardarTitulo(); }
@@ -990,6 +993,15 @@ function moverFila(fl, d) {   // sube (−) o baja (+) este subtítulo; si está
 function avisoMarcados() {
   const n = filas.filter(f => f.marcado).length;
   if (n > 1) estado(`${n} subtítulos marcados: al subir o bajar uno de ellos, se mueven todos igual.`, "");
+  $("desmarcar").hidden = n === 0;
+  $("n_marcados").textContent = n ? `(${n})` : "";
+}
+function desmarcarTodos() {   // quita la marca ☑ de todos a la vez
+  filas.forEach(f => { f.marcado = false; });
+  document.querySelectorAll("input.marca").forEach(m => { m.checked = false; });
+  document.querySelectorAll(".fila.marcada").forEach(d => d.classList.remove("marcada"));
+  avisoMarcados();
+  estado("Se quitaron todas las marcas.", "ok");
 }
 function hayCambios() { return firma() !== base; }
 function actualizarBotones() {

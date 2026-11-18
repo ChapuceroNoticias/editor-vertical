@@ -232,6 +232,9 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
   «Recortar» se cambia para ese rato.
 - **Tramos de 0.10 s**: en todos los carriles (Pantalla, imágenes, encuadres, difuminar, stickers, audio y la
   selección para quitar pedazos) se puede partir y dejar bloques de hasta 0.10 s.
+- **1.9.7**: el recuadro azul «Pantalla de Nacho» se puede llevar a cualquier parte del video (ya no se limita a la
+  derecha de la cámara); Ctrl+B también parte el bloque gris de «Pantalla» (y si hiciste clic en una línea sin bloque
+  bajo el cursor, ya no parte el de otra línea); en Subtítulos, «☐ Desmarcar todos» quita todas las marcas ☑.
 - **Cámara de Nacho de forma libre en la pantalla dividida** (Clips Chapuceros y Fuera): en Encuadre, estira el
   recuadro de Nacho desde sus esquinas a lo ancho o a lo alto, como el de la pantalla (con Shift conserva la forma).
   Se ve completo bajo el título, con los lados difuminados. También aplica cuando Nacho se ve como recuadro completo.

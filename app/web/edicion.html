@@ -1453,9 +1453,12 @@ async function partir(it, te) {
   const bajo = (x) => x.a + 1e-4 < te && te < x.b - 1e-4;
   if (it && !bajo(it)) it = null;
   if (!it && stSel) it = itemsLinea().find(x => x.ref === stSel && bajo(x)) || null;
-  const todos = itemsLinea().filter(x => x.mov !== false && x.tipo !== "ti" && bajo(x));
+  // también el bloque gris de «Pantalla» (el video original, sin pantalla): se parte su toma
+  const todos = itemsLinea().filter(x => (x.mov !== false || x.tipo === "n" || x.tipo === "g") && x.tipo !== "ti" && bajo(x));
   if (!it && carrilActivo) it = todos.find(x => x.carril === carrilActivo) || null;
   if (!it && carrilActivo === "au") return partirAudioLibre(te);   // sin sección: se crea el corte en el audio
+  // si hiciste clic en una línea, solo se parte esa (antes, si no había bloque, se partía el de otra línea)
+  if (!it && carrilActivo) return avisar("En esa línea no hay un bloque bajo el cursor rojo para partir.");
   if (!it) it = todos.find(x => x.tipo === "m") || todos.find(x => x.carril === "p") || todos[0] || null;
   if (!it) return avisar("Pon el cursor rojo sobre un bloque (o haz clic en su línea) para partirlo.");
   if (!(it.a + 0.1 - 1e-3 <= te && te <= it.b - 0.1 + 1e-3))

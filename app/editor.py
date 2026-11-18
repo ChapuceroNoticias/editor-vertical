@@ -2320,7 +2320,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-17d v1.9.6"
+VERSION = "2026-11-18a v1.9.7"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3745,13 +3745,10 @@ def rect_en_region(r, region):
 
 
 def zona_pantalla(pl, info):
-    """Dónde puede ir el recuadro de la pantalla de Nacho: desde donde termina su cámara (lado derecho) hasta el
-    final del video, de arriba a abajo. 'pl' ya con escalar_cajas aplicado."""
+    """Dónde puede ir el recuadro de la pantalla de Nacho: TODO el video (antes solo a la derecha de su cámara;
+    ahora se deja libre para acomodar lo que sea). 'pl' ya con escalar_cajas aplicado."""
     W, H = float(info["ancho"]), float(info["alto"])
-    pd = (pl.get("fuente_16x9") or {}).get("persona_dividida")
-    x0 = float(pd[0]) + float(pd[2]) if pd else 0.0
-    x0 = min(max(0.0, x0), W * 0.6)
-    return [round(x0, 1), 0.0, round(W - x0, 1), H]
+    return [0.0, 0.0, W, H]
 
 
 def pintar_ventana(frame, vent, w, h):
