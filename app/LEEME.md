@@ -232,6 +232,9 @@ se quitó y de alrededor; arrastra las orillas rojas para recuperar (hacia adent
   «Recortar» se cambia para ese rato.
 - **Tramos de 0.10 s**: en todos los carriles (Pantalla, imágenes, encuadres, difuminar, stickers, audio y la
   selección para quitar pedazos) se puede partir y dejar bloques de hasta 0.10 s.
+- **Movimiento en los tipos de pantalla (1.9.8)**: en la pestaña Pantalla, «Movimiento en este tramo» para la toma
+  de Nacho (Solo Nacho, arriba en Dividida / Ganso) y para la pantalla (abajo, completa o 9:16): acercar, alejar y
+  paneos, con ritmo suave o constante. También en Encuadre, donde se ajustan los recuadros de inicio y final.
 - **1.9.7**: el recuadro azul «Pantalla de Nacho» se puede llevar a cualquier parte del video (ya no se limita a la
   derecha de la cámara); Ctrl+B también parte el bloque gris de «Pantalla» (y si hiciste clic en una línea sin bloque
   bajo el cursor, ya no parte el de otra línea); en Subtítulos, «☐ Desmarcar todos» quita todas las marcas ☑.

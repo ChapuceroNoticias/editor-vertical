@@ -119,6 +119,10 @@
   .tit_aj .btn.mini { height: 28px; min-width: 26px; padding: 0 6px; }
   .tit_aj input { width: 58px; height: 28px; padding: 0 6px; font-size: 13px; text-align: center; }
   .tit_aj b { min-width: 34px; text-align: center; color: var(--texto); font: 600 12px "Geist Mono", monospace; }
+  .mov_bloque { display: flex; flex-direction: column; gap: 8px; }
+  .mv_quien { display: flex; flex-direction: column; gap: 6px; }
+  .mv_quien > span { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--tenue); font-weight: 500; }
+  .mv_ops .op, .mv_suav .op { padding: 6px 9px; font-size: 12px; }
   .barra .campo_titulo { flex: 1 1 340px; gap: 10px; font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--tenue); }
   .barra .campo_titulo textarea { resize: none; overflow: hidden; line-height: 16px; min-height: 34px; padding: 8px 12px; font-family: inherit; }
   .barra .campo_titulo input, .barra .campo_titulo textarea { height: 34px; padding: 0 12px; font-size: 14px; letter-spacing: 0; text-transform: none; flex: 1; }
@@ -233,6 +237,21 @@
         <label>Hasta<input type="text" class="t" id="p_fin"></label><button class="btn" id="p_fin_aqui">aquí</button>
         <button class="btn prim" id="p_aplicar" disabled>Aplicar</button>
         <button class="btn" id="p_descartar">Descartar</button>
+      </div>
+      <div class="mov_bloque" id="mv_bloque">
+        <div class="separador"></div>
+        <div class="sub"><b>Movimiento en este tramo</b> (como las fotos): se mueve suave de principio a fin del tramo.
+          Los recuadros de inicio y final se ajustan en «Encuadre».</div>
+        <div class="mv_quien" id="mv_n"><span>Nacho</span><div class="ops mv_ops" data-q="n"><button class="op" data-m="ninguno">Sin movimiento</button><button class="op" data-m="acercar">Acercar</button>
+          <button class="op" data-m="alejar">Alejar</button><button class="op" data-m="der">Paneo →</button>
+          <button class="op" data-m="izq">Paneo ←</button><button class="op" data-m="abajo">Paneo ↓</button>
+          <button class="op" data-m="arriba">Paneo ↑</button></div>
+          <div class="ops mv_suav" data-q="n"><button class="op" data-m="suave">Ritmo suave</button><button class="op" data-m="lineal">Ritmo constante</button></div></div>
+        <div class="mv_quien" id="mv_p"><span>Pantalla</span><div class="ops mv_ops" data-q="p"><button class="op" data-m="ninguno">Sin movimiento</button><button class="op" data-m="acercar">Acercar</button>
+          <button class="op" data-m="alejar">Alejar</button><button class="op" data-m="der">Paneo →</button>
+          <button class="op" data-m="izq">Paneo ←</button><button class="op" data-m="abajo">Paneo ↓</button>
+          <button class="op" data-m="arriba">Paneo ↑</button></div>
+          <div class="ops mv_suav" data-q="p"><button class="op" data-m="suave">Ritmo suave</button><button class="op" data-m="lineal">Ritmo constante</button></div></div>
       </div>
     </div>
 
@@ -349,6 +368,16 @@
         <button class="btn prim" id="e_aplicar" disabled>Aplicar tiempos</button>
         <button class="btn" id="e_cancelar" disabled>Descartar</button>
         <button class="btn peligro" id="e_quitar" disabled>Volver al automático aquí</button>
+      </div>
+      <div id="nm_bloque" style="display:none;flex-direction:column;gap:8px">
+        <div class="separador"></div>
+        <div class="sub"><b style="color:#facc15">Movimiento de la toma de Nacho</b> (como las fotos): elige uno; el recuadro
+          amarillo es el de inicio y se mueve hasta el final del tramo.</div>
+        <div class="ops mv_ops" data-q="n"><button class="op" data-m="ninguno">Sin movimiento</button><button class="op" data-m="acercar">Acercar</button>
+          <button class="op" data-m="alejar">Alejar</button><button class="op" data-m="der">Paneo →</button>
+          <button class="op" data-m="izq">Paneo ←</button><button class="op" data-m="abajo">Paneo ↓</button>
+          <button class="op" data-m="arriba">Paneo ↑</button></div>
+        <div class="ops mv_suav" data-q="n"><button class="op" data-m="suave">Ritmo suave</button><button class="op" data-m="lineal">Ritmo constante</button></div>
       </div>
       <div id="pm_bloque" style="display:none;flex-direction:column;gap:8px">
         <div class="separador"></div>
@@ -748,6 +777,68 @@ async function movimientoPantalla(tipo) {
   editP = null; tramoPE = null;
   await enviar("/enc/guardar_pantalla", { t: T, ajustes: lista },
     tipo === "ninguno" ? "La pantalla queda sin movimiento." : "Movimiento de la pantalla guardado: ajusta los recuadros de inicio y final si quieres.");
+}
+// movimiento de la toma de Nacho (arriba en la dividida, Solo Nacho, Dividida Ganso), igual que el de la pantalla:
+// del recuadro de inicio al final a lo largo del tramo (el editor.py ya lo arma: ventana_manual con «final»)
+async function movimientoNacho(tipo) {
+  const t = ahoraO(), e = muestra(t), v = ventanaActual(t, e);
+  if (!v || !e.auto) return avisar("Aquí no hay toma de Nacho que mover (¿hay una imagen en su lugar?).");
+  const a = ajusteEn(t);
+  const tramo = a ? [a.inicio, a.fin] : (() => { const g = grupoEn(t); return [g.inicio, g.fin]; })();
+  if (tipo === "suave" || tipo === "lineal") {
+    if (!a || !a.final) return avisar("Primero elige un movimiento.");
+    const lista = E.ajustes.map(x => x === a ? { ...x, suavizado: tipo } : x);
+    return guardarEncuadre(lista, tipo === "suave" ? "Movimiento con ritmo suave." : "Movimiento con ritmo constante.");
+  }
+  const libre = (a && a.modo === "libre") || e.tipo === "contenida";
+  let base;
+  if (libre) {   // recuadro de forma libre: se mueve el recuadro tal cual (como la pantalla)
+    base = a && a.modo === "libre" ? JSON.parse(JSON.stringify(a)) : { modo: "libre", r: v.r.slice(), region: MARCO() };
+    const S = ventanaManual({ ...base, final: null }, e), cx = S[0] + S[2] / 2, cy = S[1] + S[3] / 2, w = S[2], asp = S[2] / S[3];
+    const rect = (x, y, ww) => rectEnRegion([x - ww / 2, y - ww / asp / 2, ww, ww / asp], MARCO());
+    const w2 = w / 1.25, paso = 0.18 * w2;
+    if (tipo === "ninguno") delete base.final;
+    else if (tipo === "acercar") base.final = { r: rect(cx, cy, w / 1.35) };
+    else if (tipo === "alejar") { base.r = rect(cx, cy, w / 1.35); base.final = { r: S.slice() }; }
+    else if (tipo === "der") { base.r = rect(cx - paso, cy, w2); base.final = { r: rect(cx + paso, cy, w2) }; }
+    else if (tipo === "izq") { base.r = rect(cx + paso, cy, w2); base.final = { r: rect(cx - paso, cy, w2) }; }
+    else if (tipo === "abajo") { base.r = rect(cx, cy - paso / asp, w2); base.final = { r: rect(cx, cy + paso / asp, w2) }; }
+    else if (tipo === "arriba") { base.r = rect(cx, cy + paso / asp, w2); base.final = { r: rect(cx, cy - paso / asp, w2) }; }
+  } else {   // recuadro con la forma de la toma: centro y acercamiento de inicio y de final
+    const S = a && a.modo === "fijo" ? ventanaManual({ ...a, final: null }, e, t) : v.r;
+    base = aParametros(S, e, "fijo");
+    if (a && a.suavizado) base.suavizado = a.suavizado;
+    const z = base.zoom, cx = base.cx, cy = base.cy, z2 = z * 1.25, paso = 0.18 * (S[2] / 1.25), pv = paso / e.aspect;
+    if (tipo === "acercar") base.final = { cx, cy, zoom: z * 1.35 };
+    else if (tipo === "alejar") { base.zoom = z * 1.35; base.final = { cx, cy, zoom: z }; }
+    else if (tipo === "der") { Object.assign(base, { zoom: z2, cx: cx - paso }); base.final = { cx: cx + paso, cy, zoom: z2 }; }
+    else if (tipo === "izq") { Object.assign(base, { zoom: z2, cx: cx + paso }); base.final = { cx: cx - paso, cy, zoom: z2 }; }
+    else if (tipo === "abajo") { Object.assign(base, { zoom: z2, cy: cy - pv }); base.final = { cx, cy: cy + pv, zoom: z2 }; }
+    else if (tipo === "arriba") { Object.assign(base, { zoom: z2, cy: cy + pv }); base.final = { cx, cy: cy - pv, zoom: z2 }; }
+  }
+  edit = null; tramoE = null; escribirTramoE();
+  const lista = recortarFuera(E.ajustes, tramo[0], tramo[1]);
+  lista.push({ ...base, inicio: tramo[0], fin: tramo[1] });
+  await guardarEncuadre(lista, tipo === "ninguno" ? "La toma de Nacho queda sin movimiento." : "Movimiento de la toma de Nacho guardado.");
+}
+function pintarMovimientos(t) {   // botones activos de «Movimiento» (pestañas Pantalla y Encuadre)
+  const e = muestra(t), v = ventanaActual(t, e), a = ajusteEn(t), pe = pvEn(t), ap = ajustePEn(t);
+  const hayN = !!(v && e.auto), hayP = !!pe;
+  const nMov = !!(a && a.final), pMov = !!(ap && ap.final);
+  $("mv_n").style.display = hayN ? "flex" : "none";
+  $("mv_p").style.display = hayP ? "flex" : "none";
+  $("mv_bloque").style.display = hayN || hayP ? "flex" : "none";
+  $("nm_bloque").style.display = hayN ? "flex" : "none";
+  document.querySelectorAll('.mv_ops[data-q="n"] [data-m="ninguno"]').forEach(b => b.classList.toggle("activo", !nMov));
+  document.querySelectorAll('.mv_ops[data-q="p"] [data-m="ninguno"]').forEach(b => b.classList.toggle("activo", !pMov));
+  document.querySelectorAll('.mv_suav[data-q="n"]').forEach(d => {
+    d.style.display = nMov ? "flex" : "none";
+    d.querySelectorAll(".op").forEach(b => b.classList.toggle("activo", nMov && (a.suavizado || "suave") === b.dataset.m));
+  });
+  document.querySelectorAll('.mv_suav[data-q="p"]').forEach(d => {
+    d.style.display = pMov ? "flex" : "none";
+    d.querySelectorAll(".op").forEach(b => b.classList.toggle("activo", pMov && (ap.suavizado || "suave") === b.dataset.m));
+  });
 }
 function programarGuardarP() { clearTimeout(timerP); timerP = setTimeout(guardarP, 450); }
 async function guardarP() {
@@ -1804,7 +1895,7 @@ function pasoBucle() {
   dibujarLinea(te);
   $("tiempo").innerHTML = `${mmss(te)} <small>/ ${mmss(durE())}</small>`;
   $("b_play").textContent = video.paused ? "▶ Reproducir" : "❚❚ Pausa";
-  pintarPantalla(te); pintarImagen(t); pintarEncuadre(t, e, v); pintarStickerSel();
+  pintarPantalla(te); pintarImagen(t); pintarEncuadre(t, e, v); pintarStickerSel(); pintarMovimientos(t);
 }
 
 // ---------- encuadre: arrastrar el recuadro ----------
@@ -3056,6 +3147,10 @@ async function iniciar() {
   $("b_rehacer").onclick = rehacerAccion;
   $("b_atajos").onclick = () => $("m_atajos").classList.add("abierto");
   document.querySelectorAll("#pm_ops .op, #pm_suav .op").forEach(b => b.onclick = () => { video.pause(); movimientoPantalla(b.dataset.m); });
+  document.querySelectorAll(".mv_ops .op, .mv_suav .op").forEach(b => b.onclick = () => {
+    video.pause();
+    return b.parentElement.dataset.q === "n" ? movimientoNacho(b.dataset.m) : movimientoPantalla(b.dataset.m);
+  });
   $("m_atajos_cerrar").onclick = () => $("m_atajos").classList.remove("abierto");
   // pantalla
   $("p_ini_aqui").onclick = () => { $("p_ini").value = mmss(ahoraE()); marcarCambioP(); };
