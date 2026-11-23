@@ -163,10 +163,14 @@ def asegurar_ollama():
         log(f"No pude iniciar Ollama: {e} (el editor funciona igual, sin el análisis del tema)")
 
 
+# acceso directo «Revisor Chapucero»: abre la pantalla del encargado
+PAGINA = URL + ("/revisor" if "--revisor" in sys.argv else "")
+
+
 def abrir_navegador():
     for _ in range(240):
         if vivo(URL + "/"):
-            webbrowser.open(URL)
+            webbrowser.open(PAGINA)
             return
         time.sleep(0.5)
     aviso("El Editor Vertical tardó demasiado en arrancar. Revisa el archivo:\n" + str(DATOS / "servidor.log"))
@@ -174,7 +178,7 @@ def abrir_navegador():
 
 def main():
     if vivo(URL + "/"):
-        webbrowser.open(URL)   # ya estaba abierto
+        webbrowser.open(PAGINA)   # ya estaba abierto
         return
     preparar_entorno()
     actualizar()

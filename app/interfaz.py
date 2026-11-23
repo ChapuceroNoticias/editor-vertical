@@ -34,6 +34,7 @@ sys.path.insert(0, str(BASE))
 import editor as ed  # noqa: E402
 import aprendizaje  # noqa: E402
 import montaje  # noqa: E402
+import revision  # noqa: E402
 
 # compatibilidad Gradio 5 y 6
 _TEMA_EN_BLOCKS = "theme" in inspect.signature(gr.Blocks.__init__).parameters
@@ -462,10 +463,8 @@ def ruta_export(trabajo):
     """Dónde queda el video final al exportar: carpeta «Renders» del escritorio, con el TÍTULO del cuadro «Título»
     como nombre (sin título: nombre del video). Si ya hay otro video con ese nombre, se le agrega (2), (3)..."""
     plan, _ = cargar(trabajo)
-    titulo = (plan.get("titulo") or "").strip()
-    if titulo:
-        base = nombre_archivo(titulo)
-    else:
+    base = nombre_final(plan)
+    if not base:
         base = Path(plan["video"]).stem + ("_subtitulado" if estilo_de(plan) == "solo_subtitulos" else "_vertical")
     p, k = CARPETA_RENDERS / f"{base}.mp4", 2
     while p.exists() and str(p) != exportado_de(trabajo):
@@ -905,6 +904,7 @@ def datos_encuadre(t):
             "difuminar_busqueda": estado_difuminar(t),
             # stickers animados (tiempo del original; posición y tamaño relativos al video vertical)
             "stickers": plan.get("stickers") or [],
+            "plecas": plan.get("plecas") or [],
             "catalogo_stickers": [{"tipo": a, "nombre": b, "color": c, "tam": d} for a, b, c, d in ed.CATALOGO_STICKERS
                                   if (ed.DIR_STICKERS / f"{a}.png").exists()],
             "meta_stickers": ed.meta_stickers(),
@@ -1035,6 +1035,16 @@ def renderizar_de_nuevo(t):
     return {"ok": True, "mensaje": "Armando la vista previa con la edición actual…"}
 
 
+def armar_previa_y_esperar(t):
+    """Para «Enviar a revisión»: arma la vista previa ligera y espera a que termine. -> (ok, detalle)"""
+    renderizar_de_nuevo(t)
+    while True:
+        e = estado_render_edicion(t)
+        if e["estado"] != "trabajando":
+            return e["estado"] == "listo", e.get("detalle", e["estado"])
+        time.sleep(1.0)
+
+
 def estado_render_edicion(t):
     r = _RENDER_EDI.get(t)
     if not r:
@@ -1104,6 +1114,7 @@ def guardar_stickers(t, lista):
     plan, _ = cargar(t)
     dur = plan["info"]["duracion"]
     tipos = {a: c for a, _, c, _ in ed.CATALOGO_STICKERS}
+    tipos.update({f"pleca:{p['id']}": "#ffffff" for p in plan.get("plecas") or []})   # plecas de este trabajo
     limpios = []
     for d in lista or []:
         try:
@@ -1123,7 +1134,10 @@ def guardar_stickers(t, lista):
                         "x": round(max(-0.2, min(1.2, x)), 4), "y": round(max(-0.2, min(1.2, y)), 4),
                         "tam": round(max(0.04, min(1.5, tam)), 4), "prop": ed.prop_sticker(d),
                         "rot": round(((rot + 180) % 360) - 180, 1),
-                        "color": color.lower(), "espejo": bool(d.get("espejo"))})
+                        "color": color.lower(), "espejo": bool(d.get("espejo")),
+                        **({"relleno": bool(d.get("relleno"))} if tipo.startswith("pleca:") else {})})
+        if limpios[-1].get("relleno"):   # con relleno la pleca va de orilla a orilla: centrada
+            limpios[-1]["x"] = 0.5
     limpios.sort(key=lambda d: d["inicio"])
     # los stickers se dibujan en vivo en la vista previa: cambiarlos no la deja «desactualizada»
     vpm = Path(t) / "vista_previa.mp4"
@@ -1441,7 +1455,8 @@ def datos_armado(plan, pl):
         "zoom_imagen": cfg_p.get("zoom_imagen", 1.5),
         "imagen_izquierda": bool(cfg_p.get("imagen_izquierda")),
         "proyeccion": [{"inicio": p["inicio"], "fin": p["fin"], "caja": [float(v) for v in (p.get("caja") or [0, 0, 1, 1])],
-                        "tipo": p["tipo"], "documento": bool(p.get("documento")), "vertical": bool(p.get("vertical"))}
+                        "tipo": p["tipo"], "documento": bool(p.get("documento")), "vertical": bool(p.get("vertical")),
+                        "y_lectura": float(p["camino"][0][2]) if p.get("tipo") == "lectura" and p.get("camino") else None}
                        for p in plan.get("proyeccion", [])],
         "momentos": [{"inicio": m["inicio"], "fin": m["fin"], "estilo": m.get("estilo", "dividida"),
                       "n": len(m.get("imagenes") or []), "marcos": marcos_momento(m, plan, pl)}
@@ -1740,6 +1755,48 @@ def guardar_subidas(t, i, archivos, reemplazar):
     poner_imagenes(moms[i], nuevas, reemplazar)
     guardar_plan(t, plan)
     return {"ok": True, "i": i, "mensaje": f"Ahora tiene {len(moms[i]['imagenes'])} imagen(es)."}
+
+
+def crear_pleca(t, d):
+    """Recorta del video (calidad completa) la pleca con el nombre del entrevistado y la guarda en el trabajo como
+    sticker reutilizable: se pone las veces que haga falta y se mueve por toda la pantalla."""
+    plan, _ = cargar(t)
+    tiempo = max(0.0, min(float(d["tiempo"]), float(plan["info"]["duracion"]) - 0.05))
+    W, H = int(plan["info"]["ancho"]), int(plan["info"]["alto"])
+    x, y, w, h = [float(v) for v in d["caja"]]
+    x, y = max(0, int(round(x))), max(0, int(round(y)))
+    w, h = int(min(round(w), W - x)), int(min(round(h), H - y))
+    w, h = w - w % 2, h - h % 2
+    if w < 16 or h < 8:
+        raise ValueError("El recuadro de la pleca es muy chico: dibújalo sobre la pleca en el video.")
+    plecas = plan.get("plecas") or []
+    n = 1 + max([int(p["id"][1:]) for p in plecas if str(p.get("id", "")).startswith("p") and p["id"][1:].isdigit()] or [0])
+    pid = f"p{n}"
+    destino = Path(t) / "plecas"
+    destino.mkdir(exist_ok=True)
+    archivo = destino / f"{pid}.png"
+    r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{tiempo:.3f}", "-i", str(plan["video"]),
+                        "-frames:v", "1", "-vf", f"crop={w}:{h}:{x}:{y}", str(archivo)], capture_output=True, text=True)
+    if r.returncode != 0 or not archivo.exists():
+        raise ValueError("No se pudo recortar la pleca: " + (r.stderr or "")[-200:])
+    nombre = (str(d.get("nombre") or "").strip() or f"Pleca {n}")[:40]
+    plan, _ = cargar(t)
+    respaldar(t)
+    plan["plecas"] = (plan.get("plecas") or []) + [{"id": pid, "nombre": nombre, "ancho": w, "alto": h}]
+    guardar_plan(t, plan)
+    return {"ok": True, "id": pid, "mensaje": f"Pleca guardada: «{nombre}». Úsala desde Stickers las veces que quieras."}
+
+
+def borrar_pleca(t, pid):
+    """Quita la pleca del trabajo y todos los stickers que la usan."""
+    plan, _ = cargar(t)
+    tipo = f"pleca:{pid}"
+    respaldar(t)
+    plan["plecas"] = [p for p in plan.get("plecas") or [] if p.get("id") != pid]
+    plan["stickers"] = [s for s in plan.get("stickers") or [] if s.get("tipo") != tipo]
+    guardar_plan(t, plan)
+    (Path(t) / "plecas" / f"{pid}.png").unlink(missing_ok=True)
+    return {"ok": True, "mensaje": "Pleca borrada."}
 
 
 def captura_pantalla(t, d):
@@ -2118,6 +2175,49 @@ def nombre_archivo(titulo, n=100):
     return t[:n].rstrip(". ") or "clip"
 
 
+def prefijo_nomenclatura(nombre_video):
+    """De «102 NACHO NOCHE MARTIN.mp4» o «102NACHO NOCHE MARTIN- TÍTULO VIEJO.mp4» saca la nomenclatura
+    (número, programa y editor): todo lo que va antes del primer guion, con un espacio entre el número y el texto."""
+    s = Path(str(nombre_video)).stem.split("-", 1)[0]
+    s = _re.sub(r"^(\d+)(?=[^\d\s])", r"\1 ", s.strip())          # 102NACHO -> 102 NACHO
+    return _re.sub(r"\s+", " ", s).strip(" .-_")
+
+
+def _quitar_prefijo(titulo, prefijo):
+    """Si el título ya empieza con la nomenclatura (aunque sin espacios o mal puesta), se le quita."""
+    if not prefijo:
+        return titulo
+    objetivo = [c for c in prefijo.upper() if not c.isspace()]
+    i = j = 0
+    while i < len(titulo) and j < len(objetivo):
+        c = titulo[i]
+        if c.isspace():
+            i += 1
+            continue
+        if c.upper() != objetivo[j]:
+            return titulo
+        i += 1
+        j += 1
+    if j < len(objetivo):
+        return titulo
+    return titulo[i:].lstrip(" -–—_").strip()
+
+
+def nombre_final(plan):
+    """Nombre del video final: «<número programa editor> - <título actual>»
+    (ej. «102 NACHO NOCHE MARTIN - ¡HARFUCH CAPTURA A MACHUCHONES!»). Sin título: None."""
+    titulo = _re.sub(r"\s+", " ", str(plan.get("titulo") or "")).strip()
+    if not titulo:
+        return None
+    # el clip de un «Video largo» se nombra con la nomenclatura del video largo del que salió
+    origen = (plan.get("origen_video_largo") or {}).get("video") or plan.get("video_original") or plan["video"]
+    prefijo = prefijo_nomenclatura(origen)
+    titulo = _quitar_prefijo(titulo, prefijo)
+    if not prefijo or not titulo or titulo.upper() == prefijo.upper():
+        return nombre_archivo(titulo or prefijo, 180)
+    return nombre_archivo(f"{prefijo} - {titulo}", 180)
+
+
 def ruta_fragmento(titulo):
     """Archivo del clip en VideosEdit con el TÍTULO como nombre (si ya existe otro, se le agrega (2), (3)...)."""
     base = nombre_archivo(titulo)
@@ -2370,6 +2470,117 @@ def datos_subtitulos(t):
     }
 
 
+# ----------------------------------------------------------------------------
+# Revisor: render final en calidad completa (copia local del trabajo de Drive -> carpeta de videos finales)
+# ----------------------------------------------------------------------------
+_REV_RENDER = {}   # carpeta en Drive -> {"estado", "progreso", "etapa", "mensaje", "proc"}
+
+
+def render_final_revisor(carpeta, destino_nombre=""):
+    actual = _REV_RENDER.get(carpeta)
+    if actual and actual.get("estado") == "trabajando":
+        return {"ok": True, "mensaje": "Ya se está renderizando."}
+    if revision.lista_destinos():
+        salida = revision.ruta_destino(destino_nombre)
+        if not salida:
+            return {"ok": False, "mensaje": "Elige en «Guardar en» la carpeta donde va este video."}
+    else:   # sin carpeta de destinos configurada: «Listos para subir» (o la carpeta de videos finales)
+        salida = revision.carpeta_salida()
+        destino_nombre = salida.name if salida else ""
+    if not salida:
+        return {"ok": False, "mensaje": "Primero elige la carpeta compartida de Drive (⚙ Configuración)."}
+    _REV_RENDER[carpeta] = {"estado": "trabajando", "progreso": 0.0, "etapa": "Preparando", "cancelado": False}
+    threading.Thread(target=_render_final, args=(carpeta, salida, destino_nombre), daemon=True).start()
+    return {"ok": True, "mensaje": "Render final en marcha…"}
+
+
+def _render_final(carpeta, salida, destino_nombre=""):
+    st = _REV_RENDER[carpeta]
+    local = revision.DATOS / "revisor_render" / Path(carpeta).name
+    try:
+        st.update(etapa="Preparando el trabajo en esta PC", progreso=0.01)
+        revision.copia_local(carpeta, local)
+        plan, _ = cargar(str(local))
+        if not Path(plan["video"]).exists():
+            raise RuntimeError("el video base aún no termina de bajar de Drive (revisa que Google Drive esté sincronizado)")
+        nombre = nombre_final(plan) or Path(plan["video"]).stem + "_vertical"
+        salida.mkdir(parents=True, exist_ok=True)
+        temporal = local / "final_revisor.mp4"
+        try:
+            gpu = ed.nvenc_disponible()
+        except Exception:
+            gpu = False
+        cmd = [sys.executable, str(BASE / "editor.py"), "render", str(local), "--salida", str(temporal)] + \
+            (["--gpu"] + (["--solo-gpu"] if GPU_INICIAL else []) if gpu else [])
+        env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+        registrar("─" * 60)
+        registrar(f"▶ Revisor · render final: {Path(carpeta).name}")
+        proc = lanzar(cmd, cwd=str(BASE), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                      text=True, encoding="utf-8", errors="replace")
+        st["proc"] = proc
+        ultimas = []
+        for ln in proc.stdout:
+            ln = ln.rstrip()
+            if ln.startswith("@@PROGRESO@@"):
+                try:
+                    v, etapa = ln.split(" ", 1)[1].split("|", 1)
+                    st.update(progreso=round(0.02 + 0.9 * float(v), 3), etapa=etapa)
+                except ValueError:
+                    pass
+            elif ln and not ln.startswith("@@"):
+                ultimas = (ultimas + [ln])[-4:]
+        proc.wait()
+        if st.get("cancelado") or fue_cancelado(proc):
+            st.update(estado="cancelado", mensaje="Render final cancelado.")
+            return
+        if proc.returncode != 0 or not temporal.exists():
+            raise RuntimeError(" | ".join(ultimas)[-400:] or f"el render terminó con código {proc.returncode}")
+        st.update(etapa=f"Guardando en «{destino_nombre or salida.name}»", progreso=0.95)
+        destino = revision.copiar_a_destino(temporal, salida, f"{nombre}.mp4")
+        revision.marcar_renderizado(carpeta, destino, destino_nombre or salida.name)
+        registrar(f"✔ Revisor · video final: {destino}")
+        st.update(estado="listo", progreso=1.0, etapa="Listo", archivo=str(destino),
+                  mensaje=f"Video final listo: «{destino.name}» en «{destino.parent.name}». Google Drive lo sube solo.")
+    except Exception as e:
+        registrar(f"✖ Revisor · render final: {e}")
+        st.update(estado="error", mensaje=f"No se pudo hacer el render final: {e}")
+    finally:
+        shutil.rmtree(local, ignore_errors=True)
+
+
+def estado_render_final(carpeta):
+    st = _REV_RENDER.get(carpeta)
+    return {k: v for k, v in st.items() if k != "proc"} if st else {"estado": "nada"}
+
+
+def cancelar_render_final(carpeta):
+    st = _REV_RENDER.get(carpeta)
+    proc = st and st.get("proc")
+    if proc is not None and proc.poll() is None:
+        st["cancelado"] = True
+        _matar(proc)
+    return True
+
+
+def crear_acceso_revisor():
+    """Acceso directo «Revisor Chapucero» en el escritorio (Windows)."""
+    if os.name != "nt":
+        return False, "El acceso directo solo se puede crear en Windows."
+    pyw = Path(sys.executable).with_name("pythonw.exe")
+    if not pyw.exists():
+        pyw = Path(sys.executable)
+    destino = ESCRITORIO / "Revisor Chapucero.lnk"
+    ps = ("$ws = New-Object -ComObject WScript.Shell; "
+          f"$l = $ws.CreateShortcut('{destino}'); $l.TargetPath = '{pyw}'; "
+          f"$l.Arguments = '\"{BASE / 'iniciar.pyw'}\" --revisor'; $l.WorkingDirectory = '{BASE}'; "
+          f"$l.IconLocation = '{BASE / 'icono.ico'},0'; $l.Description = 'Revisor · El Chapucero'; $l.Save()")
+    r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                       capture_output=True, text=True, creationflags=0x08000000)
+    if r.returncode != 0 or not destino.exists():
+        return False, "No pude crear el acceso directo: " + (r.stderr or "")[-200:]
+    return True, f"Listo: quedó «Revisor Chapucero» en el escritorio."
+
+
 def crear_app():
     from fastapi import Body, FastAPI, HTTPException, Request
     from fastapi.responses import FileResponse, JSONResponse, Response
@@ -2451,6 +2662,66 @@ def crear_app():
     @app.get("/sub/editor")
     def sub_pagina():
         return FileResponse(BASE / "web" / "subtitulos.html", headers={"Cache-Control": "no-store"})
+
+    # ---------------- Revisor (encargado) ----------------
+    def validar_rev(c):
+        c = limpiar_ruta(c)
+        raiz = revision.carpeta_lista()
+        if not c or not raiz or not (Path(c) / "revision.json").exists() or \
+                Path(c).resolve().parent != (raiz / revision.SUB_TRABAJOS).resolve():
+            raise HTTPException(404, "Trabajo de revisión no válido")
+        return c
+
+    @app.get("/revisor")
+    def rev_pagina():
+        return FileResponse(BASE / "web" / "revisor.html", headers={"Cache-Control": "no-store"})
+
+    @app.get("/rev/lista")
+    def rev_lista():
+        c = revision.config()
+        sal = revision.carpeta_salida()
+        return {"config": dict(c, salida_efectiva=str(sal) if sal else ""), "lista_ok": bool(revision.carpeta_lista()),
+                "destinos": revision.lista_destinos(),
+                "trabajos": revision.lista(), "version": ed.VERSION}
+
+    @app.post("/rev/config")
+    def rev_config(d: dict = Body(...)):
+        ok, msg = revision.guardar_config(d.get("carpeta"), d.get("nombre"), d.get("salida"), d.get("destinos"))
+        return {"ok": ok, "mensaje": msg}
+
+    @app.post("/rev/abrir")
+    def rev_abrir(d: dict = Body(...)):
+        return revision.abrir(validar_rev(d.get("carpeta")), bool(d.get("forzar")))
+
+    @app.post("/rev/latido")
+    def rev_latido(d: dict = Body(...)):
+        return {"ok": revision.latido(validar_rev(d.get("carpeta")))}
+
+    @app.post("/rev/soltar")
+    async def rev_soltar(request: Request):
+        try:   # llega también con sendBeacon (texto) al cerrar la pestaña
+            d = json.loads((await request.body()).decode("utf-8") or "{}")
+            revision.soltar(validar_rev(d.get("carpeta")))
+        except Exception:
+            pass
+        return {"ok": True}
+
+    @app.post("/rev/regresar")
+    def rev_regresar(d: dict = Body(...)):
+        revision.regresar(validar_rev(d.get("carpeta")), d.get("nota", ""))
+        return {"ok": True}
+
+    @app.post("/rev/render")
+    def rev_render(d: dict = Body(...)):
+        return render_final_revisor(validar_rev(d.get("carpeta")), str(d.get("destino") or ""))
+
+    @app.get("/rev/render_estado")
+    def rev_render_estado(carpeta: str):
+        return estado_render_final(limpiar_ruta(carpeta))
+
+    @app.post("/rev/render_cancelar")
+    def rev_render_cancelar(d: dict = Body(...)):
+        return {"ok": cancelar_render_final(limpiar_ruta(d.get("carpeta")))}
 
     @app.get("/sub/datos")
     def sub_datos(t: str):
@@ -2775,6 +3046,26 @@ def crear_app():
         t = validar(form.get("t"))
         archivos = [(f.filename, await f.read()) for f in form.getlist("archivos") if hasattr(f, "read")]
         return _ok(lambda: guardar_subidas(t, int(form.get("i")), archivos, form.get("reemplazar") == "1"))
+
+    @app.post("/edi/pleca")
+    def edi_pleca(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        return _ok(lambda: crear_pleca(t, d))
+
+    @app.post("/edi/pleca_borrar")
+    def edi_pleca_borrar(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        return _ok(lambda: borrar_pleca(t, str(d.get("id") or "")))
+
+    @app.get("/edi/pleca_img")
+    def edi_pleca_img(t: str, id: str):
+        t = validar(t)
+        if not _re.fullmatch(r"p\d+", id or ""):
+            raise HTTPException(404, "Pleca no válida")
+        f = Path(t) / "plecas" / f"{id}.png"
+        if not f.exists():
+            raise HTTPException(404, "No existe esa pleca")
+        return FileResponse(f, headers={"Cache-Control": "no-store"})
 
     @app.post("/edi/captura")
     def edi_captura(d: dict = Body(...)):
@@ -3327,6 +3618,7 @@ footer { display: none !important; }
 #nav_editor::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M4%2020h4L19%209l-4-4L4%2016v4z'/%3E%3Cpath%20d='M13.5%206.5l4%204'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M4%2020h4L19%209l-4-4L4%2016v4z'/%3E%3Cpath%20d='M13.5%206.5l4%204'/%3E%3C/svg%3E"); }
 #nav_largo::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='5'%20width='18'%20height='14'%20rx='2'/%3E%3Cpath%20d='M7%205v14M17%205v14M3%209.5h4M3%2014.5h4M17%209.5h4M17%2014.5h4'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='5'%20width='18'%20height='14'%20rx='2'/%3E%3Cpath%20d='M7%205v14M17%205v14M3%209.5h4M3%2014.5h4M17%209.5h4M17%2014.5h4'/%3E%3C/svg%3E"); }
 #nav_aprendido::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9%2018h6M10%2021h4'/%3E%3Cpath%20d='M12%203a6%206%200%200%200-3.5%2010.9c.6.5%201%201.2%201%202.1h5c0-.9.4-1.6%201-2.1A6%206%200%200%200%2012%203z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9%2018h6M10%2021h4'/%3E%3Cpath%20d='M12%203a6%206%200%200%200-3.5%2010.9c.6.5%201%201.2%201%202.1h5c0-.9.4-1.6%201-2.1A6%206%200%200%200%2012%203z'/%3E%3C/svg%3E"); }
+#nav_revision::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M7%2018a4.5%204.5%200%200%201-.6-9A6%206%200%200%201%2018%208a4%204%200%200%201-.5%2010z'/%3E%3Cpath%20d='M9.5%2013l2%202%203.5-4'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M7%2018a4.5%204.5%200%200%201-.6-9A6%206%200%200%201%2018%208a4%204%200%200%201-.5%2010z'/%3E%3Cpath%20d='M9.5%2013l2%202%203.5-4'/%3E%3C/svg%3E"); }
 #nav_registro::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M8%206h12M8%2012h12M8%2018h12'/%3E%3Ccircle%20cx='4'%20cy='6'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='12'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='18'%20r='.6'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M8%206h12M8%2012h12M8%2018h12'/%3E%3Ccircle%20cx='4'%20cy='6'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='12'%20r='.6'/%3E%3Ccircle%20cx='4'%20cy='18'%20r='.6'/%3E%3C/svg%3E"); }
 #btn_liberar { justify-content: flex-start !important; height: 38px; padding: 0 10px !important; border: 0 !important;
   background: transparent !important; color: #9A9AA3 !important; box-shadow: none !important; font-weight: 400 !important;
@@ -3408,6 +3700,14 @@ button.secondary { background: #1D1D22 !important; border: 1px solid #2A2A30 !im
 #btn_volver { max-width: 40px; min-width: 40px !important; height: 36px; padding: 0 !important; background: transparent !important; border: 1px solid #2A2A30 !important; }
 #trabajo_actual { color: #EDEDF0; font-size: 14px; }
 #trabajo_actual p { margin: 0; }
+#btn_revision { height: 36px; white-space: nowrap; }
+#fila_exportar { align-items: flex-end !important; gap: 12px !important; }
+.rev-tabla { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 6px; }
+.rev-tabla th { text-align: left; color: #9A9AA3; font-weight: 500; padding: 8px 10px; border-bottom: 1px solid #2A2A30; }
+.rev-tabla td { padding: 10px; border-bottom: 1px solid #1D1D22; color: #EDEDF0; vertical-align: top; }
+.rev-tabla td span { color: #9A9AA3; font-size: 12px; }
+.rev-tabla td i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; }
+.rev-vacio { color: #9A9AA3; padding: 18px 0; }
 #btn_cancelar { background: transparent !important; border: 1px solid #2A2A30 !important; color: #9A9AA3 !important; }
 #btn_cancelar:hover { color: #FF8C8F !important; border-color: #4A2326 !important; }
 #btn_exportar { min-height: 36px; }
@@ -3438,6 +3738,12 @@ button.secondary { background: #1D1D22 !important; border: 1px solid #2A2A30 !im
 #nav .ayuda-lat { display: none; padding: 14px 10px 0; font: 400 11.5px/1.45 "Geist", sans-serif; color: #6E6E78; }
 #nav .ayuda-lat .ley { display: flex; align-items: center; gap: 7px; margin: 0 0 5px; color: #9A9AA3; }
 #nav .ayuda-lat i { flex: 0 0 10px; width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+#nav .ayuda-lat summary { cursor: pointer; color: #9A9AA3; font-size: 12px; list-style: none; padding: 6px 2px; user-select: none; }
+#nav .ayuda-lat summary::-webkit-details-marker { display: none; }
+#nav .ayuda-lat summary::before { content: "▸"; display: inline-block; width: 14px; transition: transform .15s; }
+#nav .ayuda-lat details[open] summary::before { transform: rotate(90deg); }
+#nav .ayuda-lat summary:hover { color: #EDEDF0; }
+#nav .ayuda-lat details[open] summary { margin-bottom: 6px; }
 #nav .ayuda-lat p { margin: 10px 0 0; } #nav .ayuda-lat b { color: #C9C9CF; font-weight: 500; }
 body.ver-edi #nav .ayuda-lat#ayuda_edi, body.ver-subs #nav .ayuda-lat#ayuda_subs { display: block; }
 #nav.mini .ayuda-lat { display: none !important; }
@@ -3447,7 +3753,7 @@ body.ver-edi #nav .ayuda-lat#ayuda_edi, body.ver-subs #nav .ayuda-lat#ayuda_subs
 """
 
 AYUDA_LATERAL = """
-<div class="ayuda-lat" id="ayuda_edi">
+<div class="ayuda-lat" id="ayuda_edi"><details><summary>Colores y atajos</summary>
   <div class="ley"><i style="background:#D9484E"></i>Pantalla completa</div><div class="ley"><i style="background:#3B82F6"></i>Dividida</div>
   <div class="ley"><i style="background:#6366f1"></i>Dividida Ganso</div><div class="ley"><i style="background:#3A3A42"></i>Solo Nacho</div>
   <div class="ley"><i style="background:#8B5CF6"></i>9:16 (vista vertical de todo el video)</div>
@@ -3458,13 +3764,13 @@ AYUDA_LATERAL = """
   <p><b>Clic</b>: seleccionar · arrastra o estira las orillas (con <b>Alt</b>, sin imán)<br><b>Ctrl + rueda</b>: acercar<br>
   <b>Doble clic</b>: llevar el cursor (de 0.10 en 0.10 s · con <b>Alt</b>: libre)<br><b>Ctrl + B</b>: partir en el cursor (la línea en que hiciste clic)<br>
   <b>En «Así se verá»</b>: arrastra la toma de arriba o la de abajo para acomodarla · <b>rueda</b>: acercar/alejar</p>
-</div>
-<div class="ayuda-lat" id="ayuda_subs">
+</details></div>
+<div class="ayuda-lat" id="ayuda_subs"><details><summary>Atajos</summary>
   <p><b>Enter</b> siguiente<br><b>Shift+Enter</b> cortar renglón<br><b>＋</b> agregar debajo<br>
   <b>☑</b> marca varios para subirlos o bajarlos juntos<br><b>▲▼</b> altura (Shift = 50 px) o arrastrándolo en el video<br>
   <b>Alt+↑↓</b> mover el que se ve</p>
   <p>Texto vacío = quitar · tiempos en min:seg:centésimas del video editado</p>
-</div>
+</details></div>
 """
 
 TEMA_JS = """() => {
@@ -3574,7 +3880,35 @@ def opciones_recientes(n=8):
     return out
 
 
-NAV = (("editor", "Editor"), ("largo", "Video largo"), ("aprendido", "Lo aprendido"), ("registro", "Registro"))
+NAV = (("editor", "Editor"), ("largo", "Video largo"), ("aprendido", "Lo aprendido"), ("revision", "Revisión"),
+       ("registro", "Registro"))
+
+
+SOLO_RENDERS = "Renders (solo esta PC)"
+
+
+def opciones_destino():
+    """Desplegable «Guardar en» de Exportar: solo Renders, o además una carpeta de Drive (Clips Chapucero\\...)."""
+    return [SOLO_RENDERS] + revision.lista_destinos()
+
+
+def html_revision():
+    """Sección «Revisión»: trabajos de todos los editores en la carpeta compartida de Drive."""
+    if not revision.carpeta_lista():
+        return ('<div class="rev-vacio">Aún no se elige la carpeta compartida de Drive en esta PC '
+                '(escríbela arriba y presiona «Guardar»).</div>')
+    filas = revision.lista()
+    if not filas:
+        return '<div class="rev-vacio">Todavía no hay trabajos mandados a revisión.</div>'
+    colores = {"por_revisar": "#F2A33A", "en_revision": "#3B82F6", "regresado": "#FF6B6F", "renderizado": "#3DD68C"}
+    h = ['<table class="rev-tabla"><tr><th>Título</th><th>Editor</th><th>Enviado</th><th>Estado</th><th>Video base</th></tr>']
+    for f in filas:
+        est = f["texto"] + (f" · {f['revisa']}" if f.get("revisa") else "")
+        h.append(f'<tr><td><b>{f["titulo"]}</b><br><span>{f["estilo"]}</span></td><td>{f["editor"]}</td>'
+                 f'<td>{f["enviado"]}</td><td><i style="background:{colores.get(f["estado"], "#9A9AA3")}"></i>{est}</td>'
+                 f'<td>{"✔ en Drive" if f["listo_video"] else "⏳ sincronizando"}</td></tr>')
+    h.append("</table>")
+    return "".join(h)
 
 
 def construir():
@@ -3647,6 +3981,7 @@ def construir():
                                 btn_volver = gr.Button("←", elem_id="btn_volver", scale=0, min_width=40)
                                 actual = gr.Markdown(elem_id="trabajo_actual")
                                 gr.HTML('<div id="estado_edi"></div>', elem_id="estado_edi_caja")
+                                btn_revision = gr.Button("Enviar a revisión", elem_id="btn_revision", scale=0, min_width=150)
                                 # (el botón «Exportar» de arriba se quitó: se exporta desde la pestaña Exportar)
                                 btn_exportar = gr.Button("Exportar", variant="primary", elem_id="btn_exportar", scale=0,
                                                          min_width=120, visible=False)
@@ -3659,8 +3994,14 @@ def construir():
                                     with gr.Column(elem_classes=["seccion"]):
                                         gr.Markdown("Arma el video final (MP4 1080×1920) cuando termines de revisar **Edición** y "
                                                     "**Subtítulos**. Mientras revisas no hace falta: las vistas previas ya muestran "
-                                                    f"cómo queda. Queda en la carpeta `{CARPETA_RENDERS}`.")
-                                        btn_render = gr.Button("Exportar video final", variant="primary", scale=0)
+                                                    f"cómo queda. Queda en la carpeta `{CARPETA_RENDERS}` y, si eliges una "
+                                                    "carpeta de Drive en «Guardar en», también se copia ahí.")
+                                        with gr.Row(equal_height=True, elem_id="fila_exportar"):
+                                            destino_export = gr.Dropdown(label="Guardar en", choices=opciones_destino(),
+                                                                         value=SOLO_RENDERS, scale=0, min_width=280,
+                                                                         elem_id="destino_export")
+                                            btn_render = gr.Button("Exportar video final", variant="primary", scale=0,
+                                                                   min_width=200)
                                         video = gr.Video(label="Video final", height=620, interactive=False)
 
                     # ---------- Video largo ----------
@@ -3672,6 +4013,32 @@ def construir():
                     with gr.Tab("Lo aprendido", id="aprendido"):
                         gr.HTML('<iframe src="/apr/editor" style="width:100%;height:1300px;border:0;'
                                 'background:#0B0B0D"></iframe>')
+
+                    # ---------- Revisión (carpeta compartida de Drive) ----------
+                    with gr.Tab("Revisión", id="revision"):
+                        with gr.Column(elem_classes=["seccion"]):
+                            gr.HTML('<div class="titulo-sec"><h1>Revisión</h1><p>Los editores mandan su trabajo a la '
+                                    'carpeta compartida de Google Drive con «Enviar a revisión»; aquí se ven los de '
+                                    'todos. Cada PC elige una vez dónde está esa carpeta (Google Drive para escritorio).'
+                                    '</p></div>')
+                            _rc = revision.config()
+                            with gr.Row(equal_height=True):
+                                rev_carpeta = gr.Textbox(label="Carpeta compartida de Drive", value=_rc["carpeta"], scale=4,
+                                                         placeholder=r"Ej. G:\Mi unidad\Editor Vertical - Revisión")
+                                rev_nombre = gr.Textbox(label="Tu nombre", value=_rc["nombre"], scale=2,
+                                                        placeholder="Quién manda o revisa en esta PC")
+                                rev_guardar = gr.Button("Guardar", variant="primary", scale=0, min_width=120)
+                            with gr.Row(equal_height=True):
+                                rev_destinos = gr.Textbox(label="Carpeta de destinos en Drive (sus subcarpetas salen en «Guardar en»)",
+                                                          value=_rc["destinos"], scale=4,
+                                                          placeholder=r"Ej. G:\Mi unidad\Clips Chapucero")
+                                rev_acceso = gr.Button("Crear acceso «Revisor Chapucero» en el escritorio", scale=0,
+                                                       min_width=300)
+                            rev_msg = gr.Markdown()
+                            with gr.Row():
+                                gr.HTML('<div class="etiqueta">Trabajos en revisión</div>')
+                                rev_act = gr.Button("↻ Actualizar", scale=0, min_width=130)
+                            rev_lista = gr.HTML(html_revision)
 
                     # ---------- Registro ----------
                     with gr.Tab("Registro", id="registro"):
@@ -3692,6 +4059,23 @@ def construir():
                                                 for k, _ in NAV]
         for (k, _), b in zip(NAV, botones_nav):
             b.click(lambda k=k: ir_a(k), None, [secciones] + botones_nav, queue=False)
+
+        def rev_guardar_cfg(carpeta, nombre, destinos):
+            ok, msg = revision.guardar_config(carpeta, nombre, None, destinos)
+            if ok and revision.carpeta_destinos():
+                msg += f"  Carpetas para «Guardar en»: {', '.join(revision.lista_destinos()) or '(ninguna)'}."
+            return ("✔ " if ok else "⚠ ") + msg, html_revision(), gr.update(choices=opciones_destino())
+        rev_guardar.click(rev_guardar_cfg, [rev_carpeta, rev_nombre, rev_destinos], [rev_msg, rev_lista, destino_export])
+
+        def rev_crear_acceso():
+            ok, msg = crear_acceso_revisor()
+            return ("✔ " if ok else "⚠ ") + msg + ("" if not ok else "  También puedes abrirlo aquí: "
+                                                     "[http://127.0.0.1:7860/revisor](/revisor)")
+        rev_acceso.click(rev_crear_acceso, None, rev_msg)
+        rev_act.click(html_revision, None, rev_lista)
+
+        # las carpetas de Drive pueden cambiar: el desplegable «Guardar en» se pone al día al abrir la página
+        demo.load(lambda: gr.update(choices=opciones_destino()), None, destino_export, queue=False)
 
         btn_reg_act.click(texto_registro, None, caja_registro)
         btn_reg_act.click(estado_equipo, None, caja_estado)
@@ -3726,9 +4110,18 @@ def construir():
             final = video_salida(t)
             nombres = {Path(v).name: k for k, v in ESTILOS.items()}
             est = nombres.get(Path(str(plan.get("plantilla", ""))).name, "")
+            try:
+                if revision.traer_cambios(t, lambda x: cargar(x)[0], respaldar):
+                    registrar(f"↓ Traje las correcciones del revisor (subtítulos y título): {Path(t).name}")
+                rv = revision.estado_de(t)
+            except Exception:
+                rv = None
+            rev = f" · {rv['texto']}" + (f" ({rv['revisa']})" if rv.get("revisa") else "") if rv else ""
+            if rv and rv.get("nota"):
+                rev += f"<br><b style='color:#FF8C8F'>Nota del revisor:</b> {rv['nota']}"
             return (f"**{plan.get('titulo') or Path(plan['video']).stem}**  \n"
                     f"<span style='color:#9A9AA3;font-size:12.5px'>{Path(plan['video']).name}"
-                    f"{' · ' + est if est else ''}{' · exportado' if final else ''}</span>")
+                    f"{' · ' + est if est else ''}{' · exportado' if final else ''}{rev}</span>")
 
         def todo_ui(t):
             """Valores para refrescar la interfaz con el trabajo t."""
@@ -3872,7 +4265,7 @@ def construir():
         btn_aviso_no.click(lambda: (gr.Column(visible=False), "", ""), None, salidas_aviso, queue=False)
         ev_procesar.then(refrescar_listas, None, [ruta_video, ruta_trabajo, recientes])
 
-        def accion_render(t, gpu):
+        def accion_render(t, gpu, destino_drive=SOLO_RENDERS):
             if not t:
                 gr.Warning("Primero procesa o abre un video")
                 yield gr.update(), "", gr.update()
@@ -3900,6 +4293,21 @@ def construir():
                                       f"{r['pantalla']} de pantalla, {r['encuadre']} de encuadre, {r['imagenes']} búsquedas")
                     except Exception as e:
                         registrar(f"⚠ No pude aprender de este video: {e}")
+                    carpeta_drive = revision.ruta_destino(destino_drive) if destino_drive != SOLO_RENDERS else None
+                    if carpeta_drive:
+                        try:   # copia del video terminado a la carpeta de Drive elegida (Drive lo sube solo)
+                            yield gr.update(), barra(0.99, f"Copiando a «{destino_drive}» en Drive"), gr.update()
+                            final_drive = revision.copiar_a_destino(destino, carpeta_drive)
+                            registrar(f"✔ Copiado a Drive: {final_drive}")
+                            html = barra(1.0, f"✔ Video final listo: «{Path(destino).name}» en Renders y en «{destino_drive}» "
+                                              "(Google Drive lo sube solo).", "listo")
+                        except Exception as e:
+                            registrar(f"✖ No se pudo copiar a Drive: {e}")
+                            html = barra(1.0, f"⚠ El video quedó en Renders, pero no se pudo copiar a «{destino_drive}»: {e}",
+                                         "error")
+                    elif destino_drive not in (None, SOLO_RENDERS):
+                        html = barra(1.0, f"⚠ El video quedó en Renders: no encuentro la carpeta «{destino_drive}» en Drive.",
+                                     "error")
                     yield video_salida(t), html, nombre_trabajo(t)
                 elif final is not None and final.get("cancelado"):
                     a_medias = video_salida(t)
@@ -3910,7 +4318,30 @@ def construir():
                 else:
                     yield gr.update(), html, gr.update()
 
-        ev_render = btn_render.click(accion_render, [trabajo, usar_gpu], [video, progreso, actual])
+        def accion_revision(t):
+            if not t:
+                yield barra(1.0, "Abre un trabajo primero.", "error"), gr.update()
+                return
+            r = revision.enviar(t, lambda x: cargar(x)[0], armar_previa_y_esperar)
+            if not r["ok"]:
+                yield barra(1.0, "⚠ " + r["mensaje"], "error"), gr.update()
+                return
+            registrar(f"▶ Enviar a revisión: {Path(t).name}")
+            while True:
+                e = revision.estado_envio(t)
+                if e["estado"] == "trabajando":
+                    yield barra(e.get("progreso", 0), e.get("etapa", "Mandando"), "trabajando"), gr.update()
+                    time.sleep(0.7)
+                    continue
+                ok = e["estado"] == "listo"
+                registrar(("✔ " if ok else "✖ ") + e.get("mensaje", ""))
+                yield barra(1.0, ("✔ " if ok else "⚠ ") + e.get("mensaje", ""), "listo" if ok else "error"), \
+                    nombre_trabajo(t)
+                return
+
+        btn_revision.click(accion_revision, trabajo, [progreso, actual])
+
+        ev_render = btn_render.click(accion_render, [trabajo, usar_gpu, destino_export], [video, progreso, actual])
         # «Exportar» de arriba: lleva a la pestaña Exportar y arma el video final
         ev_exportar = btn_exportar.click(lambda: gr.Tabs(selected="exportar"), None, pasos, queue=False).then(
             accion_render, [trabajo, usar_gpu], [video, progreso, actual])

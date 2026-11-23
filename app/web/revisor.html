@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Revisor · El Chapucero</title>
+<style>
+  :root {
+    --fondo: #0b0b0d; --panel: #141418; --panel2: #1b1b21; --texto: #ececf1; --suave: #9a9aa6; --borde: #2a2a32;
+    --acento: #d91e2b; --ok: #3dd68c; --pend: #f2a33a; --azul: #3b82f6; --rojo: #ff6b6f;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fondo); color: var(--texto);
+    display: grid; grid-template-columns: 300px 1fr; grid-template-rows: 100%; overflow: hidden; }
+  button { font: inherit; cursor: pointer; }
+  .btn { border: 1px solid var(--borde); background: var(--panel2); color: var(--texto); padding: 8px 14px; border-radius: 8px; font-weight: 600; }
+  .btn:hover { border-color: #3a3a44; }
+  .btn.prim { background: var(--acento); border-color: var(--acento); color: #fff; }
+  .btn.ok { background: #16794a; border-color: #16794a; color: #fff; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  input, textarea { font: inherit; color: var(--texto); background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 9px 11px; width: 100%; }
+
+  /* ----- columna de trabajos ----- */
+  aside { border-right: 1px solid var(--borde); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  .marca { display: flex; align-items: center; gap: 10px; padding: 18px 18px 12px; font-weight: 700; font-size: 16px; }
+  .marca i { width: 22px; height: 22px; border-radius: 6px; background: var(--acento); display: inline-block; }
+  .marca .sp { flex: 1; }
+  .icono { border: 0; background: none; color: var(--suave); font-size: 17px; padding: 4px 6px; border-radius: 6px; }
+  .icono:hover { color: var(--texto); background: var(--panel2); }
+  .yo { padding: 0 18px 10px; color: var(--suave); font-size: 12.5px; }
+  .filtros { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 14px 12px; border-bottom: 1px solid var(--borde); }
+  .filtros button { border: 1px solid var(--borde); background: transparent; color: var(--suave); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+  .filtros button.activo { color: var(--texto); border-color: var(--texto); }
+  .lista { overflow: auto; flex: 1; }
+  .item { padding: 12px 16px; border-bottom: 1px solid #1d1d22; cursor: pointer; }
+  .item:hover { background: var(--panel2); }
+  .item.sel { background: #22141a; box-shadow: inset 3px 0 0 var(--acento); }
+  .item b { display: block; font-size: 13.5px; margin-bottom: 3px; }
+  .item .meta { font-size: 12px; color: var(--suave); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; }
+  .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--suave)); }
+  .vacio { color: var(--suave); padding: 20px 18px; font-size: 13px; }
+  .pie { padding: 10px 18px; font-size: 11px; color: #6b6b75; border-top: 1px solid var(--borde); font-family: ui-monospace, monospace; }
+
+  /* ----- trabajo abierto ----- */
+  main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .cabeza { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--borde); flex-wrap: wrap; }
+  .cabeza .tit { flex: 1; min-width: 240px; }
+  .cabeza .tit b { font-size: 15px; }
+  .cabeza .tit div { font-size: 12.5px; color: var(--suave); }
+  .fila_prog { display: flex; align-items: center; gap: 16px; padding: 10px 18px; border-bottom: 1px solid var(--borde); }
+  .fila_prog[hidden] { display: none !important; }
+  .destino { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--suave); white-space: nowrap; }
+  .destino select { font: inherit; font-size: 13.5px; color: var(--texto); background: var(--fondo); border: 1px solid var(--borde);
+    border-radius: 8px; padding: 7px 10px; min-width: 220px; }
+  .destino select.falta { border-color: var(--pend); }
+  .prog { flex: 1; min-width: 0; visibility: hidden; }
+  .prog.ver { visibility: visible; }
+  .prog .txt { font-size: 13px; margin-bottom: 6px; }
+  .prog .txt.ok { color: var(--ok); } .prog .txt.err { color: var(--rojo); }
+  .prog .riel { height: 6px; background: #1d1d22; border-radius: 999px; overflow: hidden; }
+  .prog .riel div { height: 100%; width: 0; background: var(--texto); transition: width .4s; }
+  iframe { flex: 1; width: 100%; border: 0; background: var(--fondo); }
+  .bienvenida { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--suave); text-align: center; padding: 40px; }
+  .bienvenida h1 { color: var(--texto); font-size: 22px; margin: 0 0 8px; }
+
+  /* ----- ventanas ----- */
+  .capa { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 10; }
+  .capa.ver { display: flex; }
+  .ventana { background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; padding: 22px; width: min(560px, 92vw); }
+  .ventana h2 { margin: 0 0 6px; font-size: 18px; }
+  .ventana p { margin: 0 0 14px; color: var(--suave); font-size: 13px; }
+  .ventana label { display: block; font-size: 12px; color: var(--suave); margin: 12px 0 5px; }
+  .ventana .botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .ventana .msg { font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .ventana .msg.err { color: var(--rojo); } .ventana .msg.ok { color: var(--ok); }
+  .nota_ed { background: #2a1416; border: 1px solid #5a2a2e; color: #ffb3b5; border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin: 8px 18px 0; display: none; }
+</style>
+</head>
+<body>
+<aside>
+  <div class="marca"><i></i>Revisor<span class="sp"></span>
+    <button class="icono" id="b_act" title="Actualizar la lista">↻</button>
+    <button class="icono" id="b_cfg" title="Configuración">⚙</button>
+  </div>
+  <div class="yo" id="yo"></div>
+  <div class="filtros" id="filtros">
+    <button data-f="pend" class="activo">Pendientes</button>
+    <button data-f="regresado">Regresados</button>
+    <button data-f="renderizado">Renderizados</button>
+    <button data-f="todos">Todos</button>
+  </div>
+  <div class="lista" id="lista"></div>
+  <div class="pie" id="pie"></div>
+</aside>
+
+<main>
+  <div class="cabeza" id="cabeza" hidden>
+    <div class="tit"><b id="h_tit"></b><div id="h_meta"></div></div>
+    <button class="btn" id="b_regresar" title="Regresa el trabajo al editor con una nota de qué corregir">↩ Regresar al editor</button>
+    <button class="btn prim" id="b_render" title="Arma el video en calidad completa con subtítulos y título, y lo guarda en la carpeta de videos finales">Render final</button>
+    <button class="btn" id="b_cerrar" title="Cierra el trabajo (si no lo terminaste, vuelve a «Por revisar»)">✕</button>
+  </div>
+  <div class="nota_ed" id="nota_ed"></div>
+  <div class="fila_prog" id="fila_prog" hidden>
+    <label class="destino">GUARDAR EN <select id="destino"></select></label>
+    <div class="prog" id="prog"><div class="txt" id="p_txt"></div><div class="riel"><div id="p_riel"></div></div></div>
+  </div>
+  <div class="bienvenida" id="bienvenida"><div><h1>Revisión de subtítulos</h1>
+    Elige un trabajo de la lista. Corrige los subtítulos y el título, guarda,<br>y presiona <b>Render final</b> para dejar el video listo para subir.</div></div>
+  <iframe id="marco" hidden></iframe>
+</main>
+
+<!-- configuración -->
+<div class="capa" id="c_cfg"><div class="ventana">
+  <h2>Configuración</h2>
+  <p>La carpeta compartida de Google Drive para escritorio donde los editores mandan sus trabajos.</p>
+  <label>Carpeta compartida de Drive</label><input id="f_carpeta" placeholder="Ej. G:\Mi unidad\Editor Vertical - Revisión">
+  <label>Tu nombre</label><input id="f_nombre" placeholder="Así ven los demás quién está revisando">
+  <label>Carpeta de destinos en Drive (sus subcarpetas salen en «Guardar en»)</label><input id="f_destinos" placeholder="Ej. G:\Mi unidad\Clips Chapucero">
+  <div class="msg" id="cfg_msg"></div>
+  <div class="botones"><button class="btn" id="cfg_no">Cancelar</button><button class="btn prim" id="cfg_si">Guardar</button></div>
+</div></div>
+
+<!-- regresar -->
+<div class="capa" id="c_reg"><div class="ventana">
+  <h2>Regresar al editor</h2>
+  <p>Escribe qué tiene que corregir. Lo verá en el Editor Vertical al abrir el trabajo. Lo que ya corregiste aquí (subtítulos y título) se le pasa.</p>
+  <textarea id="f_nota" rows="4" placeholder="Ej. la imagen del segundo 12 no corresponde; falta difuminar el logo…"></textarea>
+  <div class="botones"><button class="btn" id="reg_no">Cancelar</button><button class="btn prim" id="reg_si">Regresar</button></div>
+</div></div>
+
+<!-- ocupado -->
+<div class="capa" id="c_ocu"><div class="ventana">
+  <h2>Lo está revisando otra persona</h2>
+  <p id="ocu_txt"></p>
+  <div class="botones"><button class="btn" id="ocu_no">Cancelar</button><button class="btn" id="ocu_si">Abrirlo de todos modos</button></div>
+</div></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const COLORES = { por_revisar: "var(--pend)", en_revision: "var(--azul)", regresado: "var(--rojo)", renderizado: "var(--ok)" };
+let DATOS = { trabajos: [], config: {} }, filtro = "pend", abierto = null, latidoT = null, renderT = null, pendiente = null;
+
+async function api(url, cuerpo) {
+  const r = await fetch(url, cuerpo === undefined ? { cache: "no-store" } :
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+  if (!r.ok) throw new Error((await r.text()) || r.status);
+  return r.json();
+}
+function esc(t) { return String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+async function cargarLista() {
+  try { DATOS = await api("/rev/lista"); } catch (e) { $("lista").innerHTML = `<div class="vacio">No pude leer la lista: ${esc(e.message)}</div>`; return; }
+  const c = DATOS.config;
+  $("yo").textContent = c.nombre ? `Revisa: ${c.nombre}` : "";
+  $("pie").textContent = "v " + (DATOS.version || "");
+  if (!DATOS.lista_ok) { abrirCfg(); $("lista").innerHTML = '<div class="vacio">Elige la carpeta compartida de Drive (⚙).</div>'; return; }
+  pintarLista();
+}
+function pintarDestinos() {
+  const sel = $("destino"), antes = sel.value, ds = DATOS.destinos || [];
+  if (!ds.length) { sel.innerHTML = '<option value="">Listos para subir</option>'; sel.classList.remove("falta"); return; }
+  sel.innerHTML = '<option value="">— Elige carpeta —</option>' + ds.map(d => `<option>${esc(d)}</option>`).join("");
+  if (ds.includes(antes)) sel.value = antes;
+  sel.classList.toggle("falta", !sel.value);
+}
+$("destino").onchange = () => $("destino").classList.toggle("falta", !$("destino").value && (DATOS.destinos || []).length > 0);
+function pintarLista() {
+  pintarDestinos();
+  const ok = (t) => filtro === "todos" ? true : filtro === "pend" ? ["por_revisar", "en_revision"].includes(t.estado) : t.estado === filtro;
+  const filas = DATOS.trabajos.filter(ok);
+  if (!filas.length) { $("lista").innerHTML = '<div class="vacio">No hay trabajos aquí.</div>'; return; }
+  $("lista").innerHTML = filas.map(t => {
+    const quien = t.estado === "en_revision" && t.revisa ? ` · ${esc(t.revisa)}` : "";
+    return `<div class="item${abierto && abierto.carpeta === t.carpeta ? " sel" : ""}" data-c="${esc(t.carpeta)}">
+      <b>${esc(t.titulo)}</b>
+      <div class="meta"><span class="chip" style="--c:${COLORES[t.estado] || "var(--suave)"}">${esc(t.texto)}${quien}</span>
+      <span>${esc(t.editor)}</span><span>${esc(t.enviado)}</span>${t.estado === "renderizado" && t.destino ? `<span>→ ${esc(t.destino)}</span>` : ""}${t.listo_video ? "" : "<span>⏳ sincronizando video</span>"}</div></div>`;
+  }).join("");
+  document.querySelectorAll(".item").forEach(el => el.onclick = () => abrir(el.dataset.c));
+}
+
+async function abrir(carpeta, forzar) {
+  if (abierto && abierto.carpeta === carpeta && !forzar) return;
+  const t = DATOS.trabajos.find(x => x.carpeta === carpeta) || { carpeta };
+  let r;
+  try { r = await api("/rev/abrir", { carpeta, forzar: !!forzar }); } catch (e) { alertaProg("No se pudo abrir: " + e.message, "err"); return; }
+  if (!r.ok) {
+    if (r.ocupado) { pendiente = carpeta; $("ocu_txt").textContent = `${r.ocupado} lo tiene abierto en este momento. Si lo abres también, pueden pisarse los cambios.`; $("c_ocu").classList.add("ver"); }
+    else alertaProg(r.mensaje, "err");
+    return;
+  }
+  await soltarActual();
+  abierto = { carpeta, t: r.t, rev: r.revision };
+  $("bienvenida").hidden = true; $("cabeza").hidden = false;
+  $("marco").hidden = false;
+  $("marco").src = `/sub/editor?t=${encodeURIComponent(r.t)}&revisor=1&v=${Date.now()}`;
+  pintarCabeza();
+  $("fila_prog").hidden = false;
+  $("destino").value = ""; pintarDestinos();
+  ocultarProg();
+  clearInterval(latidoT);
+  latidoT = setInterval(() => abierto && api("/rev/latido", { carpeta: abierto.carpeta }).catch(() => {}), 120000);
+  vigilarRender();
+  await cargarLista();
+}
+function pintarCabeza() {
+  const r = abierto.rev || {};
+  $("h_tit").textContent = r.titulo || abierto.carpeta.split(/[\\/]/).pop();
+  $("h_meta").textContent = [r.editor && `Editor: ${r.editor}`, r.enviado && `Enviado ${r.enviado}`, r.estilo].filter(Boolean).join(" · ");
+  const nota = r.estado === "regresado" && r.nota;
+  $("nota_ed").style.display = nota ? "block" : "none";
+  $("nota_ed").textContent = nota ? "Nota anterior: " + r.nota : "";
+}
+async function soltarActual() {
+  clearInterval(latidoT); clearInterval(renderT);
+  if (abierto) { try { await api("/rev/soltar", { carpeta: abierto.carpeta }); } catch (e) {} }
+  abierto = null;
+}
+async function cerrar() {
+  await soltarActual();
+  $("marco").hidden = true; $("marco").src = "about:blank";
+  $("cabeza").hidden = true; $("bienvenida").hidden = false; $("nota_ed").style.display = "none"; $("fila_prog").hidden = true;
+  ocultarProg();
+  await cargarLista();
+}
+
+// ----- render final -----
+function alertaProg(txt, cls, frac) {
+  $("prog").classList.add("ver");
+  $("p_txt").textContent = txt; $("p_txt").className = "txt " + (cls || "");
+  $("p_riel").style.width = Math.round(100 * (frac ?? 1)) + "%";
+  $("p_riel").style.background = cls === "ok" ? "var(--ok)" : cls === "err" ? "var(--rojo)" : "var(--texto)";
+}
+function ocultarProg() { $("prog").classList.remove("ver"); }
+async function renderFinal() {
+  if (!abierto) return;
+  // si hay subtítulos o título sin guardar en la vista, se avisa antes
+  try {
+    const d = $("marco").contentDocument;
+    const sinGuardar = d && ((d.getElementById("guardar") && !d.getElementById("guardar").disabled) ||
+                             (d.getElementById("titulo_guardar") && !d.getElementById("titulo_guardar").disabled));
+    if (sinGuardar && !confirm("Hay cambios sin guardar en subtítulos o título. ¿Hacer el render sin ellos?")) return;
+  } catch (e) {}
+  const destino = $("destino").value;
+  if ((DATOS.destinos || []).length && !destino) {
+    alertaProg("Elige en «Guardar en» la carpeta donde va este video.", "err", 0);
+    $("destino").classList.add("falta"); $("destino").focus(); return;
+  }
+  let r;
+  try { r = await api("/rev/render", { carpeta: abierto.carpeta, destino }); } catch (e) { alertaProg("No se pudo empezar: " + e.message, "err"); return; }
+  if (!r.ok) { alertaProg(r.mensaje, "err"); return; }
+  vigilarRender();
+}
+function vigilarRender() {
+  clearInterval(renderT);
+  const carpeta = abierto && abierto.carpeta;
+  const paso = async () => {
+    if (!abierto || abierto.carpeta !== carpeta) { clearInterval(renderT); return; }
+    let e; try { e = await api(`/rev/render_estado?carpeta=${encodeURIComponent(carpeta)}`); } catch (x) { return; }
+    $("b_render").disabled = e.estado === "trabajando";
+    $("destino").disabled = e.estado === "trabajando";
+    $("b_render").textContent = e.estado === "trabajando" ? "Renderizando…" : "Render final";
+    if (e.estado === "nada") { clearInterval(renderT); return; }
+    if (e.estado === "trabajando") { alertaProg(`${e.etapa || "Renderizando"}… ${Math.round(100 * (e.progreso || 0))}%`, "", e.progreso || 0); return; }
+    clearInterval(renderT);
+    alertaProg(e.mensaje || e.estado, e.estado === "listo" ? "ok" : "err", 1);
+    if (e.estado === "listo") { clearInterval(latidoT); abierto.rev = Object.assign(abierto.rev || {}, { estado: "renderizado" }); cargarLista(); }
+  };
+  paso(); renderT = setInterval(paso, 1000);
+}
+
+// ----- configuración -----
+function abrirCfg() {
+  const c = DATOS.config || {};
+  $("f_carpeta").value = c.carpeta || ""; $("f_nombre").value = c.nombre || ""; $("f_destinos").value = c.destinos || "";
+  $("cfg_msg").textContent = (DATOS.destinos || []).length ? "Carpetas: " + DATOS.destinos.join(", ") : ""; $("cfg_msg").className = "msg";
+  $("c_cfg").classList.add("ver");
+}
+$("b_cfg").onclick = abrirCfg;
+$("cfg_no").onclick = () => $("c_cfg").classList.remove("ver");
+$("cfg_si").onclick = async () => {
+  const r = await api("/rev/config", { carpeta: $("f_carpeta").value, nombre: $("f_nombre").value, destinos: $("f_destinos").value });
+  $("cfg_msg").textContent = r.mensaje; $("cfg_msg").className = "msg " + (r.ok ? "ok" : "err");
+  if (r.ok) { await cargarLista(); setTimeout(() => $("c_cfg").classList.remove("ver"), 700); }
+};
+
+// ----- regresar -----
+$("b_regresar").onclick = () => { $("f_nota").value = ""; $("c_reg").classList.add("ver"); setTimeout(() => $("f_nota").focus(), 50); };
+$("reg_no").onclick = () => $("c_reg").classList.remove("ver");
+$("reg_si").onclick = async () => {
+  const nota = $("f_nota").value.trim();
+  if (!nota) { $("f_nota").focus(); return; }
+  await api("/rev/regresar", { carpeta: abierto.carpeta, nota });
+  $("c_reg").classList.remove("ver");
+  abierto = null;   // ya no es nuestro: no se «suelta»
+  await cerrar();
+};
+
+// ----- ocupado -----
+$("ocu_no").onclick = () => { $("c_ocu").classList.remove("ver"); pendiente = null; };
+$("ocu_si").onclick = () => { $("c_ocu").classList.remove("ver"); if (pendiente) abrir(pendiente, true); pendiente = null; };
+
+$("b_render").onclick = renderFinal;
+$("b_cerrar").onclick = cerrar;
+$("b_act").onclick = cargarLista;
+$("filtros").querySelectorAll("button").forEach(b => b.onclick = () => {
+  filtro = b.dataset.f;
+  $("filtros").querySelectorAll("button").forEach(x => x.classList.toggle("activo", x === b));
+  pintarLista();
+});
+// al cerrar la pestaña: el trabajo vuelve a «Por revisar» (si no se terminó)
+window.addEventListener("pagehide", () => {
+  if (abierto) navigator.sendBeacon("/rev/soltar", new Blob([JSON.stringify({ carpeta: abierto.carpeta })], { type: "text/plain" }));
+});
+setInterval(() => { if (!document.hidden) cargarLista(); }, 30000);
+cargarLista();
+</script>
+</body>
+</html>

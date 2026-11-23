@@ -52,7 +52,7 @@
   .desliza.oculta { visibility: hidden; }
   #desliza_p { position: absolute; top: 1px; bottom: 1px; min-width: 24px; background: #4b4b57; border-radius: 6px; cursor: grab; }
   #desliza_p:hover, #desliza_p.arrastrando { background: #6b6b78; }
-  #linea { width: 100%; height: 276px; display: block; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde);
+  #linea { width: 100%; height: 286px; display: block; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde);
     cursor: pointer; }
   .leyenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--suave); padding: 6px 12px 0; }
   .difbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px 0; font-size: 12.5px; color: var(--suave); }
@@ -80,6 +80,12 @@
     color: var(--suave); font-size: 10.5px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .stk_lib button:hover { border-color: var(--c-sticker); color: var(--texto); }
   .stk_lib canvas { width: 52px; height: 52px; }
+  .stk_lib.plecas { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .stk_lib.plecas button { position: relative; }
+  .stk_lib.plecas img { width: 100%; height: 40px; object-fit: contain; display: block; background: #111; border-radius: 4px; }
+  .stk_lib.plecas i { position: absolute; top: 2px; right: 4px; font-style: normal; color: var(--suave); padding: 0 4px; border-radius: 4px; }
+  .stk_lib.plecas i:hover { color: #fff; background: #b91c1c; }
+  #capa.pleca { cursor: crosshair !important; }
   .stk_colores { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
   .stk_colores button { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #0006; cursor: pointer; padding: 0; }
   .stk_colores button.activo { outline: 2px solid #fff; outline-offset: 1px; }
@@ -191,6 +197,17 @@
   /* dentro de la plataforma: la fila de arriba comparte renglón con las pestañas Edición/Subtítulos/Exportar,
      el aviso y la versión van en la cabecera y la leyenda en el menú de la izquierda */
   body.incrustado .barra { padding-left: 300px; min-height: 54px; }
+  /* todos los botones de arriba en un solo renglón: el título y el aviso se encogen, los botones no */
+  .barra { flex-wrap: nowrap; }
+  .barra > * { flex-shrink: 0; }
+  .barra .campo_titulo { flex: 1 1 160px; min-width: 120px; flex-shrink: 1; }
+  .barra #estado { flex: 1 1 0; min-width: 0; flex-shrink: 1; }
+  @media (max-width: 1500px) { .barra .campo_titulo > span, .tit_aj > span { display: none; } }
+  @media (max-width: 1450px) {
+    .barra .campo_titulo { min-width: 90px; }
+    .barra #b_render { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .barra { gap: 6px; }
+  }
   @media (max-width: 1500px) {   /* pantallas chicas: la barra de arriba más compacta */
     .barra .campo_titulo { flex: 1 1 200px; } .barra .campo_titulo > span, .tit_aj > span { display: none; }
     #b_render { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -321,14 +338,27 @@
         el punto de arriba lo <b>gira</b>; <b>rueda</b> = tamaño, <b>Shift + rueda</b> = girar.
         Su bloque rosa en la línea de tiempo se mueve y se estira como los demás.</div>
       <div class="stk_lib" id="stk_lib"></div>
+      <div class="separador"></div>
+      <div class="sub"><b>Plecas</b> · el nombre del entrevistado, recortado del video. Se guarda en este trabajo y se usa
+        las veces que quieras (cada que sale el entrevistado), y se mueve por toda la pantalla como cualquier sticker.</div>
+      <div class="fila">
+        <button class="btn" id="pl_nueva" title="Pausa el video y dibuja un recuadro sobre la pleca en el video original (arriba)">＋ Pleca desde el video</button>
+        <input type="text" id="pl_nombre" placeholder="Nombre" style="flex:1;min-width:0">
+      </div>
+      <div class="stk_lib plecas" id="pl_lib"></div>
       <div id="stk_sel" style="display:none;flex-direction:column;gap:8px">
         <div class="separador"></div>
         <div class="sub" id="stk_desc"></div>
         <div class="stk_colores" id="stk_colores"></div>
-        <div class="fila"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Ancho<input type="range" id="stk_ancho" min="3" max="120" step="1"><b id="stk_ancho_txt"></b></label></div>
-        <div class="fila"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Alto<input type="range" id="stk_alto" min="3" max="150" step="1"><b id="stk_alto_txt"></b></label>
+        <div class="fila" id="pl_ctrl" style="display:none;flex-direction:column;align-items:stretch;gap:8px">
+          <label style="flex-direction:row;align-items:center;gap:6px">Tamaño<input type="range" id="pl_tam" min="20" max="120" step="1" style="flex:1"><b id="pl_tam_txt"></b></label>
+          <label style="flex-direction:row;align-items:center;gap:6px">Posición<input type="range" id="pl_pos" min="0" max="100" step="0.5" style="flex:1"><b id="pl_pos_txt"></b></label>
+          <label style="flex-direction:row;align-items:center;gap:6px" title="Si la pleca es más chica que el video, estira el color de sus orillas (blanco y azul) hasta los lados"><input type="checkbox" id="pl_relleno"> Rellenar a lo ancho (los colores de la pleca llegan hasta las orillas)</label>
+        </div>
+        <div class="fila" id="stk_fila_ancho"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Ancho<input type="range" id="stk_ancho" min="3" max="120" step="1"><b id="stk_ancho_txt"></b></label></div>
+        <div class="fila" id="stk_fila_alto"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Alto<input type="range" id="stk_alto" min="3" max="150" step="1"><b id="stk_alto_txt"></b></label>
           <button class="btn" id="stk_prop1" title="Regresarlo a su proporción original (sin estirar)">↺ Proporción</button></div>
-        <div class="fila"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Giro<input type="range" id="stk_rot" min="-180" max="180" step="1"><b id="stk_rot_txt"></b></label>
+        <div class="fila" id="stk_fila_giro"><label style="flex:1;flex-direction:row;align-items:center;gap:6px">Giro<input type="range" id="stk_rot" min="-180" max="180" step="1"><b id="stk_rot_txt"></b></label>
           <button class="btn" id="stk_rot0" title="Sin giro">0°</button></div>
         <div class="fila">
           <button class="btn" id="stk_espejo" title="Voltearlo (por ejemplo, para que la flecha o la mano apunten al otro lado)">⇋ Voltear</button>
@@ -435,7 +465,7 @@
     <b>Subtítulos que trae el video de Nacho:</b>
     <span id="dif_info"></span>
     <button class="btn" id="dif_aqui" title="Pone una franja difuminada en este momento (abajo de lo que proyecta Nacho). Luego mueve o estira el recuadro morado sobre el video y su bloque en la línea de tiempo.">＋ Difuminar aquí</button>
-    <button class="btn" id="dif_quitar" title="Quita la franja difuminada que hay en este momento">Quitar el de aquí</button>
+    <button class="btn" id="dif_quitar" title="Quita el difuminado seleccionado en la línea de tiempo (si no hay uno seleccionado, todos los de este momento)">Quitar el de aquí</button>
     <button class="btn" id="dif_buscar" title="Vuelve a buscar con el lector de texto los subtítulos del video que pone Nacho (los que pusiste a mano se conservan)">Buscar de nuevo</button>
   </div>
   <div class="difbar" id="transbar" style="display:none">
@@ -957,7 +987,12 @@ function dibujarPantallaAbajo(i, t, dx, dy, dw, dh) {
   const [x, y, w, h] = p.caja, asp = dw / dh, fase = Math.min(1, Math.max(0, (t - p.inicio) / Math.max(0.1, p.fin - p.inicio)));
   let cw, ch, x0, y0;
   if (p.tipo === "video" || p.vertical) { cw = w; ch = Math.min(h, cw / asp); cw = ch * asp; x0 = x + (w - cw) / 2; y0 = y + (h - ch) * 0.45; }
-  else if (p.documento || p.tipo === "lectura") { cw = w; ch = cw / asp; x0 = x; y0 = y + Math.max(0, h - ch) * (0.05 + 0.5 * fase); }
+  else if (p.tipo === "lectura") {   // nota que Nacho lee: quieta, desde donde empieza a leer (como el render)
+    cw = w; ch = Math.min(h, cw / asp); x0 = x;
+    const cy0 = p.y_lectura != null ? p.y_lectura : y + ch * 0.3;
+    y0 = Math.min(Math.max(y, cy0 - ch * 0.3), y + h - ch);
+  }
+  else if (p.documento) { cw = w; ch = cw / asp; x0 = x; y0 = y + Math.max(0, h - ch) * (0.05 + 0.5 * fase); }
   else { cw = Math.min(w, h * asp) / E.armado.zoom_imagen; ch = cw / asp; x0 = x + (w - cw) * (0.2 + 0.6 * fase); y0 = y + (h - ch) * 0.45; }
   deVideo(x0, y0, cw, ch, dx, dy, dw, dh);
 }
@@ -1146,6 +1181,11 @@ function dibujarEscenario(t, e, v, vp, pe) {
     marco(vp, zonaP(pe), pe.auto, "#38bdf8", "#38bdf8", todo ? "Vista 9:16" : "Pantalla de Nacho");
   }
   dibujarDifuminar(t, s, d);
+  if (capPleca && capPleca.p0) {   // recuadro de la pleca que se está recortando
+    const [x0, y0] = capPleca.p0.map(v => v * s), [x1, y1] = capPleca.p1.map(v => v * s);
+    ctx.setLineDash([6 * d, 4 * d]); ctx.strokeStyle = "#facc15"; ctx.lineWidth = 3;
+    ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0)); ctx.setLineDash([]);
+  }
 }
 function difEn(t) { return (E.difuminar || []).filter(x => x.inicio <= t && t < x.fin); }
 function dibujarDifuminar(t, s, d) {   // franja difuminada (morada): se mueve y se estira libre
@@ -1168,7 +1208,7 @@ function colorOp(op) { return getComputedStyle(document.documentElement).getProp
 const REGLA = 26;   // alto de la regla de tiempo (arriba de los carriles)
 // carriles más altos para que las orillas se agarren fácil; «Imágenes 2» = la imagen de arriba (en lugar de Nacho)
 const CARRILES = { p: [REGLA + 6, 24], m: [REGLA + 34, 22], m2: [REGLA + 60, 22], en: [REGLA + 86, 20], ep: [REGLA + 110, 20],
-                   df: [REGLA + 134, 20], st: [REGLA + 158, 39], au: [REGLA + 201, 44] };
+                   df: [REGLA + 134, 30], st: [REGLA + 168, 39], au: [REGLA + 211, 44] };
 let ratonX = null;   // tiempo bajo el ratón (línea guía), o null
 function itemsLinea() {
   const it = [];
@@ -1181,19 +1221,24 @@ function itemsLinea() {
     it.push({ carril: "m", tipo: "ti", a: 0, b: aEditado(X.titulo_fin), op: "titulo", ref: { k: "titulo" }, mov: true });
   E.ajustes.forEach(a => it.push({ carril: "en", tipo: "en", a: aEditado(a.inicio), b: aEditado(a.fin), op: "manual", ref: a, mov: true }));
   (E.ajustes_pantalla || []).forEach(a => it.push({ carril: "ep", tipo: "ep", a: aEditado(a.inicio), b: aEditado(a.fin), op: "pantallaman", ref: a, mov: true }));
-  (E.difuminar || []).forEach(a => it.push({ carril: "df", tipo: "df", a: aEditado(a.inicio), b: aEditado(a.fin), op: "difuminar", ref: a, mov: true }));
+  // difuminados: también pueden ir varios a la vez (en renglones, como los stickers)
+  enRenglones((E.difuminar || []).map(a => ({ carril: "df", tipo: "df", a: aEditado(a.inicio), b: aEditado(a.fin), op: "difuminar", ref: a, mov: true })), "df", it);
   (E.audio_tramos || []).forEach(a => it.push({ carril: "au", tipo: "au", a: aEditado(a.inicio), b: aEditado(a.fin), ref: a, mov: true,
                                                 op: a.ganancia <= 0.001 ? "silencio" : "audio" }));
-  // stickers: si se enciman en el tiempo, van en renglones (hasta 3) para que se vean y se puedan agarrar todos
-  const filasSt = [], itsSt = (E.stickers || []).map(a => ({ carril: "st", tipo: "st", a: aEditado(a.inicio), b: aEditado(a.fin), op: "sticker", ref: a, mov: true }));
-  itsSt.sort((x, y) => x.a - y.a).forEach(x => {
-    let f = filasSt.findIndex(fin => fin <= x.a + 1e-6);
-    if (f < 0) { f = filasSt.length < 3 ? filasSt.length : filasSt.indexOf(Math.min(...filasSt)); }
-    filasSt[f] = Math.max(filasSt[f] || 0, x.b); x.fila = f;
-  });
-  const [sy, sh] = CARRILES.st, nf = Math.max(1, filasSt.length);
-  itsSt.forEach(x => { x.yh = [sy + x.fila * sh / nf, sh / nf - (nf > 1 ? 1 : 0)]; it.push(x); });
+  // stickers: si se enciman en el tiempo, van en renglones (hasta 4) para que se vean y se puedan agarrar todos
+  enRenglones((E.stickers || []).map(a => ({ carril: "st", tipo: "st", a: aEditado(a.inicio), b: aEditado(a.fin), op: "sticker", ref: a, mov: true })), "st", it, 4);
   return it;
+}
+// bloques que se enciman en el tiempo: cada uno en su renglón dentro del carril (hasta «max» renglones)
+function enRenglones(its, carril, salida, max = 3) {
+  const filas = [];
+  its.sort((x, y) => x.a - y.a).forEach(x => {
+    let f = filas.findIndex(fin => fin <= x.a + 1e-6);
+    if (f < 0) { f = filas.length < max ? filas.length : filas.indexOf(Math.min(...filas)); }
+    filas[f] = Math.max(filas[f] || 0, x.b); x.fila = f;
+  });
+  const [cy, ch] = CARRILES[carril], nf = Math.max(1, filas.length);
+  its.forEach(x => { x.yh = [cy + x.fila * ch / nf, ch / nf - (nf > 1 ? 1 : 0)]; salida.push(x); });
 }
 const xDe = (s) => (s - vista[0]) / (vista[1] - vista[0]) * linea.width;
 // ---------- segmentos del video (montaje): seleccionar con Shift + arrastrar en la línea Pantalla ----------
@@ -1659,6 +1704,7 @@ function atajos(ev) {
     const d = (ev.code === "ArrowLeft" ? -1 : 1) * (ev.shiftKey ? 1 : 1 / fps);
     return ajustarSel(it, it.a + d, it.b + d);
   }
+  if (k === "escape" && capPleca) { hecho(); terminarPleca(false); return estado("Pleca cancelada."); }
   if (k === "escape") { hecho(); stSel = null; segSel = null; pintarSegbar(); seleccionar(null, false); edit = null; tramoE = null; editP = null; tramoPE = null; return estado(""); }
   if (k === "tab") { hecho(); return siguienteBloque(ev.shiftKey); }
   const mover = (d) => { video.pause(); irE(Math.min(durE(), Math.max(0, te + d))); };
@@ -1927,7 +1973,7 @@ function ponerRect(r, e) {
 function ponerRectLibreN(r) { edit = { modo: "libre", r: r.map(v => Math.round(v * 10) / 10), region: MARCO() }; }
 function objetivo(t, p) {   // qué recuadro está bajo el cursor: el de Nacho o el de la pantalla
   const e = muestra(t), v = ventanaActual(t, e), pe = pvEn(t), vp = ventanaPActual(t, pe);
-  for (const x of difEn(t)) { const z = zonaDe(p, x.caja); if (z) return { cual: "dif", z, x }; }   // va encima de los demás
+  for (const x of [...difEn(t)].reverse()) { const z = zonaDe(p, x.caja); if (z) return { cual: "dif", z, x }; }   // va encima de los demás
   if (v) { const z = zonaDe(p, v.r); if (z) return { cual: "nacho", z, e }; }
   if (vp && vp.fin) { const z = zonaDe(p, vp.fin); if (z) return { cual: "pantallaFin", z, e: pe }; }
   if (vp) { const z = zonaDe(p, vp.fin ? vp.ini : vp.r); if (z) return { cual: "pantalla", z, e: pe }; }
@@ -1939,6 +1985,7 @@ function ponerRectP(r, pe) {   // forma libre (si se movía, conserva su recuadr
 }
 function iniciarEncuadre() {
   capa.addEventListener("pointerdown", (ev) => {
+    if (capPleca) { capPleca.p0 = capPleca.p1 = punto(ev); capa.setPointerCapture(ev.pointerId); return; }
     const t = ahoraO(), p = punto(ev), o = objetivo(t, p);
     if (!o) return;
     video.pause();
@@ -1957,6 +2004,7 @@ function iniciarEncuadre() {
     capa.setPointerCapture(ev.pointerId);
   });
   capa.addEventListener("pointermove", (ev) => {
+    if (capPleca) { if (capPleca.p0) capPleca.p1 = punto(ev); return; }
     if (!arrastre) {
       const o = objetivo(ahoraO(), punto(ev));
       capa.style.cursor = !o ? "pointer" : o.z === "mover" ? "move" : (o.z === "nw" || o.z === "se" ? "nwse-resize" : "nesw-resize");
@@ -1994,6 +2042,7 @@ function iniciarEncuadre() {
     }
   });
   capa.addEventListener("pointerup", () => {
+    if (capPleca) { if (capPleca.p0) terminarPleca(true); return; }
     if (arrastre && arrastre.cual === "dif") {
       const fue = arrastre; arrastre = null;
       if (!fue.movido) { video.pause(); return; }
@@ -2343,8 +2392,68 @@ const stSubidas = new Set();
 const STK_COLORES = ["#e6231b", "#f97316", "#ffd400", "#22c55e", "#0ea5e9", "#a855f7", "#ffffff", "#111111"];
 const STK_LINEA = ["circulo", "ovalo", "rectangulo", "marco", "enfoque", "subrayado", "tachado"];
 let stTmpA = null, stTmpB = null;
-const propDe = (s) => Math.round(Math.max(0.1, Math.min(10, s.prop || 1)) * 100) / 100;
-function nombreSticker(tipo) { const c = (E.catalogo_stickers || []).find(x => x.tipo === tipo); return c ? c.nombre : tipo; }
+const propDe = (s) => String(s.tipo || "").startsWith("pleca:")   // las plecas pueden ser muy delgadas
+  ? Math.round(Math.max(0.02, Math.min(10, s.prop || 1)) * 10000) / 10000
+  : Math.round(Math.max(0.1, Math.min(10, s.prop || 1)) * 100) / 100;
+function nombreSticker(tipo) {
+  if (esPleca(tipo)) { const p = (E.plecas || []).find(x => "pleca:" + x.id === tipo); return p ? p.nombre : "Pleca"; }
+  const c = (E.catalogo_stickers || []).find(x => x.tipo === tipo); return c ? c.nombre : tipo;
+}
+// ---------- plecas: recorte del video (nombre del entrevistado) usado como sticker ----------
+const esPleca = (tipo) => String(tipo || "").startsWith("pleca:");
+const plImgs = {};
+function imgPleca(tipo) {
+  const id = String(tipo).slice(6);
+  if (!plImgs[id]) { plImgs[id] = new Image(); plImgs[id].src = `/edi/pleca_img?t=${encodeURIComponent(T)}&id=${id}&v=${Date.now()}`; }
+  const im = plImgs[id];
+  return im.complete && im.naturalWidth ? im : null;
+}
+let capPleca = null;   // dibujando el recuadro de una pleca nueva sobre el video original: {p0, p1}
+function propPleca(tipo) { const p = (E.plecas || []).find(x => "pleca:" + x.id === tipo); return p ? p.alto / p.ancho : 0.15; }
+function agregarPleca(p) {
+  const te = ahoraE(), a = aOriginal(te), b = aOriginal(Math.min(durE(), te + 5));
+  if (b - a < 0.1) return avisar("No cabe aquí: estás al final del video.");
+  // como en las muestras: a todo lo ancho y pegada abajo (luego se mueve o se estira a gusto)
+  const prop = p.alto / p.ancho, tam = 1, altoFr = tam * prop * E.salida[0] / E.salida[1];
+  const nuevo = { tipo: "pleca:" + p.id, inicio: a, fin: b, x: 0.5, y: Math.max(0.1, 1 - altoFr / 2 - 0.012), tam, prop, rot: 0, color: "#ffffff", espejo: false, relleno: false };
+  stSel = nuevo; sel = null;
+  guardarStickers([...(E.stickers || []), nuevo], `Pleca «${p.nombre}» puesta (5 s): muévela y estírala en la vista previa.`);
+}
+function pintarPlecas() {
+  const lib = $("pl_lib");
+  if (!lib) return;
+  const ps = E.plecas || [];
+  lib.innerHTML = ps.length ? "" : '<div class="sub" style="grid-column:1/-1">Todavía no hay plecas en este trabajo.</div>';
+  for (const p of ps) {
+    const b = document.createElement("button");
+    b.title = `Poner «${p.nombre}» aquí`;
+    b.innerHTML = `<img src="/edi/pleca_img?t=${encodeURIComponent(T)}&id=${p.id}"><span></span><i title="Borrar esta pleca (y donde se usa)">✕</i>`;
+    b.querySelector("span").textContent = p.nombre;
+    b.onclick = (ev) => {
+      if (ev.target.tagName === "I") {
+        const usos = (E.stickers || []).filter(s => s.tipo === "pleca:" + p.id).length;
+        if (usos && !confirm(`La pleca «${p.nombre}» se usa ${usos} vez/veces. ¿Borrarla de todos lados?`)) return;
+        return enviar("/edi/pleca_borrar", { t: T, id: p.id }, "Pleca borrada.");
+      }
+      agregarPleca(p);
+    };
+    lib.appendChild(b);
+  }
+}
+function empezarPleca() {
+  video.pause();
+  capPleca = { p0: null, p1: null };
+  capa.classList.add("pleca");
+  estado("Dibuja un recuadro sobre la pleca en el video original (arriba). Esc para cancelar.", "pend");
+}
+function terminarPleca(guardar) {
+  const c = capPleca; capPleca = null; capa.classList.remove("pleca");
+  if (!guardar || !c || !c.p0 || !c.p1) return;
+  const x = Math.min(c.p0[0], c.p1[0]), y = Math.min(c.p0[1], c.p1[1]), w = Math.abs(c.p1[0] - c.p0[0]), h = Math.abs(c.p1[1] - c.p0[1]);
+  if (w < 16 || h < 8) return avisar("El recuadro quedó muy chico: vuelve a dibujarlo sobre la pleca.");
+  estado("Recortando la pleca…", "pend");
+  enviar("/edi/pleca", { t: T, tiempo: ahoraO(), caja: [x, y, w, h], nombre: $("pl_nombre").value.trim() }).then(() => { $("pl_nombre").value = ""; });
+}
 function hojaBase(tipo) {
   if (!stHojas[tipo]) { stHojas[tipo] = new Image(); stHojas[tipo].src = `/stk/hoja?tipo=${tipo}`; }
   const im = stHojas[tipo];
@@ -2408,11 +2517,17 @@ function dibujarStickers(cx, t, W, H) {   // true si dibujó alguno
   if (!E.meta_stickers) return false;
   let alguno = false;
   for (const s of stickersEn(t)) {
-    const c = cuadroTenido(s.tipo, s.color, cuadroSticker(t - s.inicio), propDe(s));
+    const pl = esPleca(s.tipo);
+    const c = pl ? imgPleca(s.tipo) : cuadroTenido(s.tipo, s.color, cuadroSticker(t - s.inicio), propDe(s));
     if (!c) continue;
-    const g = geomSticker(s, W, H), resta = s.fin - t;
+    const g = geomSticker(s, W, H), resta = s.fin - t, desde = t - s.inicio;
     cx.save(); cx.translate(g.cx, g.cy); cx.rotate(g.rot); if (s.espejo) cx.scale(-1, 1);
-    cx.globalAlpha = resta < 0.12 ? Math.max(0, resta / 0.12) : 1;
+    cx.globalAlpha = !pl && resta < 0.12 ? Math.max(0, resta / 0.12) : 1;   // la pleca entra y sale en corte directo
+    if (pl && s.relleno && g.w < W) {   // relleno: el color de las orillas de la pleca estirado hasta los lados
+      const iw = c.naturalWidth, ih = c.naturalHeight, lado = (W - g.w) / 2 + 1, k = Math.min(3, iw - 1);
+      cx.drawImage(c, k, 0, 1, ih, -W / 2, -g.h / 2, lado, g.h);
+      cx.drawImage(c, iw - 1 - k, 0, 1, ih, g.w / 2 - 1, -g.h / 2, lado, g.h);
+    }
     cx.drawImage(c, -g.w / 2, -g.h / 2, g.w, g.h);
     cx.restore();
     alguno = true;
@@ -2428,6 +2543,7 @@ function dibujarSelSticker(cx, t, W, H) {   // recuadro del seleccionado con sus
   cx.fillStyle = "#F2A33A"; cx.strokeStyle = "#fff";
   // esquina: agrandar parejo
   cx.beginPath(); cx.moveTo(a, b - 12 * d); cx.lineTo(a, b); cx.lineTo(a - 12 * d, b); cx.closePath(); cx.fill(); cx.stroke();
+  if (esPleca(stSel.tipo)) { cx.restore(); return; }   // la pleca: solo mover y agrandar parejo
   // lados: solo ancho (derecha) o solo alto (abajo)
   cx.fillStyle = "#fff"; cx.strokeStyle = "#F2A33A";
   cx.beginPath(); cx.roundRect(a - 3.5 * d, -9 * d, 7 * d, 18 * d, 3 * d); cx.fill(); cx.stroke();
@@ -2441,7 +2557,7 @@ function dibujarSelSticker(cx, t, W, H) {   // recuadro del seleccionado con sus
 function guardarStickers(lista, msg) {
   const antes = stSel;
   return enviar("/edi/stickers", { t: T, lista: lista.map(x => ({ tipo: x.tipo, inicio: x.inicio, fin: x.fin, x: x.x, y: x.y,
-    tam: x.tam, prop: propDe(x), rot: x.rot || 0, color: x.color, espejo: !!x.espejo })) }, msg).then(r => {
+    tam: x.tam, prop: propDe(x), rot: x.rot || 0, color: x.color, espejo: !!x.espejo, relleno: !!x.relleno })) }, msg).then(r => {
     if (antes) stSel = (E.stickers || []).find(s => s.tipo === antes.tipo && Math.abs(s.inicio - antes.inicio) < 0.002 &&
       Math.abs(s.x - antes.x) < 0.001 && Math.abs(s.y - antes.y) < 0.001) || null;
     pintarStickerSel(true);
@@ -2459,7 +2575,8 @@ function agregarSticker(c) {
 function cambiarSticker(campos, guardar = true) {
   if (!stSel) return;
   Object.assign(stSel, campos);
-  if (campos.prop !== undefined) stSel.prop = Math.round(Math.max(0.1, Math.min(10, stSel.prop)) * 100) / 100;
+  if (esPleca(stSel.tipo) && stSel.relleno) stSel.x = 0.5;   // con relleno va de orilla a orilla: siempre centrada
+  if (campos.prop !== undefined) stSel.prop = propDe(stSel);
   pintarStickerSel(true);
   if (!guardar) return;
   clearTimeout(cambiarSticker.tm);
@@ -2496,7 +2613,11 @@ function pintarLibStickers() {
   $("stk_color").oninput = (ev) => cambiarSticker({ color: ev.target.value });
   $("stk_ancho").oninput = (ev) => cambiarSticker(ponerAncho(Number(ev.target.value) / 100));
   $("stk_alto").oninput = (ev) => cambiarSticker(ponerAlto(Number(ev.target.value) / 100));
-  $("stk_prop1").onclick = () => cambiarSticker({ prop: 1 });
+  $("stk_prop1").onclick = () => cambiarSticker({ prop: esPleca(stSel.tipo) ? propPleca(stSel.tipo) : 1 });
+  $("pl_nueva").onclick = empezarPleca;
+  $("pl_tam").oninput = (ev) => cambiarSticker({ tam: Number(ev.target.value) / 100 });
+  $("pl_pos").oninput = (ev) => cambiarSticker({ y: Number(ev.target.value) / 100 });
+  $("pl_relleno").onchange = (ev) => cambiarSticker(ev.target.checked ? { relleno: true, x: 0.5 } : { relleno: false });
   $("stk_rot").oninput = (ev) => cambiarSticker({ rot: Number(ev.target.value) });
   $("stk_rot0").onclick = () => cambiarSticker({ rot: 0 });
   $("stk_espejo").onclick = () => cambiarSticker({ espejo: !stSel.espejo });
@@ -2517,7 +2638,15 @@ function pintarStickerSel(forzar) {
   const an = Math.round(stSel.tam * 100), al = Math.round(stSel.tam * propDe(stSel) * 100);
   $("stk_ancho").value = an; $("stk_ancho_txt").textContent = an + "%";
   $("stk_alto").value = al; $("stk_alto_txt").textContent = al + "%";
-  $("stk_prop1").disabled = Math.abs(propDe(stSel) - 1) < 0.005;
+  $("stk_prop1").disabled = Math.abs(propDe(stSel) - (esPleca(stSel.tipo) ? propPleca(stSel.tipo) : 1)) < 0.005;
+  const pl = esPleca(stSel.tipo);
+  for (const id of ["stk_colores", "stk_fila_ancho", "stk_fila_alto", "stk_fila_giro", "stk_espejo"]) $(id).style.display = pl ? "none" : "";
+  $("pl_ctrl").style.display = pl ? "flex" : "none";
+  if (pl) {
+    $("pl_tam").value = Math.round(stSel.tam * 100); $("pl_tam_txt").textContent = Math.round(stSel.tam * 100) + "%";
+    $("pl_pos").value = (stSel.y * 100).toFixed(1); $("pl_pos_txt").textContent = Math.round(stSel.y * 100) + "%";
+    $("pl_relleno").checked = !!stSel.relleno;
+  }
   $("stk_rot").value = Math.round(stSel.rot || 0); $("stk_rot_txt").textContent = Math.round(stSel.rot || 0) + "°";
   $("stk_espejo").classList.toggle("activo", !!stSel.espejo);
 }
@@ -2536,7 +2665,9 @@ function tocarSticker(p) {   // qué sticker (y qué parte) está bajo el cursor
   if (stSel && lista.includes(stSel)) { lista.splice(lista.indexOf(stSel), 1); lista.push(stSel); }   // el elegido va primero
   for (let i = lista.length - 1; i >= 0; i--) {
     const s = lista[i], [lx, ly, g] = aLocal(s, p), a = g.w / 2, b = g.h / 2;
-    if (s === stSel) {
+    if (s === stSel && esPleca(s.tipo)) {
+      if (Math.abs(lx - a) < 12 * d && Math.abs(ly - b) < 12 * d) return { s, modo: "tam" };
+    } else if (s === stSel) {
       if (Math.hypot(lx, ly + b + 18 * d) < 10 * d) return { s, modo: "rot" };
       if (Math.abs(lx - a) < 12 * d && Math.abs(ly - b) < 12 * d) return { s, modo: "tam" };
       if (Math.abs(lx - a) < 9 * d && Math.abs(ly) < 14 * d) return { s, modo: "ancho" };
@@ -2592,7 +2723,7 @@ function iniciarStickers() {
     }
     const s = stSel, g = geomSticker(s, W, H);
     stArr.movido = true;
-    if (stArr.modo === "mover") cambiarSticker({ x: stArr.x0 + (p[0] - stArr.p0[0]) / W, y: stArr.y0 + (p[1] - stArr.p0[1]) / H }, false);
+    if (stArr.modo === "mover") cambiarSticker({ x: stArr.x0 + (p[0] - stArr.p0[0]) / W, y: stArr.y0 + (p[1] - stArr.p0[1]) / H }, false);   // (con relleno, x se queda al centro)
     else if (stArr.modo === "tam") {
       const d0 = Math.hypot(stArr.p0[0] - g.cx, stArr.p0[1] - g.cy), d1 = Math.hypot(p[0] - g.cx, p[1] - g.cy);
       cambiarSticker({ tam: Math.max(0.03, Math.min(1.5, stArr.tam0 * d1 / Math.max(1, d0))) }, false);
@@ -2647,7 +2778,7 @@ function iniciarStickers() {
     ev.preventDefault();
     stSel = o.s;
     const k = (ev.deltaY || ev.deltaX) < 0 ? 1 : -1;
-    if (ev.shiftKey) cambiarSticker({ rot: Math.round(((o.s.rot || 0) + k * 5 + 540) % 360 - 180) });
+    if (ev.shiftKey && !esPleca(o.s.tipo)) cambiarSticker({ rot: Math.round(((o.s.rot || 0) + k * 5 + 540) % 360 - 180) });
     else cambiarSticker({ tam: Math.max(0.03, Math.min(1.5, o.s.tam * (k > 0 ? 1.06 : 1 / 1.06))) });
   }, { passive: false });
 }
@@ -2657,17 +2788,22 @@ function guardarDifuminar(lista, msg) {
   return enviar("/edi/difuminar", { t: T, lista: lista.map(x => ({ inicio: x.inicio, fin: x.fin, caja: x.caja, auto: !!x.auto })) }, msg);
 }
 function difuminarAqui() {
-  const t = ahoraO(), pe = pvEn(t);
-  if (difEn(t).length) return avisar("Aquí ya hay una franja difuminada: muévela o estírala.");
-  // abajo de lo que proyecta Nacho (o abajo del cuadro), unos 5 segundos o hasta que termine ese tramo
+  const t = ahoraO(), pe = pvEn(t), ya = difEn(t).length;
+  // la primera: abajo de lo que proyecta Nacho (o abajo del cuadro); si ya hay otra aquí, un recuadro más chico
+  // al centro (se pueden poner varios a la vez para tapar distintas palabras u objetos)
   const [rx, ry, rw, rh] = pe ? pe.region : [0, 0, E.video.ancho, E.video.alto];
-  const caja = [Math.round(rx + rw * 0.1), Math.round(ry + rh * 0.76), Math.round(rw * 0.8), Math.round(rh * 0.18)];
+  const des = ((ya - 1) % 4) * 0.06;
+  const caja = !ya ? [Math.round(rx + rw * 0.1), Math.round(ry + rh * 0.76), Math.round(rw * 0.8), Math.round(rh * 0.18)]
+    : [Math.round(rx + rw * (0.35 + des)), Math.round(ry + rh * (0.35 + des)), Math.round(rw * 0.3), Math.round(rh * 0.16)];
   const tr = tramoPantallaEn(aEditado(t));
   const fin = Math.min(E.video.duracion, tr ? Math.max(aOriginal(tr.fin_s), t + 1) : t + 5);
   guardarDifuminar([...(E.difuminar || []), { inicio: t, fin: Math.min(fin, t + 30), caja, auto: false }],
-    "Franja difuminada agregada: acomoda el recuadro morado sobre las letras del video.");
+    ya ? `Otro difuminado agregado (${ya + 1} aquí): acomoda el recuadro morado nuevo sobre lo que quieres tapar.`
+       : "Franja difuminada agregada: acomoda el recuadro morado sobre las letras del video.");
 }
 function quitarDifuminarAqui() {
+  const it = itemSel();
+  if (it && it.tipo === "df") return borrar(it);   // con varios a la vez: quita el que está seleccionado
   const t = ahoraO(), aqui = difEn(t);
   if (!aqui.length) return avisar("Aquí no hay franja difuminada.");
   guardarDifuminar(E.difuminar.filter(x => !aqui.includes(x)), "Franja difuminada quitada.");
@@ -2823,6 +2959,8 @@ async function recargar() {
   if (E.titulo) { tituloImg = new Image(); tituloImg.src = `/enc/titulo?${q}&v=${version}`; } else tituloImg = null;
   if (document.activeElement !== $("titulo")) { $("titulo").value = X.titulo || ""; if ($("titulo")._ajustar) $("titulo")._ajustar(); }
   pintarListas();
+  for (const k in plImgs) delete plImgs[k];   // por si se volvió a recortar una pleca con el mismo número
+  pintarPlecas();
   ponerFuente();
   if (E.preparando) setTimeout(vigilarProxy, 5000);
   pintarBotonRender();

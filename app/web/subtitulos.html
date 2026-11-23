@@ -135,6 +135,8 @@
   body.incrustado .izq { padding-top: 62px; }
   body.incrustado video { height: calc(100vh - 200px); }
   body.incrustado .pie { display: none; }
+  body.revisor video { height: calc(100vh - 130px); }
+  body.revisor .pie { display: none; }
   @media (min-width: 761px) { .app { overflow: hidden; } .der { min-height: 0; height: 100%; } }
 </style>
 </head>
@@ -192,6 +194,8 @@
 
 <script>
 const T = new URLSearchParams(location.search).get("t");
+// Revisor (encargado): el cuadro del título se ve en todos los estilos
+const REVISOR = new URLSearchParams(location.search).get("revisor") === "1";
 const $ = (id) => document.getElementById(id);
 const video = $("video"), capa = $("capa"), ctx = capa.getContext("2d");
 const arm = $("armado"), actx = arm.getContext("2d");
@@ -290,7 +294,8 @@ function filtrar() {
 }
 function estado(txt, cls) { $("estado").textContent = txt; $("estado").className = cls || ""; }
 const INCRUSTADO = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
-if (INCRUSTADO) document.body.classList.add("incrustado");
+if (INCRUSTADO && !REVISOR) document.body.classList.add("incrustado");
+if (REVISOR) document.body.classList.add("revisor");
 
 // En vivo se reproduce el video ORIGINAL saltando las pausas recortadas; los subtítulos van en tiempo editado.
 function aEditado(t) {
@@ -355,7 +360,16 @@ function ajustarCanvas() {
 // ---------- stickers (se ponen en Edición; aquí solo se ven) ----------
 const stHojas = {};
 let stTmpA = null, stTmpB = null, stCapa = null, stTitulo = null;
-const propDe = (s) => Math.round(Math.max(0.1, Math.min(10, s.prop || 1)) * 100) / 100;
+const esPleca = (tipo) => String(tipo || "").startsWith("pleca:");
+const propDe = (s) => esPleca(s.tipo)   // plecas (recorte del video): pueden ser muy delgadas
+  ? Math.round(Math.max(0.02, Math.min(10, s.prop || 1)) * 10000) / 10000
+  : Math.round(Math.max(0.1, Math.min(10, s.prop || 1)) * 100) / 100;
+const plImgs = {};
+function imgPleca(tipo) {
+  const id = String(tipo).slice(6);
+  if (!plImgs[id]) { plImgs[id] = new Image(); plImgs[id].src = `/edi/pleca_img?t=${encodeURIComponent(T)}&id=${id}`; }
+  return plImgs[id].complete && plImgs[id].naturalWidth ? plImgs[id] : null;
+}
 function hojaSticker(tipo, prop) {
   const clave = tipo + "@" + prop.toFixed(2);
   if (!stHojas[clave]) { stHojas[clave] = new Image(); stHojas[clave].src = `/stk/hoja?tipo=${tipo}&prop=${prop.toFixed(2)}&t=${encodeURIComponent(T)}`; }
@@ -391,11 +405,16 @@ function dibujarStickers(cx, t, W, H) {
   for (const s of activos) {
     let k = Math.floor((t - s.i) * m.FPS);
     if (k >= m.INTRO) k = m.INTRO + (k - m.INTRO) % m.LOOP;
-    const prop = propDe(s), c = cuadroTenido(s.tipo, s.color, k, prop);
+    const pl = esPleca(s.tipo), prop = propDe(s), c = pl ? imgPleca(s.tipo) : cuadroTenido(s.tipo, s.color, k, prop);
     if (!c) continue;
-    const w = s.tam * W, h = w * prop, resta = s.f - t;
+    const w = s.tam * W, h = w * prop, resta = s.f - t, desde = t - s.i;
     g.save(); g.translate(s.x * W, s.y * H); g.rotate((s.rot || 0) * Math.PI / 180); if (s.espejo) g.scale(-1, 1);
-    g.globalAlpha = resta < 0.12 ? Math.max(0, resta / 0.12) : 1;
+    g.globalAlpha = !pl && resta < 0.12 ? Math.max(0, resta / 0.12) : 1;   // la pleca entra y sale en corte directo
+    if (pl && s.relleno && w < W) {   // relleno: el color de las orillas de la pleca estirado hasta los lados
+      const iw = c.naturalWidth, ih = c.naturalHeight, lado = (W - w) / 2 + 1, k = Math.min(3, iw - 1);
+      g.drawImage(c, k, 0, 1, ih, -W / 2, -h / 2, lado, h);
+      g.drawImage(c, iw - 1 - k, 0, 1, ih, w / 2 - 1, -h / 2, lado, h);
+    }
     g.drawImage(c, -w / 2, -h / 2, w, h);
     g.restore();
   }
@@ -695,7 +714,12 @@ function dibujarPantallaAbajo(i, t, dx, dy, dw, dh) {   // lo que proyecta Nacho
   const [x, y, w, h] = p.caja, asp = dw / dh, fase = Math.min(1, Math.max(0, (t - p.inicio) / Math.max(0.1, p.fin - p.inicio)));
   let cw, ch, x0, y0;
   if (p.tipo === "video" || p.vertical) { cw = w; ch = Math.min(h, cw / asp); cw = ch * asp; x0 = x + (w - cw) / 2; y0 = y + (h - ch) * 0.45; }
-  else if (p.documento || p.tipo === "lectura") { cw = w; ch = cw / asp; x0 = x; y0 = y + Math.max(0, h - ch) * (0.05 + 0.5 * fase); }
+  else if (p.tipo === "lectura") {   // nota que Nacho lee: quieta, desde donde empieza a leer (como el render)
+    cw = w; ch = Math.min(h, cw / asp); x0 = x;
+    const cy0 = p.y_lectura != null ? p.y_lectura : y + ch * 0.3;
+    y0 = Math.min(Math.max(y, cy0 - ch * 0.3), y + h - ch);
+  }
+  else if (p.documento) { cw = w; ch = cw / asp; x0 = x; y0 = y + Math.max(0, h - ch) * (0.05 + 0.5 * fase); }
   else { cw = Math.min(w, h * asp) / E.armado.zoom_imagen; ch = cw / asp; x0 = x + (w - cw) * (0.2 + 0.6 * fase); y0 = y + (h - ch) * 0.45; }
   deVideo(x0, y0, cw, ch, dx, dy, dw, dh);
 }
@@ -1099,31 +1123,42 @@ function cargarTituloImg() {
 }
 function pintarTitulo(msg) {
   const caja = $("titulo_solo");
-  caja.hidden = !D.solo;
-  if (!D.solo) return;
+  caja.hidden = !(D.solo || REVISOR);
+  $("titulo_en_video").parentElement.style.display = D.solo ? "" : "none";
+  if (!D.solo && !REVISOR) return;
   const txt = $("titulo_txt").value.trim(), falta = !tituloGuardado;
-  $("titulo_guardar").disabled = txt === tituloGuardado && $("titulo_en_video").checked === enVideoGuardado;
+  $("titulo_guardar").disabled = txt === tituloGuardado && (!D.solo || $("titulo_en_video").checked === enVideoGuardado);
   $("titulo_txt").classList.toggle("falta", falta && !txt);
   const av = $("titulo_aviso");
   if (msg) { av.textContent = msg; av.className = "aviso_titulo ok"; return; }
   av.className = "aviso_titulo" + (falta ? " falta" : "");
   av.textContent = falta ? `⚠ Este video no tiene título: al exportar se llamará «${D.nombre_sin_titulo}». Escríbelo y dale Guardar título.`
-    : (!$("titulo_guardar").disabled ? "Cambios sin guardar en el título." :
+    : (!$("titulo_guardar").disabled ? "Cambios sin guardar en el título." : !D.solo ? "" :
        (enVideoGuardado ? "El título se ve encima del clip y saldrá así en el video exportado." : "El título solo da nombre al archivo (no se pone encima del clip)."));
 }
 async function guardarTitulo() {
-  const titulo = $("titulo_txt").value.trim(), en_video = $("titulo_en_video").checked;
+  const titulo = $("titulo_txt").value.trim(), en_video = D.solo ? $("titulo_en_video").checked : null;
   try {
     const r = await fetch("/edi/titulo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ t: T, titulo, en_video }) });
     if (!r.ok) throw new Error(await r.text());
-    tituloGuardado = titulo; enVideoGuardado = en_video;
+    tituloGuardado = titulo; if (D.solo) enVideoGuardado = en_video;
     cargarTituloImg();
     cargarAjusteTitulo();
+    if (!D.solo) { await refrescarTituloVivo(); pintarTitulo("Título guardado ✓"); return; }
     pintarTitulo(titulo ? "Título guardado ✓ " + (en_video ? "Se ve encima del clip y saldrá así al exportar." : "El video se exportará con este nombre.") : "");
   } catch (err) { $("titulo_aviso").textContent = "No se pudo guardar el título: " + err.message; $("titulo_aviso").className = "aviso_titulo falta"; }
 }
+// Revisor, estilos armados: la barra del título del armado en vivo se vuelve a pedir con el título nuevo
+async function refrescarTituloVivo() {
+  try { refrescarTitulo(await (await fetch(`/sub/datos?t=${encodeURIComponent(T)}`, { cache: "no-store" })).json()); } catch (e) {}
+}
 function desdeDatos(d) {
   D = d;
+  if (REVISOR && !D.solo && document.activeElement !== $("titulo_txt")) {
+    tituloGuardado = (D.titulo_texto || "").trim();
+    $("titulo_txt").value = tituloGuardado;
+    setTimeout(() => { const el = $("titulo_txt"); el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }, 0);
+  }
   if (D.solo && document.activeElement !== $("titulo_txt")) {
     tituloGuardado = (D.titulo_texto || "").trim();
     $("titulo_txt").value = tituloGuardado;
@@ -1296,6 +1331,7 @@ function guardarAjusteTitulo() {
         body: JSON.stringify({ t: T, tam: TIT.tam || null, inter: TIT.inter || 0 }) })).json();
       if (r && r.usado) TIT.usado = r.usado;
       pintarAjusteTitulo(); cargarTituloImg();
+      if (D && !D.solo) refrescarTituloVivo();
     } catch (e) {}
   }, 350);
 }

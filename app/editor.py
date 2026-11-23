@@ -59,7 +59,10 @@ def cargar_aprendido():
 def plantilla_plan(plan):
     """La plantilla del trabajo con los ajustes aprendidos que se le aplicaron al analizarlo (quedan fijos en el
     plan: lo que se apruebe después no cambia trabajos ya hechos)."""
-    pl = cargar_json(plan["plantilla"])
+    pl_ruta = Path(plan["plantilla"])
+    if not pl_ruta.exists():   # trabajo abierto en otra PC (revisión en Drive): la plantilla de esta instalación
+        pl_ruta = BASE / "plantillas" / Path(str(plan["plantilla"]).replace("\\", "/")).name
+    pl = cargar_json(pl_ruta)
     parche = (plan.get("aprendido") or {}).get("parche")
     if parche:
         import aprendizaje
@@ -2320,7 +2323,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-18b v1.9.8"
+VERSION = "2026-11-23 v1.11.0"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3517,8 +3520,20 @@ CATALOGO_STICKERS = [
 STICKERS_LINEA = ("circulo", "ovalo", "rectangulo", "marco", "enfoque", "subrayado", "tachado")
 
 
+def es_pleca(tipo):
+    """Pleca: recorte del video (el nombre del entrevistado) guardado en el trabajo como sticker reutilizable.
+    tipo = "pleca:<id>"; la imagen está en <trabajo>/plecas/<id>.png"""
+    return str(tipo or "").startswith("pleca:")
+
+
+def ruta_pleca(trabajo, tipo):
+    return Path(trabajo) / "plecas" / (str(tipo).split(":", 1)[1] + ".png") if trabajo and es_pleca(tipo) else None
+
+
 def prop_sticker(s):
     try:
+        if es_pleca(s.get("tipo")):   # en las plecas «prop» es su forma (alto / ancho), pueden ser muy delgadas
+            return round(max(0.02, min(10.0, float(s.get("prop", 1) or 1))), 4)
         return round(max(0.1, min(10.0, float(s.get("prop", 1) or 1))), 2)
     except (TypeError, ValueError):
         return 1.0
@@ -3553,8 +3568,12 @@ class Stickers:
     """Pega los stickers en cada cuadro del video vertical (W x H). t = tiempo del video original."""
 
     def __init__(self, lista, W, H, trabajo=None):
-        self.lista = sorted([s for s in lista or [] if (DIR_STICKERS / f"{s.get('tipo')}.png").exists()],
-                            key=lambda s: s["inicio"])
+        def existe(s):
+            if es_pleca(s.get("tipo")):
+                rp = ruta_pleca(trabajo, s["tipo"])
+                return bool(rp and rp.exists())
+            return (DIR_STICKERS / f"{s.get('tipo')}.png").exists()
+        self.lista = sorted([s for s in lista or [] if existe(s)], key=lambda s: s["inicio"])
         self.W, self.H = W, H
         self.trabajo = trabajo
         self.meta = meta_stickers()
@@ -3571,7 +3590,55 @@ class Stickers:
             self.hojas[ruta_h] = h.astype(np.float32) / 255.0 if h is not None else None
         return self.hojas[ruta_h]
 
+    def _pleca(self, n, s):
+        """La pleca no tiene animación: la imagen tal cual, al tamaño y giro del sticker."""
+        clave = (n, "pleca")
+        if clave in self.cache:
+            return self.cache[clave]
+        rp = ruta_pleca(self.trabajo, s["tipo"])
+        im = cv2.imread(str(rp), cv2.IMREAD_UNCHANGED) if rp else None
+        if im is None:
+            return None
+        if im.ndim == 2:
+            im = cv2.cvtColor(im, cv2.COLOR_GRAY2BGRA)
+        elif im.shape[2] == 3:
+            im = cv2.cvtColor(im, cv2.COLOR_BGR2BGRA)
+        img = im.astype(np.float32) / 255.0
+        img[..., :3] *= img[..., 3:]   # premultiplicado (para escalar/girar sin orillas oscuras)
+        if s.get("espejo"):
+            img = img[:, ::-1]
+        ancho = max(4, int(round(float(s.get("tam", 0.8)) * self.W)))
+        alto = max(4, int(round(ancho * prop_sticker(s))))
+        img = cv2.resize(img, (ancho, alto), interpolation=cv2.INTER_AREA if ancho < im.shape[1] else cv2.INTER_CUBIC)
+        if s.get("relleno") and ancho < self.W:
+            # relleno: el color de la orilla de cada renglón (unos píxeles adentro) se estira hasta los lados del video
+            k = min(3, ancho - 1)
+            izq = (self.W - ancho) // 2
+            der = self.W - ancho - izq
+            img = np.concatenate([np.repeat(img[:, k:k + 1], izq, axis=1), img,
+                                  np.repeat(img[:, ancho - 1 - k:ancho - k], der, axis=1)], axis=1)
+            s = dict(s, x=0.5)
+        rot = 0.0 if es_pleca(s.get("tipo")) else float(s.get("rot", 0) or 0)
+        if abs(rot) > 0.01:
+            diag = int(np.ceil(np.hypot(ancho, alto))) + 2
+            M = cv2.getRotationMatrix2D((ancho / 2, alto / 2), -rot, 1.0)
+            M[0, 2] += (diag - ancho) / 2
+            M[1, 2] += (diag - alto) / 2
+            img = cv2.warpAffine(img, M, (diag, diag), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
+                                 borderValue=(0, 0, 0, 0))
+        img = np.clip(img, 0, 1)
+        alpha = img[..., 3:]
+        bgr = np.where(alpha > 1e-4, img[..., :3] / np.maximum(alpha, 1e-4), 0) * 255.0
+        h, w = img.shape[:2]
+        cx, cy = float(s.get("x", 0.5)) * self.W, float(s.get("y", 0.5)) * self.H
+        x0, y0 = int(round(cx - w / 2)), int(round(cy - h / 2))
+        sup = (bgr.astype(np.float32), alpha.astype(np.float32), (x0, y0, x0 + w, y0 + h))
+        self.cache[clave] = sup
+        return sup
+
     def _imagen(self, n, s, k):
+        if es_pleca(s.get("tipo")):
+            return self._pleca(n, s)
         clave = (n, k)
         if clave in self.cache:
             return self.cache[clave]
@@ -3630,7 +3697,7 @@ class Stickers:
             if sup is None:
                 continue
             resta = s["fin"] - t
-            if resta < 0.12:   # se va con un desvanecido corto
+            if resta < 0.12 and not es_pleca(s.get("tipo")):   # se va con un desvanecido corto (la pleca: corte directo)
                 bgr, a, caja = sup
                 sup = (bgr, a * max(0.0, resta / 0.12), caja)
             pegar(lienzo, sup)
@@ -4015,6 +4082,13 @@ def ventana_pantalla(pv, t, asp, completa, cfg_p):
         ch2 = min(h, cw2 / asp)
         cw2 = ch2 * asp
         return x + (w - cw2) / 2, y + (h - ch2) * 0.45, cw2, ch2
+    if pv["tipo"] == "lectura" and not completa:
+        # nota o tweet que Nacho lee: a todo lo ancho y QUIETO (ya no sigue la lectura), desde donde empieza a leer.
+        # Si se quiere movimiento, se pone en Edición (Pantalla → Movimiento).
+        cw2 = w
+        ch2 = min(h, cw2 / asp)
+        cy0 = float(pv["camino"][0][2]) if pv.get("camino") else y + ch2 * 0.3
+        return x, min(max(y, cy0 - ch2 * 0.3), y + h - ch2), cw2, ch2
     if pv.get("documento") or pv["tipo"] == "lectura":
         # documento: a todo lo ancho, bajando despacio desde arriba
         cw2 = w
@@ -5222,8 +5296,6 @@ def cmd_render(args):
                     k = min(int((t - mom["inicio"]) // dur), len(imgs) - 1)
                     fase = min(1.0, (t - mom["inicio"] - k * dur) / dur)
                     lienzo[iy:iy + ih, ix:ix + iw] = imagen_momento(mom, k, iw, ih, fase)
-                elif pv["tipo"] == "lectura" and not dentro(t, manual_p):
-                    lienzo[iy:iy + ih, ix:ix + iw] = cuadro_lectura(frame, pv, t, iw, ih, pl.get("lectura", {}))
                 else:
                     # lo que proyecta Nacho (video, mapa, documento...), o el recuadro que se acomodó a mano
                     vent = ventana_pantalla(pv, t, iw / ih, False, cfg_p)

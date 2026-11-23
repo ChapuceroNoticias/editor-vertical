@@ -11,6 +11,7 @@ Get-CimInstance Win32_Process -Filter "Name='pythonw.exe' OR Name='python.exe' O
 Start-Sleep -Seconds 1
 $menu = [Environment]::GetFolderPath("Programs")
 Remove-Item (Join-Path ([Environment]::GetFolderPath("Desktop")) "Editor Vertical.lnk") -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path ([Environment]::GetFolderPath("Desktop")) "Revisor Chapucero.lnk") -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $menu "Editor Vertical.lnk") -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $menu "Cerrar Editor Vertical.lnk") -Force -ErrorAction SilentlyContinue
 Remove-Item "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\EditorVerticalChapucero" -Recurse -Force -ErrorAction SilentlyContinue
