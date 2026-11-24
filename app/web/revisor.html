@@ -125,7 +125,8 @@
     <div class="prog" id="prog"><div class="txt" id="p_txt"></div><div class="riel"><div id="p_riel"></div></div></div>
   </div>
   <div class="rejilla" id="bienvenida">
-    <div class="cab"><h1 id="rj_tit">Pendientes</h1><span>Clic en un video para revisarlo: corrige título y subtítulos (🔇 silencia la voz de un subtítulo), guarda y presiona <b>Render final</b>.</span></div>
+    <div class="cab"><h1 id="rj_tit">Pendientes</h1>
+      <button class="btn" id="b_borrar_rend" style="margin-left:auto;order:3" title="Borra de la carpeta compartida los trabajos que ya se renderizaron (los videos finales no se tocan)">🗑 Borrar renderizados</button><span>Clic en un video para revisarlo: corrige título y subtítulos (🔇 silencia la voz de un subtítulo), guarda y presiona <b>Render final</b>.</span></div>
     <div class="tarjetas" id="tarjetas"></div>
   </div>
   <iframe id="marco" hidden></iframe>
@@ -196,11 +197,11 @@ function pintarLista() {
   pintarTarjetas(filas);
   if (!filas.length) { $("lista").innerHTML = '<div class="vacio">No hay trabajos aquí.</div>'; return; }
   $("lista").innerHTML = filas.map(t => {
-    const quien = t.estado === "en_revision" && t.revisa ? ` · ${esc(t.revisa)}` : "";
+    const quien = t.estado === "en_revision" && t.revisa ? ` por ${esc(t.revisa)}` : "";
     return `<div class="item${abierto && abierto.carpeta === t.carpeta ? " sel" : ""}" data-c="${esc(t.carpeta)}">
       <b>${esc(t.titulo)}</b>
       <div class="meta"><span class="chip" style="--c:${COLORES[t.estado] || "var(--suave)"}">${esc(t.texto)}${quien}</span>
-      <span>${esc(t.editor)}</span><span>${esc(t.enviado)}</span>${t.estado === "renderizado" && t.destino ? `<span>→ ${esc(t.destino)}</span>` : ""}${t.listo_video ? "" : "<span>⏳ sincronizando video</span>"}</div></div>`;
+      <span title="Editor que lo mandó">✎ ${esc(t.editor)}</span><span>${esc(t.enviado)}</span>${t.estado === "renderizado" && t.destino ? `<span>→ ${esc(t.destino)}</span>` : ""}${t.listo_video ? "" : "<span>⏳ sincronizando video</span>"}</div></div>`;
   }).join("");
   document.querySelectorAll(".item").forEach(el => el.onclick = () => abrir(el.dataset.c));
 }
@@ -233,16 +234,23 @@ function pintarTarjetas(filas) {
   $("rj_tit").textContent = `${NOMBRES_FILTRO[filtro] || ""} · ${filas.length}`;
   if (!filas.length) { $("tarjetas").innerHTML = '<div class="vacio">No hay trabajos aquí.</div>'; return; }
   $("tarjetas").innerHTML = filas.map(t => {
-    const quien = t.estado === "en_revision" && t.revisa ? ` · ${esc(t.revisa)}` : "";
+    const quien = t.estado === "en_revision" && t.revisa ? ` por ${esc(t.revisa)}` : "";
     const img = `/rev/miniatura?carpeta=${encodeURIComponent(t.carpeta)}&v=${t.mini_v || 0}`;
     return `<div class="tarjeta" data-c="${esc(t.carpeta)}">
       <div class="mini"><span class="sin">sin miniatura</span><img src="${img}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.remove()" loading="lazy">
         <span class="chip" style="--c:${COLORES[t.estado] || "var(--suave)"}">${esc(t.texto)}${quien}</span></div>
-      <div class="info"><b>${esc(t.titulo)}</b><div>${esc(t.editor)} · ${esc(t.enviado)}${t.estado === "renderizado" && t.destino ? " · → " + esc(t.destino) : ""}</div></div></div>`;
+      <div class="info"><b>${esc(t.titulo)}</b><div>✎ ${esc(t.editor)} · ${esc(t.enviado)}${t.estado === "renderizado" && t.destino ? " · → " + esc(t.destino) : ""}</div></div></div>`;
   }).join("");
   document.querySelectorAll(".tarjeta").forEach(el => el.onclick = () => abrir(el.dataset.c));
 }
 $("buscar").oninput = () => pintarLista();
+$("b_borrar_rend").onclick = async () => {
+  const rend = (DATOS.trabajos || []).filter(t => t.estado === "renderizado");
+  if (!rend.length) return alert("No hay trabajos renderizados para borrar.");
+  if (!confirm(`¿Borrar de la carpeta compartida los ${rend.length} trabajos ya renderizados (con su video base)?\n\nLos videos finales que ya están en sus carpetas NO se borran.`)) return;
+  try { const r = await api("/rev/borrar_renderizados", {}); alert(r.mensaje); } catch (e) { alert("No se pudo: " + e.message); }
+  cargarLista();
+};
 function pintarCabeza() {
   const r = abierto.rev || {};
   $("h_tit").textContent = r.titulo || abierto.carpeta.split(/[\\/]/).pop();

@@ -614,6 +614,26 @@ def localizar(carpeta):
     return cambio
 
 
+def borrar_renderizados():
+    """Borra de la carpeta compartida los trabajos que ya se renderizaron (para liberar espacio en Drive).
+    Los videos finales no se tocan. -> (borrados, espacio en bytes, errores)"""
+    raiz = carpeta_lista()
+    if not raiz:
+        return 0, 0, ["no hay carpeta compartida"]
+    n, tam, errores = 0, 0, []
+    for d in (raiz / SUB_TRABAJOS).iterdir() if (raiz / SUB_TRABAJOS).exists() else []:
+        r = _leer(d / "revision.json") if d.is_dir() else None
+        if not r or r.get("estado") != "renderizado":
+            continue
+        try:
+            peso = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+            shutil.rmtree(d)
+            n, tam = n + 1, tam + peso
+        except OSError as e:
+            errores.append(f"{d.name}: {e}")
+    return n, tam, errores
+
+
 def lista():
     """Todos los trabajos de la carpeta compartida (los más recientes primero)."""
     raiz = carpeta_lista()

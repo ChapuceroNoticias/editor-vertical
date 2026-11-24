@@ -2209,12 +2209,20 @@ def _quitar_prefijo(titulo, prefijo):
     return titulo[i:].lstrip(" -–—_").strip()
 
 
+# estilos que se guardan con la nomenclatura (número, programa, editor - título); los demás, solo con el título
+CON_NOMENCLATURA = ("chapucero_vertical", "clips_fuera", "solo_subtitulos_chapucero")
+
+
 def nombre_final(plan):
-    """Nombre del video final: «<número programa editor> - <título actual>»
-    (ej. «102 NACHO NOCHE MARTIN - ¡HARFUCH CAPTURA A MACHUCHONES!»). Sin título: None."""
+    """Nombre del video final. Clips Chapuceros, Clips Fuera y Solo subtítulos (Chapucero):
+    «<número programa editor> - <título actual>» (ej. «102 NACHO NOCHE MARTIN - ¡HARFUCH CAPTURA A MACHUCHONES!»).
+    Los demás estilos (Tiktoks): solo el título. Sin título: None."""
     titulo = _re.sub(r"\s+", " ", str(plan.get("titulo") or "")).strip()
     if not titulo:
         return None
+    estilo = Path(str(plan.get("plantilla", "")).replace("\\", "/")).stem
+    if estilo not in CON_NOMENCLATURA:
+        return nombre_archivo(titulo, 180)
     # el clip de un «Video largo» se nombra con la nomenclatura del video largo del que salió
     origen = (plan.get("origen_video_largo") or {}).get("video") or plan.get("video_original") or plan["video"]
     prefijo = prefijo_nomenclatura(origen)
@@ -2706,6 +2714,16 @@ def crear_app():
         if not m:
             raise HTTPException(404, "Sin miniatura")
         return FileResponse(m, headers={"Cache-Control": "max-age=60"})
+
+    @app.post("/rev/borrar_renderizados")
+    def rev_borrar_renderizados():
+        n, tam, errores = revision.borrar_renderizados()
+        registrar(f"🗑 Revisor: borré {n} trabajos renderizados de la carpeta compartida ({tam / 1e9:.1f} GB)")
+        msg = f"Se borraron {n} trabajos renderizados ({tam / 1e9:.1f} GB)." if n else "No había trabajos renderizados."
+        if errores:
+            msg += " No se pudieron borrar: " + "; ".join(errores[:3])
+        return {"ok": not errores, "mensaje": msg + (" Google Drive los manda a su papelera: vacíala para liberar el espacio."
+                                                     if n else "")}
 
     @app.post("/rev/latido")
     def rev_latido(d: dict = Body(...)):
