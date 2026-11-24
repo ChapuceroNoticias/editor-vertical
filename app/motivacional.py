@@ -1351,7 +1351,8 @@ def render(args, trabajo, plan, pl):
     a_cfg = pl.get("audio", {})
     musica = ed.ruta(a_cfg.get("musica")) if a_cfg.get("musica") and not args.sin_musica else None
     hay_musica = bool(musica and Path(musica).exists())
-    f_audio, map_audio = ed.filtro_audio(pl, info, hay_musica, cortes, ed.mezcla_de(plan), video=plan["video"], tramos=plan.get("audio_tramos"))
+    f_audio, map_audio = ed.filtro_audio(pl, info, hay_musica, cortes, ed.mezcla_de(plan), video=plan["video"],
+                                         tramos=ed.tramos_audio(plan, trabajo))
 
     cmd, salida, paso, tam = ed.salida_render(args, trabajo, plan, pl, W, H, fps, hay_musica, musica, f_audio,
                                               map_audio, salida)

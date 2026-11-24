@@ -628,14 +628,18 @@ def guardar_subtitulos(trabajo, tabla, cortes=None):
             dy = max(-1800, min(1800, int(round(float(fila[4]))))) if len(fila) >= 5 else int((viejo or {}).get("dy", 0))
         except (TypeError, ValueError):
             dy = int((viejo or {}).get("dy", 0) or 0)
+        # silenciado: el texto se ve igual, pero en el video final no se escucha la voz en ese tramo (la música sí)
+        mudo = str(fila[5]) == "1" if len(fila) >= 6 else bool((viejo or {}).get("mudo"))
         # se compara con lo que se veía (sin las palabras de tramos quitados): si no cambió, se conserva entero
         vis = [p for p in viejo["palabras"] if not ed.palabra_cortada(p, cortes_u)] if viejo else []
         saltos_viejos = {k for k, p in enumerate(vis) if p.get("salto") and k < len(vis) - 1}
         if viejo and [p["p"] for p in vis] == palabras_nuevas and saltos_viejos == saltos and \
                 mmss(ed_t(viejo["i"], plan)) == mmss(ini_e) and mmss(ed_t(viejo["f"], plan)) == mmss(fin_e):
-            igual = {k: v for k, v in viejo.items() if k != "dy"}
+            igual = {k: v for k, v in viejo.items() if k not in ("dy", "mudo")}
             if dy:
                 igual["dy"] = dy
+            if mudo:
+                igual["mudo"] = True
             nuevos.append(igual)
             continue
         # los tiempos de la tabla son del video editado; se guardan en tiempo del original. Las palabras se reparten
@@ -672,6 +676,8 @@ def guardar_subtitulos(trabajo, tabla, cortes=None):
         nuevo = {"i": round(ini, 3), "f": round(fin, 3), "palabras": pal}
         if dy:
             nuevo["dy"] = dy
+        if mudo:
+            nuevo["mudo"] = True
         nuevos.append(nuevo)
     # los que no se veían por estar todos en un tramo quitado se guardan tal cual (vuelven si se restaura)
     for n, g in enumerate(viejos):
@@ -2404,7 +2410,7 @@ def datos_subtitulos(t):
         if not vis:
             continue
         grupos.append({"id": n, "i": round(ed_t(g["i"], plan), 3), "f": round(ed_t(g["f"], plan), 3),
-                       "texto": texto_con_saltos(vis), "dy": int(g.get("dy", 0) or 0),
+                       "texto": texto_con_saltos(vis), "dy": int(g.get("dy", 0) or 0), "mudo": bool(g.get("mudo")),
                        "palabras": [{"p": p["p"], "i": round(ed.a_editado(p["i"], cs), 3),
                                      "f": round(ed.a_editado(p["f"], cs), 3), "salto": bool(p.get("salto"))}
                                     for p in vis]})
@@ -2693,6 +2699,14 @@ def crear_app():
     def rev_abrir(d: dict = Body(...)):
         return revision.abrir(validar_rev(d.get("carpeta")), bool(d.get("forzar")))
 
+    @app.get("/rev/miniatura")
+    def rev_miniatura(carpeta: str):
+        c = validar_rev(carpeta)
+        m = revision.miniatura(c)
+        if not m:
+            raise HTTPException(404, "Sin miniatura")
+        return FileResponse(m, headers={"Cache-Control": "max-age=60"})
+
     @app.post("/rev/latido")
     def rev_latido(d: dict = Body(...)):
         return {"ok": revision.latido(validar_rev(d.get("carpeta")))}
@@ -2759,7 +2773,7 @@ def crear_app():
     def sub_guardar(d: dict = Body(...)):
         t = validar(d.get("t"))
         filas = [[str(f.get("i", "")), str(f.get("f", "")), str(f.get("texto", "")), str(f.get("id", -1)),
-                  str(f.get("dy", 0))] for f in d.get("filas", [])]
+                  str(f.get("dy", 0)), "1" if f.get("mudo") else "0"] for f in d.get("filas", [])]
         n = guardar_subtitulos(t, filas, d.get("cortes"))
         return {"ok": True, "n": n, "datos": datos_subtitulos(t)}
 

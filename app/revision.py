@@ -27,7 +27,7 @@ SUB_TRABAJOS = "Trabajos"
 SUB_LISTOS = "Listos para subir"
 
 # lo que no viaja a Drive: copias locales que se rehacen solas, temporales e historial de deshacer
-EXCLUIR = {"proxy.mp4", "proxy.json", "render_edicion.log", "exportado.txt", "revision_envio.json",
+EXCLUIR = {"proxy.mp4", "proxy.json", "render_edicion.log", "exportado.txt", "revision_envio.json", "miniatura.jpg",
            ".historial", ".rehacer", "_tramos", "revision.json"}
 
 ESTADOS = {"por_revisar": "Por revisar", "en_revision": "En revisión", "regresado": "Regresado al editor",
@@ -224,6 +224,42 @@ def _copiar(src, dst, aviso=None):
     return True
 
 
+def miniatura(carpeta, forzar=False):
+    """Imagen chica del trabajo (para la cuadrícula del Revisor): un cuadro de la vista previa a un tercio del video."""
+    carpeta = Path(carpeta)
+    destino = carpeta / "miniatura.jpg"
+    if destino.exists() and not forzar:
+        return destino
+    fuente = next((carpeta / n for n in ("vista_previa.mp4", "vista_navegador.mp4") if (carpeta / n).exists()), None)
+    if fuente is None:
+        try:
+            plan = _leer(carpeta / "plan.json", {}) or {}
+            v = Path(plan.get("video", ""))
+            fuente = v if v.exists() else None
+        except Exception:
+            fuente = None
+    if fuente is None:
+        return None
+    import subprocess
+    try:
+        r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(fuente)],
+                           capture_output=True, text=True, timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        dur = float(r.stdout.strip() or 0)
+    except Exception:
+        dur = 0
+    tmp = carpeta / "miniatura_tmp.jpg"
+    try:
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{max(0.0, dur * 0.33):.2f}", "-i", str(fuente),
+                        "-frames:v", "1", "-vf", "scale=360:-2", "-q:v", "4", str(tmp)],
+                       capture_output=True, timeout=60, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if tmp.exists():
+            os.replace(tmp, destino)
+            return destino
+    except Exception:
+        pass
+    return None
+
+
 def _al_dia(t):
     vp = Path(t) / "vista_previa.mp4"
     return vp.exists() and (Path(t) / "plan.json").stat().st_mtime <= vp.stat().st_mtime + 1
@@ -372,6 +408,8 @@ def _enviar(t, raiz, nombre, cargar_plan, armar_previa):
                 datos.pop("video_original", None)
             _escribir(j, datos)
         _refrescar_previa(destino, al_dia)
+        st.update(etapa="Miniatura", progreso=0.98)
+        miniatura(destino, forzar=True)
         # 5) estado de revisión
         r = _leer(destino / "revision.json", {}) or {}
         ahora = time.strftime("%Y-%m-%d %H:%M")
@@ -593,6 +631,7 @@ def lista():
                        "ocupado": candado_ajeno(r), "nota": r.get("nota", ""),
                        "archivo_final": Path(r["archivo_final"]).name if r.get("archivo_final") else "",
                        "destino": r.get("destino") or (Path(r["archivo_final"]).parent.name if r.get("archivo_final") else ""),
-                       "estilo": r.get("estilo", ""), "listo_video": (d / "base" / r.get("video", "")).exists()})
+                       "estilo": r.get("estilo", ""), "listo_video": (d / "base" / r.get("video", "")).exists(),
+                       "mini_v": int((d / "miniatura.jpg").stat().st_mtime) if (d / "miniatura.jpg").exists() else 0})
     salida.sort(key=lambda x: x["enviado"], reverse=True)
     return salida

@@ -2323,7 +2323,7 @@ def cmd_convertir(args):
     return asegurar_mp4(Path(args.video.strip().strip('"')).resolve())
 
 
-VERSION = "2026-11-23 v1.11.0"
+VERSION = "2026-11-23 v1.12.0"
 
 # Imágenes automáticas: al analizar ya NO se buscan imágenes en internet (el video se arma igual, sin fotos).
 # Las imágenes se agregan después a mano en la pestaña Edición («Agregar imagen aquí», buscar o subir).
@@ -3995,6 +3995,20 @@ def ganancia_voz(video, cortes, objetivo_db=-19.0, max_db=20.0):
     return g
 
 
+def tramos_audio(plan, trabajo):
+    """Secciones de audio de Edición + los subtítulos marcados como silenciados (🔇 en Subtítulos / Revisor):
+    en esos tramos no se escucha la voz (la música de fondo sigue)."""
+    tramos = list(plan.get("audio_tramos") or [])
+    try:
+        grupos = cargar_json(Path(trabajo) / "subtitulos.json") if trabajo else []
+    except Exception:
+        grupos = []
+    for g in grupos or []:
+        if g.get("mudo") and float(g.get("f", 0)) > float(g.get("i", 0)):
+            tramos.append({"inicio": float(g["i"]), "fin": float(g["f"]), "ganancia": 0.0})
+    return tramos
+
+
 def filtro_tramos_audio(tramos, cortes):
     """Secciones de audio separadas en Edición: cada una con su volumen (0 = silenciada). Van DESPUÉS de nivelar la
     voz (si no, el nivelador las regresaría a su volumen) y en tiempo del video ya editado."""
@@ -4221,7 +4235,7 @@ def vista_previa_rapida(trabajo, plan=None):
     w, h = W // 2, H // 2
     fps = info["fps"]
     cortes = sorted(plan.get("cortes", []), key=lambda c: c["inicio"])
-    f_audio, map_audio = filtro_audio(pl, info, False, cortes, video=plan["video"], tramos=plan.get("audio_tramos"))
+    f_audio, map_audio = filtro_audio(pl, info, False, cortes, video=plan["video"], tramos=tramos_audio(plan, trabajo))
     tmp = trabajo / "vista_previa_tmp.mp4"
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}",
            "-r", f"{fps}", "-i", "-", "-i", plan["video"], "-map", "0:v"]
@@ -5124,7 +5138,8 @@ def cmd_render(args):
 
     musica = ruta(pl.get("audio", {}).get("musica")) if not args.sin_musica else None
     hay_musica = bool(musica and Path(musica).exists())
-    f_audio, map_audio = filtro_audio(pl, info, hay_musica, cortes, mezcla_de(plan), video=plan["video"], tramos=plan.get("audio_tramos"))
+    f_audio, map_audio = filtro_audio(pl, info, hay_musica, cortes, mezcla_de(plan), video=plan["video"],
+                                      tramos=tramos_audio(plan, trabajo))
 
     cmd, salida, paso, tam = salida_render(args, trabajo, plan, pl, W, H, fps, hay_musica, musica, f_audio, map_audio,
                                            salida)

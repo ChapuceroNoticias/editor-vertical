@@ -39,7 +39,7 @@
   #estado { font-size: 13px; color: var(--suave); width: 100%; }
   #estado.ok { color: var(--ok); } #estado.pend { color: var(--pend); } #estado.err { color: var(--rojo); }
   .lista { overflow: auto; flex: 1 1 auto; }
-  .fila { display: grid; grid-template-columns: 30px 86px 86px 1fr 118px 22px 28px; gap: 6px; align-items: center;
+  .fila { display: grid; grid-template-columns: 30px 86px 86px 1fr 118px 26px 22px 28px; gap: 6px; align-items: center;
     padding: 6px 10px; border-bottom: 1px solid var(--borde); }
   .fila.activa { background: var(--activo); }
   .fila.cambiada { box-shadow: inset 3px 0 0 var(--pend); }
@@ -53,6 +53,10 @@
   .fila .ir:hover, .fila .mas:hover { color: var(--acento); }
   .fila input.marca { width: 15px; height: 15px; margin: 0; accent-color: var(--acento); cursor: pointer; }
   .fila.marcada { box-shadow: inset 3px 0 0 var(--acento); }
+  .fila .mudo { border: 0; background: none; cursor: pointer; font-size: 14px; padding: 2px; opacity: .3; filter: grayscale(1); }
+  .fila .mudo:hover { opacity: .7; }
+  .fila.muda .mudo { opacity: 1; filter: none; }
+  .fila.muda textarea.tx { color: #FF8C8F; }
   .fila .alt { display: flex; gap: 3px; align-items: center; }
   .fila .alt button { border: 1px solid var(--borde); background: var(--panel); color: var(--texto); border-radius: 6px;
     cursor: pointer; font-size: 11px; padding: 5px 6px; line-height: 1; }
@@ -61,7 +65,7 @@
   .fila .alt input.dy.movido { border-color: var(--pend); color: var(--pend); }
   /* sobre el subtítulo: cursor ↕ (también encima de la vista previa armada y del video, que traen su propio cursor) */
   .pantalla.sobre-sub, .pantalla.sobre-sub *, .pantalla.arrastrando, .pantalla.arrastrando * { cursor: ns-resize !important; }
-  .encabezado { display: grid; grid-template-columns: 30px 86px 86px 1fr 118px 22px 28px; gap: 6px; padding: 6px 10px;
+  .encabezado { display: grid; grid-template-columns: 30px 86px 86px 1fr 118px 26px 22px 28px; gap: 6px; padding: 6px 10px;
     font-size: 12px; color: var(--suave); font-weight: 600; border-bottom: 1px solid var(--borde); }
 </style>
 <link rel="stylesheet" href="/app/grafito.css">
@@ -177,12 +181,13 @@
       <span class="sp"></span>
       <label class="buscar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>
         <input type="search" id="buscar" placeholder="Buscar en los subtítulos" aria-label="Buscar en los subtítulos"></label>
+      <button class="btn" id="silenciar_marcados" hidden title="Silencia (o quita el silencio de) todos los subtítulos marcados ☑">🔇 Silenciar marcados</button>
       <button class="btn" id="desmarcar" hidden title="Quita la marca ☑ de todos los subtítulos marcados">☐ Desmarcar todos <b id="n_marcados"></b></button>
       <button class="btn" id="descartar" disabled>Descartar</button>
       <button class="btn prim" id="guardar" disabled>Guardar subtítulos</button>
       <div id="estado"></div>
     </div>
-    <div class="encabezado"><span></span><span>Inicio</span><span>Fin</span><span>Texto</span><span title="Sube (▲) o baja (▼) cada subtítulo por separado. También puedes arrastrarlo arriba o abajo sobre el video.">Altura ↕</span><span title="Marca varios: al subir o bajar uno de los marcados, se mueven todos igual. Clic aquí: desmarcar todos" id="cab_marca" style="cursor:pointer">☑</span><span></span></div>
+    <div class="encabezado"><span></span><span>Inicio</span><span>Fin</span><span>Texto</span><span title="Sube (▲) o baja (▼) cada subtítulo por separado. También puedes arrastrarlo arriba o abajo sobre el video.">Altura ↕</span><span title="🔇 Silenciar: en el video final no se escucha la voz en ese subtítulo (el texto se ve igual y la música sigue)">🔇</span><span title="Marca varios: al subir o bajar uno de los marcados, se mueven todos igual. Clic aquí: desmarcar todos" id="cab_marca" style="cursor:pointer">☑</span><span></span></div>
     <div class="lista" id="lista"></div>
     <div class="pie">
       <span><b>Enter</b> siguiente</span><span><b>Shift+Enter</b> cortar renglón</span><span><b>＋</b> agregar debajo</span><span><b>☑</b> marca varios para subirlos o bajarlos juntos</span>
@@ -554,13 +559,21 @@ function dibujar() {
   });
 }
 
+// subtítulos silenciados: en la vista previa también se deja de oír (aquí se calla todo el audio de la vista previa;
+// en el video final solo se quita la voz y la música sigue)
+let mudoAuto = false;
+function silenciarVivo() {
+  const t = ahora();   // tiempo del video editado (como los de la lista)
+  const dentro = filas.some((fl, n) => { if (!fl.mudo) return false; const i = seg(fl.iTxt), f = finEf(n); return i !== null && f !== null && i <= t && t < f; });
+  if (dentro !== mudoAuto) { mudoAuto = dentro; video.muted = dentro; }
+}
 function bucle() {
   requestAnimationFrame(bucle);   // primero: un error al dibujar no congela la pestaña
   // pestaña oculta (estás en Edición u otra sección): no se dibuja nada y el video se pausa
   if (document.hidden || !document.documentElement.clientWidth) { if (!video.paused) video.pause(); return; }
   try {
     if (vivo && E) { saltarPausas(); componer(); actualizarControles(); }
-    dibujar(); marcoArrastre(); marcarActiva();
+    dibujar(); marcoArrastre(); marcarActiva(); silenciarVivo();
   } catch (err) { if (!bucle._aviso) { bucle._aviso = true; console.error(err); } }
 }
 
@@ -930,6 +943,14 @@ $("m_vivo").onclick = () => { if (!vivo) ponerModo(true); };
 $("buscar").addEventListener("input", filtrar);
 $("titulo_txt").addEventListener("input", () => pintarTitulo());
 $("desmarcar").onclick = desmarcarTodos;
+$("silenciar_marcados").onclick = () => {
+  const ms = filas.filter(f => f.marcado);
+  if (!ms.length) return;
+  const poner = !ms.every(f => f.mudo);   // si todos ya estaban silenciados, se les quita
+  ms.forEach(f => { f.mudo = poner; });
+  pintarLista(); actualizarBotones();
+  estado(poner ? `${ms.length} subtítulos silenciados (guarda para que quede).` : `Se quitó el silencio de ${ms.length} subtítulos.`, "pend");
+};
 $("cab_marca").onclick = () => { if (filas.some(f => f.marcado)) desmarcarTodos(); };
 $("titulo_txt").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
@@ -999,7 +1020,7 @@ async function revisarCambiosEdicion() {
 setInterval(() => { if (T && D && !document.hidden && document.documentElement.clientWidth > 0) revisarCambiosEdicion(); }, 6000);
 
 // ---------- lista ----------
-function firma() { return JSON.stringify(filas.map(f => [f.iTxt, f.fTxt, f.texto, f.dy || 0])); }
+function firma() { return JSON.stringify(filas.map(f => [f.iTxt, f.fTxt, f.texto, f.dy || 0, !!f.mudo])); }
 function moverFila(fl, d) {   // sube (−) o baja (+) este subtítulo; si está marcado, todos los marcados igual
   const grupo = fl.marcado ? filas.filter(f => f.marcado) : [fl];
   const els = document.querySelectorAll(".fila");
@@ -1018,6 +1039,7 @@ function avisoMarcados() {
   const n = filas.filter(f => f.marcado).length;
   if (n > 1) estado(`${n} subtítulos marcados: al subir o bajar uno de ellos, se mueven todos igual.`, "");
   $("desmarcar").hidden = n === 0;
+  $("silenciar_marcados").hidden = n === 0;
   $("n_marcados").textContent = n ? `(${n})` : "";
 }
 function desmarcarTodos() {   // quita la marca ☑ de todos a la vez
@@ -1063,7 +1085,7 @@ function pintarLista() {
     div.innerHTML = `<button class="ir" title="Ir a este subtítulo">▶</button>
       <input class="t" data-c="iTxt" value="${fl.iTxt}"><input class="t" data-c="fTxt" value="${fl.fTxt}">
       <textarea class="tx" data-c="texto" rows="1" title="Shift+Enter = cortar el renglón aquí"></textarea>
-      <span class="alt"><button data-d="-10" title="Subir este subtítulo (Shift: 50 px)">▲</button><input class="dy" type="number" step="5" title="px: negativo = más arriba, 0 = donde lo pone la plataforma"><button data-d="10" title="Bajar este subtítulo (Shift: 50 px)">▼</button></span><input type="checkbox" class="marca" title="Marcar: al subir o bajar uno de los marcados, todos los marcados se mueven igual"><button class="mas" title="Agregar un subtítulo debajo">＋</button>`;
+      <span class="alt"><button data-d="-10" title="Subir este subtítulo (Shift: 50 px)">▲</button><input class="dy" type="number" step="5" title="px: negativo = más arriba, 0 = donde lo pone la plataforma"><button data-d="10" title="Bajar este subtítulo (Shift: 50 px)">▼</button></span><button class="mudo" title="Silenciar: en el video final no se escucha la voz aquí (el texto se queda igual, la música sigue)">🔇</button><input type="checkbox" class="marca" title="Marcar: al subir o bajar uno de los marcados, todos los marcados se mueven igual"><button class="mas" title="Agregar un subtítulo debajo">＋</button>`;
     const tx = div.querySelector('[data-c="texto"]');
     tx.value = fl.texto;
     const crecer = () => { tx.style.height = "auto"; tx.style.height = tx.scrollHeight + 2 + "px"; };
@@ -1077,6 +1099,12 @@ function pintarLista() {
     tx.addEventListener("input", crecer);
     requestAnimationFrame(crecer);
     div.querySelector(".ir").onclick = () => { const i = seg(fl.iTxt); if (i !== null) { irA(i + 0.01); } };
+    div.classList.toggle("muda", !!fl.mudo);
+    div.querySelector(".mudo").onclick = () => {
+      fl.mudo = !fl.mudo; div.classList.toggle("muda", fl.mudo); div.classList.add("cambiada");
+      actualizarBotones();
+      estado(fl.mudo ? "Subtítulo silenciado: en el video final no se escuchará la voz ahí (guarda para que quede)." : "Ya no está silenciado.", "pend");
+    };
     const marca = div.querySelector("input.marca");
     marca.checked = !!fl.marcado; div.classList.toggle("marcada", !!fl.marcado);
     marca.onchange = () => { fl.marcado = marca.checked; div.classList.toggle("marcada", marca.checked); avisoMarcados(); };
@@ -1167,7 +1195,7 @@ function desdeDatos(d) {
     cargarTituloImg();
   }
   pintarTitulo();
-  filas = d.grupos.map((g, n) => ({ id: g.id ?? n, iTxt: mmss(g.i), fTxt: mmss(g.f), texto: g.texto, palabras: g.palabras, i0: g.i, f0: g.f, dy: g.dy || 0 }));
+  filas = d.grupos.map((g, n) => ({ id: g.id ?? n, iTxt: mmss(g.i), fTxt: mmss(g.f), texto: g.texto, palabras: g.palabras, i0: g.i, f0: g.f, dy: g.dy || 0, mudo: !!g.mudo }));
   base = firma();
   pintarLista();
   actualizarBotones();
@@ -1219,7 +1247,7 @@ $("guardar").onclick = async () => {
   $("guardar").disabled = true;
   estado("Guardando…");
   try {
-    const cuerpo = { t: T, cortes: D.cortes, filas: filas.map(fl => ({ i: fl.iTxt, f: fl.fTxt, texto: fl.texto, id: fl.id, dy: fl.dy || 0 })) };
+    const cuerpo = { t: T, cortes: D.cortes, filas: filas.map(fl => ({ i: fl.iTxt, f: fl.fTxt, texto: fl.texto, id: fl.id, dy: fl.dy || 0, mudo: !!fl.mudo })) };
     const r = await fetch("/sub/guardar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
     if (!r.ok) throw new Error(await r.text());
     const d = await r.json();

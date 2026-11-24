@@ -360,9 +360,12 @@ def render(args, trabajo, plan, pl):
 
     venc = ed.codificador(args.gpu, pl["salida"].get("crf", 18))
     kbps = int(pl["salida"].get("audio_kbps", 125))
+    # subtítulos marcados como silenciados (🔇): en ese tramo no se escucha
+    f_mudos = ed.filtro_tramos_audio(ed.tramos_audio(plan, trabajo), [])[0].lstrip(",")
     cmd = ["ffmpeg", "-y", "-loglevel", "error",
            "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}", "-r", f"{fps}", "-i", "-",
            "-i", plan["video"], "-map", "0:v", "-map", "1:a:0?",
+           *(["-af", f_mudos] if f_mudos else []),
            "-c:a", "aac", "-b:a", f"{max(32, int(kbps * 0.96))}k",
            *venc, "-pix_fmt", "yuv420p", "-shortest", "-movflags", "+faststart", str(salida)]
     ff = ed.abrir_salida(cmd)

@@ -63,8 +63,23 @@
   .prog .riel { height: 6px; background: #1d1d22; border-radius: 999px; overflow: hidden; }
   .prog .riel div { height: 100%; width: 0; background: var(--texto); transition: width .4s; }
   iframe { flex: 1; width: 100%; border: 0; background: var(--fondo); }
-  .bienvenida { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--suave); text-align: center; padding: 40px; }
-  .bienvenida h1 { color: var(--texto); font-size: 22px; margin: 0 0 8px; }
+  /* cuadrícula de miniaturas */
+  .rejilla { flex: 1; overflow: auto; padding: 20px 22px 30px; }
+  .rejilla .cab { display: flex; align-items: baseline; gap: 14px; margin: 0 0 16px; flex-wrap: wrap; }
+  .rejilla h1 { font-size: 20px; margin: 0; }
+  .rejilla .cab span { color: var(--suave); font-size: 13px; }
+  .tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 18px; }
+  .tarjeta { background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; overflow: hidden; cursor: pointer;
+    transition: transform .12s, border-color .12s; display: flex; flex-direction: column; }
+  .tarjeta:hover { transform: translateY(-2px); border-color: #3a3a44; }
+  .tarjeta .mini { aspect-ratio: 9 / 16; background: #0f0f12 center/cover no-repeat; position: relative; }
+  .tarjeta .mini .chip { position: absolute; left: 8px; top: 8px; background: rgba(0,0,0,.72); padding: 3px 8px; border-radius: 999px; }
+  .tarjeta .mini .sin { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #55555f; font-size: 12px; }
+  .tarjeta .info { padding: 10px 12px 12px; }
+  .tarjeta .info b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13.5px; line-height: 1.3; }
+  .tarjeta .info div { color: var(--suave); font-size: 12px; margin-top: 5px; }
+  .buscar { padding: 0 14px 10px; }
+  .buscar input { padding: 7px 10px; font-size: 13px; }
 
   /* ----- ventanas ----- */
   .capa { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 10; }
@@ -86,6 +101,7 @@
     <button class="icono" id="b_cfg" title="Configuración">⚙</button>
   </div>
   <div class="yo" id="yo"></div>
+  <div class="buscar"><input id="buscar" type="search" placeholder="Buscar por título o editor"></div>
   <div class="filtros" id="filtros">
     <button data-f="pend" class="activo">Pendientes</button>
     <button data-f="regresado">Regresados</button>
@@ -108,8 +124,10 @@
     <label class="destino">GUARDAR EN <select id="destino"></select></label>
     <div class="prog" id="prog"><div class="txt" id="p_txt"></div><div class="riel"><div id="p_riel"></div></div></div>
   </div>
-  <div class="bienvenida" id="bienvenida"><div><h1>Revisión de subtítulos</h1>
-    Elige un trabajo de la lista. Corrige los subtítulos y el título, guarda,<br>y presiona <b>Render final</b> para dejar el video listo para subir.</div></div>
+  <div class="rejilla" id="bienvenida">
+    <div class="cab"><h1 id="rj_tit">Pendientes</h1><span>Clic en un video para revisarlo: corrige título y subtítulos (🔇 silencia la voz de un subtítulo), guarda y presiona <b>Render final</b>.</span></div>
+    <div class="tarjetas" id="tarjetas"></div>
+  </div>
   <iframe id="marco" hidden></iframe>
 </main>
 
@@ -168,10 +186,14 @@ function pintarDestinos() {
   sel.classList.toggle("falta", !sel.value);
 }
 $("destino").onchange = () => $("destino").classList.toggle("falta", !$("destino").value && (DATOS.destinos || []).length > 0);
+const NOMBRES_FILTRO = { pend: "Pendientes", regresado: "Regresados", renderizado: "Renderizados", todos: "Todos" };
 function pintarLista() {
   pintarDestinos();
-  const ok = (t) => filtro === "todos" ? true : filtro === "pend" ? ["por_revisar", "en_revision"].includes(t.estado) : t.estado === filtro;
+  const q = ($("buscar").value || "").trim().toLowerCase();
+  const ok = (t) => (filtro === "todos" ? true : filtro === "pend" ? ["por_revisar", "en_revision"].includes(t.estado) : t.estado === filtro)
+    && (!q || (t.titulo + " " + t.editor + " " + t.nombre).toLowerCase().includes(q));
   const filas = DATOS.trabajos.filter(ok);
+  pintarTarjetas(filas);
   if (!filas.length) { $("lista").innerHTML = '<div class="vacio">No hay trabajos aquí.</div>'; return; }
   $("lista").innerHTML = filas.map(t => {
     const quien = t.estado === "en_revision" && t.revisa ? ` · ${esc(t.revisa)}` : "";
@@ -207,6 +229,20 @@ async function abrir(carpeta, forzar) {
   vigilarRender();
   await cargarLista();
 }
+function pintarTarjetas(filas) {
+  $("rj_tit").textContent = `${NOMBRES_FILTRO[filtro] || ""} · ${filas.length}`;
+  if (!filas.length) { $("tarjetas").innerHTML = '<div class="vacio">No hay trabajos aquí.</div>'; return; }
+  $("tarjetas").innerHTML = filas.map(t => {
+    const quien = t.estado === "en_revision" && t.revisa ? ` · ${esc(t.revisa)}` : "";
+    const img = `/rev/miniatura?carpeta=${encodeURIComponent(t.carpeta)}&v=${t.mini_v || 0}`;
+    return `<div class="tarjeta" data-c="${esc(t.carpeta)}">
+      <div class="mini"><span class="sin">sin miniatura</span><img src="${img}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.remove()" loading="lazy">
+        <span class="chip" style="--c:${COLORES[t.estado] || "var(--suave)"}">${esc(t.texto)}${quien}</span></div>
+      <div class="info"><b>${esc(t.titulo)}</b><div>${esc(t.editor)} · ${esc(t.enviado)}${t.estado === "renderizado" && t.destino ? " · → " + esc(t.destino) : ""}</div></div></div>`;
+  }).join("");
+  document.querySelectorAll(".tarjeta").forEach(el => el.onclick = () => abrir(el.dataset.c));
+}
+$("buscar").oninput = () => pintarLista();
 function pintarCabeza() {
   const r = abierto.rev || {};
   $("h_tit").textContent = r.titulo || abierto.carpeta.split(/[\\/]/).pop();
