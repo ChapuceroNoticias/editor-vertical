@@ -651,7 +651,7 @@ def lista():
                        "ocupado": candado_ajeno(r), "nota": r.get("nota", ""),
                        "archivo_final": Path(r["archivo_final"]).name if r.get("archivo_final") else "",
                        "destino": r.get("destino") or (Path(r["archivo_final"]).parent.name if r.get("archivo_final") else ""),
-                       "estilo": r.get("estilo", ""), "listo_video": (d / "base" / r.get("video", "")).exists(),
+                       "estilo": r.get("estilo", ""), "video": r.get("video", ""), "listo_video": (d / "base" / r.get("video", "")).exists(),
                        "mini_v": int((d / "miniatura.jpg").stat().st_mtime) if (d / "miniatura.jpg").exists() else 0})
     salida.sort(key=lambda x: x["enviado"], reverse=True)
     return salida

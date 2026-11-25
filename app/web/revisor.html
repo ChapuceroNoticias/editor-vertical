@@ -38,6 +38,8 @@
   .item:hover { background: var(--panel2); }
   .item.sel { background: #22141a; box-shadow: inset 3px 0 0 var(--acento); }
   .item b { display: block; font-size: 13.5px; margin-bottom: 3px; }
+  .vbase { display: block; font-size: 11.5px; color: var(--suave); font-family: ui-monospace, monospace; margin: 0 0 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .item .meta { font-size: 12px; color: var(--suave); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; }
   .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--suave)); }
@@ -77,6 +79,7 @@
   .tarjeta .mini .sin { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #55555f; font-size: 12px; }
   .tarjeta .info { padding: 10px 12px 12px; }
   .tarjeta .info b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13.5px; line-height: 1.3; }
+  .tarjeta .info .vbase { white-space: normal; word-break: break-word; }
   .tarjeta .info div { color: var(--suave); font-size: 12px; margin-top: 5px; }
   .buscar { padding: 0 14px 10px; }
   .buscar input { padding: 7px 10px; font-size: 13px; }
@@ -101,7 +104,7 @@
     <button class="icono" id="b_cfg" title="Configuración">⚙</button>
   </div>
   <div class="yo" id="yo"></div>
-  <div class="buscar"><input id="buscar" type="search" placeholder="Buscar por título o editor"></div>
+  <div class="buscar"><input id="buscar" type="search" placeholder="Buscar por título, editor o video"></div>
   <div class="filtros" id="filtros">
     <button data-f="pend" class="activo">Pendientes</button>
     <button data-f="regresado">Regresados</button>
@@ -192,14 +195,14 @@ function pintarLista() {
   pintarDestinos();
   const q = ($("buscar").value || "").trim().toLowerCase();
   const ok = (t) => (filtro === "todos" ? true : filtro === "pend" ? ["por_revisar", "en_revision"].includes(t.estado) : t.estado === filtro)
-    && (!q || (t.titulo + " " + t.editor + " " + t.nombre).toLowerCase().includes(q));
+    && (!q || (t.titulo + " " + t.editor + " " + t.nombre + " " + (t.video || "")).toLowerCase().includes(q));
   const filas = DATOS.trabajos.filter(ok);
   pintarTarjetas(filas);
   if (!filas.length) { $("lista").innerHTML = '<div class="vacio">No hay trabajos aquí.</div>'; return; }
   $("lista").innerHTML = filas.map(t => {
     const quien = t.estado === "en_revision" && t.revisa ? ` por ${esc(t.revisa)}` : "";
     return `<div class="item${abierto && abierto.carpeta === t.carpeta ? " sel" : ""}" data-c="${esc(t.carpeta)}">
-      <b>${esc(t.titulo)}</b>
+      <b>${esc(t.titulo)}</b>${t.video ? `<span class="vbase" title="Video base">🎞 ${esc(t.video)}</span>` : ""}
       <div class="meta"><span class="chip" style="--c:${COLORES[t.estado] || "var(--suave)"}">${esc(t.texto)}${quien}</span>
       <span title="Editor que lo mandó">✎ ${esc(t.editor)}</span><span>${esc(t.enviado)}</span>${t.estado === "renderizado" && t.destino ? `<span>→ ${esc(t.destino)}</span>` : ""}${t.listo_video ? "" : "<span>⏳ sincronizando video</span>"}</div></div>`;
   }).join("");
@@ -239,7 +242,7 @@ function pintarTarjetas(filas) {
     return `<div class="tarjeta" data-c="${esc(t.carpeta)}">
       <div class="mini"><span class="sin">sin miniatura</span><img src="${img}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.remove()" loading="lazy">
         <span class="chip" style="--c:${COLORES[t.estado] || "var(--suave)"}">${esc(t.texto)}${quien}</span></div>
-      <div class="info"><b>${esc(t.titulo)}</b><div>✎ ${esc(t.editor)} · ${esc(t.enviado)}${t.estado === "renderizado" && t.destino ? " · → " + esc(t.destino) : ""}</div></div></div>`;
+      <div class="info"><b>${esc(t.titulo)}</b>${t.video ? `<span class="vbase" style="margin-top:4px" title="Video base">🎞 ${esc(t.video)}</span>` : ""}<div>✎ ${esc(t.editor)} · ${esc(t.enviado)}${t.estado === "renderizado" && t.destino ? " · → " + esc(t.destino) : ""}</div></div></div>`;
   }).join("");
   document.querySelectorAll(".tarjeta").forEach(el => el.onclick = () => abrir(el.dataset.c));
 }
@@ -254,7 +257,7 @@ $("b_borrar_rend").onclick = async () => {
 function pintarCabeza() {
   const r = abierto.rev || {};
   $("h_tit").textContent = r.titulo || abierto.carpeta.split(/[\\/]/).pop();
-  $("h_meta").textContent = [r.editor && `Editor: ${r.editor}`, r.enviado && `Enviado ${r.enviado}`, r.estilo].filter(Boolean).join(" · ");
+  $("h_meta").textContent = [r.video && `🎞 ${r.video}`, r.editor && `Editor: ${r.editor}`, r.enviado && `Enviado ${r.enviado}`, r.estilo].filter(Boolean).join(" · ");
   const nota = r.estado === "regresado" && r.nota;
   $("nota_ed").style.display = nota ? "block" : "none";
   $("nota_ed").textContent = nota ? "Nota anterior: " + r.nota : "";
