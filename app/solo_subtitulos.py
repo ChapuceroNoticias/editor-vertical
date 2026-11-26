@@ -234,6 +234,7 @@ def analizar(args, video, pl, pl_path, trabajo):
 def capa_titulo_clip(pl, titulo, W, H):
     """Superposición (bgr, alpha, caja) del título para un clip de W x H, o None. La barra se arma en 1080x1920
     (como en los clips Chapuceros) y se recorta: en vertical va en su lugar; en horizontal, arriba al centro."""
+    titulo = str(titulo or "").upper()   # en la exportación todos los títulos van en mayúsculas
     if not titulo or "titulo" not in pl:
         return None
     sup = ed.capa_titulo(pl, titulo, 1080, 1920)

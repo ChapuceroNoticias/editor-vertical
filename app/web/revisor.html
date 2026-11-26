@@ -81,6 +81,24 @@
   .tarjeta .info b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13.5px; line-height: 1.3; }
   .tarjeta .info .vbase { white-space: normal; word-break: break-word; }
   .tarjeta .info div { color: var(--suave); font-size: 12px; margin-top: 5px; }
+  .tarjeta .marca { position: absolute; right: 8px; top: 8px; width: 22px; height: 22px; border-radius: 6px; z-index: 2;
+    background: rgba(0,0,0,.6); border: 1.5px solid rgba(255,255,255,.7); display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #fff; cursor: pointer; }
+  .tarjeta .marca:hover { border-color: #fff; }
+  .tarjeta.elegida { border-color: var(--acento); box-shadow: 0 0 0 2px var(--acento); }
+  .tarjeta.elegida .marca { background: var(--acento); border-color: var(--acento); }
+  .tarjeta .rend { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.75); font-size: 12px; padding: 6px 8px; }
+  .tarjeta .rend i { display: block; height: 3px; background: var(--ok); margin-top: 4px; border-radius: 2px; }
+  /* avisos flotantes (abajo a la derecha) */
+  #avisos { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 10px; z-index: 50; }
+  .aviso { width: 340px; background: var(--panel2); border: 1px solid var(--borde); border-left: 4px solid var(--ok); border-radius: 10px;
+    padding: 12px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); cursor: pointer; animation: entra .35s ease-out; font-size: 13px; }
+  .aviso.err { border-left-color: var(--rojo); }
+  .aviso b { display: block; margin-bottom: 4px; font-size: 14px; }
+  .aviso span { color: var(--suave); }
+  .aviso.sale { animation: sale .3s ease-in forwards; }
+  @keyframes entra { from { transform: translateX(120%); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes sale { to { transform: translateX(120%); opacity: 0; } }
   .buscar { padding: 0 14px 10px; }
   .buscar input { padding: 7px 10px; font-size: 13px; }
 
@@ -119,6 +137,7 @@
   <div class="cabeza" id="cabeza" hidden>
     <div class="tit"><b id="h_tit"></b><div id="h_meta"></div></div>
     <button class="btn" id="b_regresar" title="Regresa el trabajo al editor con una nota de qué corregir">↩ Regresar al editor</button>
+    <button class="btn" id="b_cancelar_r" hidden title="Cancela este render (o lo saca de la cola)">Cancelar render</button>
     <button class="btn prim" id="b_render" title="Arma el video en calidad completa con subtítulos y título, y lo guarda en la carpeta de videos finales">Render final</button>
     <button class="btn" id="b_cerrar" title="Cierra el trabajo (si no lo terminaste, vuelve a «Por revisar»)">✕</button>
   </div>
@@ -129,11 +148,16 @@
   </div>
   <div class="rejilla" id="bienvenida">
     <div class="cab"><h1 id="rj_tit">Pendientes</h1>
-      <button class="btn" id="b_borrar_rend" style="margin-left:auto;order:3" title="Borra de la carpeta compartida los trabajos que ya se renderizaron (los videos finales no se tocan)">🗑 Borrar renderizados</button><span>Clic en un video para revisarlo: corrige título y subtítulos (🔇 silencia la voz de un subtítulo), guarda y presiona <b>Render final</b>.</span></div>
+      <span style="margin-left:auto;order:3;display:flex;gap:8px">
+        <button class="btn" id="b_sel_todos" title="Marca todos los que se ven en la cuadrícula">☑ Seleccionar todos</button>
+        <button class="btn" id="b_borrar_sel" disabled title="Borra de la carpeta compartida los trabajos marcados (renderizados o no). Los videos finales no se tocan.">🗑 Eliminar seleccionados</button>
+      </span><span>Clic en un video para revisarlo: corrige título y subtítulos (🔇 silencia la voz de un subtítulo), guarda y presiona <b>Render final</b>.</span></div>
     <div class="tarjetas" id="tarjetas"></div>
   </div>
   <iframe id="marco" hidden></iframe>
 </main>
+
+<div id="avisos"></div>
 
 <!-- configuración -->
 <div class="capa" id="c_cfg"><div class="ventana">
@@ -239,21 +263,96 @@ function pintarTarjetas(filas) {
   $("tarjetas").innerHTML = filas.map(t => {
     const quien = t.estado === "en_revision" && t.revisa ? ` por ${esc(t.revisa)}` : "";
     const img = `/rev/miniatura?carpeta=${encodeURIComponent(t.carpeta)}&v=${t.mini_v || 0}`;
-    return `<div class="tarjeta" data-c="${esc(t.carpeta)}">
+    const rd = RENDERS[t.carpeta], activo = rd && (rd.estado === "trabajando" || rd.estado === "en_cola");
+    const rend = !activo ? "" : rd.estado === "en_cola" ? `<div class="rend">⏳ En cola de render (${rd.posicion || "?"}°)</div>`
+      : `<div class="rend">⚙ Renderizando ${Math.round(100 * (rd.progreso || 0))}%<i style="width:${Math.round(100 * (rd.progreso || 0))}%"></i></div>`;
+    return `<div class="tarjeta${ELEGIDOS.has(t.carpeta) ? " elegida" : ""}" data-c="${esc(t.carpeta)}">
       <div class="mini"><span class="sin">sin miniatura</span><img src="${img}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.remove()" loading="lazy">
-        <span class="chip" style="--c:${COLORES[t.estado] || "var(--suave)"}">${esc(t.texto)}${quien}</span></div>
+        <span class="chip" style="--c:${COLORES[t.estado] || "var(--suave)"}">${esc(t.texto)}${quien}</span>
+        <span class="marca" title="Seleccionar para eliminar">${ELEGIDOS.has(t.carpeta) ? "✓" : ""}</span>${rend}</div>
       <div class="info"><b>${esc(t.titulo)}</b>${t.video ? `<span class="vbase" style="margin-top:4px" title="Video base">🎞 ${esc(t.video)}</span>` : ""}<div>✎ ${esc(t.editor)} · ${esc(t.enviado)}${t.estado === "renderizado" && t.destino ? " · → " + esc(t.destino) : ""}</div></div></div>`;
   }).join("");
-  document.querySelectorAll(".tarjeta").forEach(el => el.onclick = () => abrir(el.dataset.c));
+  document.querySelectorAll(".tarjeta").forEach(el => el.onclick = (ev) => {
+    if (ev.target.classList.contains("marca")) {   // la casilla: seleccionar (no abre el trabajo)
+      ELEGIDOS.has(el.dataset.c) ? ELEGIDOS.delete(el.dataset.c) : ELEGIDOS.add(el.dataset.c);
+      return pintarLista();
+    }
+    abrir(el.dataset.c);
+  });
+  const n = [...ELEGIDOS].filter(c => (DATOS.trabajos || []).some(t => t.carpeta === c)).length;
+  $("b_borrar_sel").disabled = !n;
+  $("b_borrar_sel").textContent = n ? `🗑 Eliminar seleccionados (${n})` : "🗑 Eliminar seleccionados";
+  $("b_sel_todos").textContent = filas.length && filas.every(t => ELEGIDOS.has(t.carpeta)) ? "☐ Quitar selección" : "☑ Seleccionar todos";
+  ultimasFilas = filas;
 }
-$("buscar").oninput = () => pintarLista();
-$("b_borrar_rend").onclick = async () => {
-  const rend = (DATOS.trabajos || []).filter(t => t.estado === "renderizado");
-  if (!rend.length) return alert("No hay trabajos renderizados para borrar.");
-  if (!confirm(`¿Borrar de la carpeta compartida los ${rend.length} trabajos ya renderizados (con su video base)?\n\nLos videos finales que ya están en sus carpetas NO se borran.`)) return;
-  try { const r = await api("/rev/borrar_renderizados", {}); alert(r.mensaje); } catch (e) { alert("No se pudo: " + e.message); }
+const ELEGIDOS = new Set();
+let ultimasFilas = [];
+$("b_sel_todos").onclick = () => {
+  const todos = ultimasFilas.length && ultimasFilas.every(t => ELEGIDOS.has(t.carpeta));
+  ultimasFilas.forEach(t => todos ? ELEGIDOS.delete(t.carpeta) : ELEGIDOS.add(t.carpeta));
+  pintarLista();
+};
+$("b_borrar_sel").onclick = async () => {
+  const sel = (DATOS.trabajos || []).filter(t => ELEGIDOS.has(t.carpeta));
+  if (!sel.length) return;
+  const sinRender = sel.filter(t => t.estado !== "renderizado").length;
+  if (!confirm(`¿Eliminar ${sel.length} trabajo(s) de la carpeta compartida (con su video base)?` +
+               (sinRender ? `\n\nOjo: ${sinRender} todavía NO se ha renderizado.` : "") +
+               "\n\nLos videos finales que ya están en sus carpetas NO se borran.")) return;
+  try { const r = await api("/rev/borrar", { carpetas: sel.map(t => t.carpeta) }); avisoFlotante("Eliminar", r.mensaje, r.ok ? "" : "err"); }
+  catch (e) { avisoFlotante("Eliminar", "No se pudo: " + e.message, "err"); }
+  sel.forEach(t => ELEGIDOS.delete(t.carpeta));
   cargarLista();
 };
+
+// ----- renders: cola, avisos flotantes y sonido al terminar -----
+let RENDERS = {}, vistos = null, audioCtx = null;
+document.addEventListener("pointerdown", () => {   // el navegador solo deja sonar después de un clic
+  try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === "suspended") audioCtx.resume(); } catch (e) {}
+}, true);
+function sonar(ok) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const notas = ok ? [880, 1175, 1568] : [440, 330];
+    notas.forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t0 = audioCtx.currentTime + i * 0.16;
+      o.type = "sine"; o.frequency.value = f; o.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
+      o.start(t0); o.stop(t0 + 0.45);
+    });
+  } catch (e) {}
+}
+function avisoFlotante(titulo, texto, cls) {
+  const el = document.createElement("div");
+  el.className = "aviso " + (cls || "");
+  el.innerHTML = `<b></b><span></span>`;
+  el.querySelector("b").textContent = titulo; el.querySelector("span").textContent = texto;
+  const quitar = () => { el.classList.add("sale"); setTimeout(() => el.remove(), 320); };
+  el.onclick = quitar;
+  $("avisos").appendChild(el);
+  setTimeout(quitar, 12000);
+}
+async function vigilarRenders() {
+  let d; try { d = await api("/rev/renders"); } catch (e) { return; }
+  const antes = JSON.stringify(RENDERS);
+  RENDERS = {};
+  for (const r of d.renders || []) RENDERS[r.carpeta] = r;
+  const terminados = (d.renders || []).filter(r => ["listo", "error"].includes(r.estado) && r.fin);
+  if (vistos === null) { vistos = new Set(terminados.map(r => r.carpeta + "|" + r.fin)); }
+  for (const r of terminados) {
+    const k = r.carpeta + "|" + r.fin;
+    if (vistos.has(k)) continue;
+    vistos.add(k);
+    const ok = r.estado === "listo";
+    avisoFlotante(ok ? "✔ Render terminado" : "✖ El render falló", `${r.titulo || ""} — ${r.mensaje || ""}`, ok ? "" : "err");
+    sonar(ok);
+    cargarLista();
+  }
+  if (antes !== JSON.stringify(RENDERS) && !$("bienvenida").hidden) pintarLista();
+}
+setInterval(vigilarRenders, 2000);
+vigilarRenders();
+$("buscar").oninput = () => pintarLista();
 function pintarCabeza() {
   const r = abierto.rev || {};
   $("h_tit").textContent = r.titulo || abierto.carpeta.split(/[\\/]/).pop();
@@ -308,10 +407,12 @@ function vigilarRender() {
   const paso = async () => {
     if (!abierto || abierto.carpeta !== carpeta) { clearInterval(renderT); return; }
     let e; try { e = await api(`/rev/render_estado?carpeta=${encodeURIComponent(carpeta)}`); } catch (x) { return; }
-    $("b_render").disabled = e.estado === "trabajando";
-    $("destino").disabled = e.estado === "trabajando";
-    $("b_render").textContent = e.estado === "trabajando" ? "Renderizando…" : "Render final";
+    const activo = e.estado === "trabajando" || e.estado === "en_cola";
+    $("b_render").disabled = activo; $("destino").disabled = activo;
+    $("b_render").textContent = e.estado === "trabajando" ? "Renderizando…" : e.estado === "en_cola" ? "En cola…" : "Render final";
+    $("b_cancelar_r").hidden = !activo;
     if (e.estado === "nada") { clearInterval(renderT); return; }
+    if (e.estado === "en_cola") { alertaProg(`⏳ ${e.etapa}`, "", 0); return; }
     if (e.estado === "trabajando") { alertaProg(`${e.etapa || "Renderizando"}… ${Math.round(100 * (e.progreso || 0))}%`, "", e.progreso || 0); return; }
     clearInterval(renderT);
     alertaProg(e.mensaje || e.estado, e.estado === "listo" ? "ok" : "err", 1);
@@ -352,6 +453,7 @@ $("ocu_no").onclick = () => { $("c_ocu").classList.remove("ver"); pendiente = nu
 $("ocu_si").onclick = () => { $("c_ocu").classList.remove("ver"); if (pendiente) abrir(pendiente, true); pendiente = null; };
 
 $("b_render").onclick = renderFinal;
+$("b_cancelar_r").onclick = async () => { if (abierto) { await api("/rev/render_cancelar", { carpeta: abierto.carpeta }); vigilarRender(); } };
 $("b_cerrar").onclick = cerrar;
 $("b_act").onclick = cargarLista;
 $("filtros").querySelectorAll("button").forEach(b => b.onclick = () => {

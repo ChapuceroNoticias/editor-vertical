@@ -18,6 +18,7 @@ import os
 import shutil
 import string
 import subprocess
+import tempfile
 import sys
 import threading
 import time
@@ -1536,7 +1537,8 @@ def datos_edicion(t):
             "audio": datos_audio(plan),
             "portapapeles": montaje.portapapeles(t),
             "montaje": len(plan.get("montaje") or []) > 1 or bool(plan.get("montaje_n")),
-            "estilo": estilo_de(plan), "historial": len(list((Path(t) / ".historial").glob("*_plan.json")))
+            "estilo": estilo_de(plan), "plantilla_nombre": Path(str(plan.get("plantilla", "")).replace("\\", "/")).stem,
+            "historial": len(list((Path(t) / ".historial").glob("*_plan.json")))
             if (Path(t) / ".historial").exists() else 0}
 
 
@@ -2217,7 +2219,7 @@ def nombre_final(plan):
     """Nombre del video final. Clips Chapuceros, Clips Fuera y Solo subtítulos (Chapucero):
     «<número programa editor> - <título actual>» (ej. «102 NACHO NOCHE MARTIN - ¡HARFUCH CAPTURA A MACHUCHONES!»).
     Los demás estilos (Tiktoks): solo el título. Sin título: None."""
-    titulo = _re.sub(r"\s+", " ", str(plan.get("titulo") or "")).strip()
+    titulo = _re.sub(r"\s+", " ", str(plan.get("titulo") or "")).strip().upper()   # títulos en mayúsculas
     if not titulo:
         return None
     estilo = Path(str(plan.get("plantilla", "")).replace("\\", "/")).stem
@@ -2490,10 +2492,18 @@ def datos_subtitulos(t):
 _REV_RENDER = {}   # carpeta en Drive -> {"estado", "progreso", "etapa", "mensaje", "proc"}
 
 
+_REV_COLA = []                 # renders del Revisor esperando turno: (carpeta, salida, destino_nombre)
+_REV_LOCK = threading.Lock()
+_REV_HILO = [None]             # el que va haciendo los renders de la cola, uno por uno
+
+
 def render_final_revisor(carpeta, destino_nombre=""):
+    """Render final del Revisor. Si ya hay otro en marcha, este se forma en la COLA y empieza cuando termine el
+    anterior (uno a la vez, para no saturar la PC)."""
     actual = _REV_RENDER.get(carpeta)
-    if actual and actual.get("estado") == "trabajando":
-        return {"ok": True, "mensaje": "Ya se está renderizando."}
+    if actual and actual.get("estado") in ("trabajando", "en_cola"):
+        return {"ok": True, "mensaje": "Ya está en la cola de renderizado." if actual["estado"] == "en_cola"
+                else "Ya se está renderizando."}
     if revision.lista_destinos():
         salida = revision.ruta_destino(destino_nombre)
         if not salida:
@@ -2503,9 +2513,34 @@ def render_final_revisor(carpeta, destino_nombre=""):
         destino_nombre = salida.name if salida else ""
     if not salida:
         return {"ok": False, "mensaje": "Primero elige la carpeta compartida de Drive (⚙ Configuración)."}
-    _REV_RENDER[carpeta] = {"estado": "trabajando", "progreso": 0.0, "etapa": "Preparando", "cancelado": False}
-    threading.Thread(target=_render_final, args=(carpeta, salida, destino_nombre), daemon=True).start()
-    return {"ok": True, "mensaje": "Render final en marcha…"}
+    r = revision._leer(Path(carpeta) / "revision.json", {}) or {}
+    with _REV_LOCK:
+        ocupado = any(s.get("estado") == "trabajando" for s in _REV_RENDER.values()) or bool(_REV_COLA)
+        _REV_RENDER[carpeta] = {"estado": "en_cola", "progreso": 0.0, "etapa": "En cola", "cancelado": False,
+                                "titulo": r.get("titulo") or Path(carpeta).name, "destino": destino_nombre}
+        _REV_COLA.append((carpeta, salida, destino_nombre))
+        if _REV_HILO[0] is None or not _REV_HILO[0].is_alive():
+            _REV_HILO[0] = threading.Thread(target=_trabajador_renders, daemon=True)
+            _REV_HILO[0].start()
+    return {"ok": True, "mensaje": ("En cola: empieza cuando termine el render que está en marcha." if ocupado
+                                    else "Render final en marcha…")}
+
+
+def _trabajador_renders():
+    while True:
+        with _REV_LOCK:
+            if not _REV_COLA:
+                _REV_HILO[0] = None
+                return
+            carpeta, salida, destino_nombre = _REV_COLA.pop(0)
+            st = _REV_RENDER.get(carpeta) or {}
+            if st.get("cancelado"):
+                continue
+            st.update(estado="trabajando", etapa="Preparando", progreso=0.0)
+        try:
+            _render_final(carpeta, salida, destino_nombre)
+        finally:
+            _REV_RENDER.get(carpeta, {})["fin"] = time.time()
 
 
 def _render_final(carpeta, salida, destino_nombre=""):
@@ -2564,11 +2599,28 @@ def _render_final(carpeta, salida, destino_nombre=""):
 
 def estado_render_final(carpeta):
     st = _REV_RENDER.get(carpeta)
-    return {k: v for k, v in st.items() if k != "proc"} if st else {"estado": "nada"}
+    if not st:
+        return {"estado": "nada"}
+    out = {k: v for k, v in st.items() if k != "proc"}
+    if st.get("estado") == "en_cola":
+        pos = next((i + 1 for i, x in enumerate(_REV_COLA) if x[0] == carpeta), 0)
+        out["posicion"] = pos
+        out["etapa"] = f"En cola ({pos}°): empieza cuando termine el render anterior"
+    return out
+
+
+def estados_renders():
+    """Todos los renders del Revisor de esta sesión (para la cola y los avisos de «terminó»)."""
+    return [dict(estado_render_final(c), carpeta=c) for c in list(_REV_RENDER)]
 
 
 def cancelar_render_final(carpeta):
     st = _REV_RENDER.get(carpeta)
+    with _REV_LOCK:
+        if st and st.get("estado") == "en_cola":   # todavía no empieza: se saca de la cola
+            _REV_COLA[:] = [x for x in _REV_COLA if x[0] != carpeta]
+            st.update(estado="cancelado", cancelado=True, mensaje="Se sacó de la cola de renderizado.", fin=time.time())
+            return True
     proc = st and st.get("proc")
     if proc is not None and proc.poll() is None:
         st["cancelado"] = True
@@ -2750,6 +2802,41 @@ def crear_app():
     @app.get("/rev/render_estado")
     def rev_render_estado(carpeta: str):
         return estado_render_final(limpiar_ruta(carpeta))
+
+    @app.get("/rev/renders")
+    def rev_renders():
+        return {"renders": estados_renders()}
+
+    @app.post("/rev/borrar")
+    def rev_borrar(d: dict = Body(...)):
+        """Borra de la carpeta compartida los trabajos seleccionados en el Revisor (renderizados o no)."""
+        borrados, no = 0, []
+        for c in d.get("carpetas") or []:
+            try:
+                c = validar_rev(c)
+            except HTTPException:
+                continue
+            st = _REV_RENDER.get(c) or {}
+            if st.get("estado") in ("trabajando", "en_cola"):
+                no.append(f"«{Path(c).name}» se está renderizando")
+                continue
+            r = revision._leer(Path(c) / "revision.json", {}) or {}
+            ajeno = revision.candado_ajeno(r)
+            if ajeno:
+                no.append(f"«{r.get('titulo') or Path(c).name}» lo está revisando {ajeno}")
+                continue
+            try:
+                shutil.rmtree(c)
+                borrados += 1
+            except OSError as e:
+                no.append(f"«{Path(c).name}»: {e}")
+        registrar(f"🗑 Revisor: borré {borrados} trabajos de la carpeta compartida")
+        msg = f"Se borraron {borrados} trabajos." if borrados else "No se borró ninguno."
+        if borrados:
+            msg += " Google Drive los manda a su papelera: vacíala para liberar el espacio."
+        if no:
+            msg += " No se borraron: " + "; ".join(no[:4]) + "."
+        return {"ok": not no, "mensaje": msg}
 
     @app.post("/rev/render_cancelar")
     def rev_render_cancelar(d: dict = Body(...)):
@@ -3078,6 +3165,22 @@ def crear_app():
         t = validar(form.get("t"))
         archivos = [(f.filename, await f.read()) for f in form.getlist("archivos") if hasattr(f, "read")]
         return _ok(lambda: guardar_subidas(t, int(form.get("i")), archivos, form.get("reemplazar") == "1"))
+
+    @app.get("/edi/captura_descarga")
+    def edi_captura_descarga(t: str, tiempo: float):
+        """Captura del video (calidad completa) en el cursor, para descargarla como imagen a la PC."""
+        t = validar(t)
+        plan, _ = cargar(t)
+        tiempo = max(0.0, min(float(tiempo), float(plan["info"]["duracion"]) - 0.05))
+        destino = Path(tempfile.gettempdir()) / f"captura_{int(time.time() * 1000)}.jpg"
+        r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{tiempo:.3f}", "-i", str(plan["video"]),
+                            "-frames:v", "1", "-q:v", "1", str(destino)], capture_output=True, text=True)
+        if r.returncode != 0 or not destino.exists():
+            raise HTTPException(500, "No se pudo tomar la captura: " + (r.stderr or "")[-200:])
+        base = nombre_archivo((plan.get("titulo") or Path(plan["video"]).stem).replace("\n", " ").upper(), 80)
+        m, s_ = divmod(tiempo, 60)
+        nombre = f"{base} - captura {int(m):02d}.{s_:05.2f}.jpg"
+        return FileResponse(destino, media_type="image/jpeg", filename=nombre)
 
     @app.post("/edi/pleca")
     def edi_pleca(d: dict = Body(...)):

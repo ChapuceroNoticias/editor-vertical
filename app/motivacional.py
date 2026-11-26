@@ -639,6 +639,7 @@ def franja_gaby(pl):
 
 def lineas_titulo_gaby(cfg, titulo, W, H):
     """Cada renglón del título como superposición (bgr, alpha, caja) ya en su lugar, para animarlos por separado."""
+    titulo = str(titulo or "").upper()   # en la exportación todos los títulos van en mayúsculas
     if not titulo:
         return []
     texto = titulo.upper() if cfg.get("mayusculas", True) else titulo
@@ -833,6 +834,7 @@ def desplazamiento_caja(lado, te, W):
 
 def capa_titulo_yair(cfg, titulo, W, H):
     """(cuadro de arriba, cuadro de abajo) como capas para ed.pegar; cualquiera puede ser None."""
+    titulo = str(titulo or "").upper()   # en la exportación todos los títulos van en mayúsculas
     arriba, abajo = partes_titulo(titulo)
     return (_cuadro_titulo(cfg, cfg["arriba"], arriba, W, H), _cuadro_titulo(cfg, cfg["abajo"], abajo, W, H))
 
@@ -902,6 +904,7 @@ def capa_vista_previa_yair(plan, pl, W, H):
 
 def capa_titulo(cfg, titulo, W, H):
     """Recuadro negro redondeado con borde blanco y el título en mayúsculas, centrado."""
+    titulo = str(titulo or "").upper()   # en la exportación todos los títulos van en mayúsculas
     if not titulo:
         return None
     if cfg.get("tipo") == "dos_cuadros":   # «Tiktoks Yair»: los dos cuadros juntos (ya en su lugar)

@@ -485,6 +485,7 @@
     <button class="btn fant" id="b_mf" title="Un cuadro atrás (←)">◀ cuadro</button>
     <button class="btn fant" id="b_pf" title="Un cuadro adelante (→)">cuadro ▶</button>
     <button class="btn fant" id="b_p1" title="1 segundo adelante (Shift + →)">+1 s</button>
+    <button class="btn fant" id="b_captura" style="display:none" title="Descarga a tu PC una imagen del video (calidad completa) en el cursor">📷 Captura</button>
     <span class="tiempo" id="tiempo">00:00:00</span>
     <span id="fluida" style="color:var(--suave);font-size:12px"></span>
     <span class="sp" style="flex:1"></span>
@@ -1246,11 +1247,18 @@ let segSel = null;      // [a, b] en tiempo del video editado
 let creaSeg = null, mueveSeg = null;
 let ultimoPorta = null;  // «video» o «bloque»: qué pega Ctrl+V
 const enCarrilP = (ev) => { const r = linea.getBoundingClientRect(), y = ev.clientY - r.top; const [cy, ch] = CARRILES.p; return y >= cy - 4 && y <= cy + ch + 4; };
+// pedazo del video con el que trabajan los botones de «Segmento del video»: la selección amarilla o, si no hay,
+// el bloque de «Pantalla» seleccionado (con todo lo que tiene encima: stickers, difuminados, encuadres, imágenes…)
+function segRango() {
+  if (segSel) return segSel;
+  const it = itemSel();
+  return it && it.carril === "p" ? [it.a, it.b] : null;
+}
 function pintarSegbar() {
-  const hay = !!segSel, pp = X && X.portapapeles;
+  const r = segRango(), hay = !!r, pp = X && X.portapapeles;
   for (const id of ["seg_cortar", "seg_copiar", "seg_duplicar", "seg_quitar"]) $(id).disabled = !hay;
   $("seg_pegar").disabled = !pp;
-  $("seg_info").textContent = hay ? `${mmss(segSel[0])} – ${mmss(segSel[1])} (${(segSel[1] - segSel[0]).toFixed(2)} s)`
+  $("seg_info").textContent = hay ? `${segSel ? "" : "Bloque de Pantalla: "}${mmss(r[0])} – ${mmss(r[1])} (${(r[1] - r[0]).toFixed(2)} s) · se copia con todo lo que tiene encima`
     : (pp ? `Hay un pedazo copiado (${pp.duracion.toFixed(1)} s). Shift + arrastrar en «Pantalla» selecciona otro.`
           : "Clic en un bloque gris (o Shift + arrastrar en «Pantalla») para seleccionar un pedazo del video.");
   $("segbar").style.display = X && X.estilo === "solo_subtitulos" ? "none" : "";
@@ -1275,13 +1283,13 @@ async function opMontaje(accion, extra, pendienteTxt) {
   } catch (err) { estado("No se pudo: " + err.message, "err"); }
   finally { montajeOcupado = false; }
 }
-const segO = () => [aOriginal(segSel[0]), aOriginal(segSel[1])];
-function segCortar() { if (segSel) { const [a, b] = segO(); opMontaje("cortar", { a, b }); } }
-function segCopiar() { if (segSel) { const [a, b] = segO(); opMontaje("copiar", { a, b }, "Copiando…"); } }
-function segDuplicar() { if (segSel) { const [a, b] = segO(); opMontaje("duplicar", { a, b }); } }
+const segO = () => { const r = segRango(); return [aOriginal(r[0]), aOriginal(r[1])]; };
+function segCortar() { if (segRango()) { const [a, b] = segO(); opMontaje("cortar", { a, b }); } }
+function segCopiar() { if (segRango()) { const [a, b] = segO(); opMontaje("copiar", { a, b }, "Copiando el pedazo con todo lo que tiene…"); } }
+function segDuplicar() { if (segRango()) { const [a, b] = segO(); opMontaje("duplicar", { a, b }); } }
 function segPegar() { opMontaje("pegar", { p: aOriginal(ahoraE()) }); }
 function segQuitar() {
-  if (!segSel) return;
+  if (!segRango()) return;
   const [a, b] = segO(); segSel = null; pintarSegbar();
   enviar("/edi/cortar", { t: T, inicio: a, fin: b }, "Pedazo quitado del video (se puede restaurar en «Quitar tramos»).");
 }
@@ -1525,6 +1533,7 @@ function seleccionar(it, aviso = true) {
   if (it && it.tipo === "st") stSel = it.ref;
   if (it && it.tipo === "m" && it.ref && it.ref.k) { momPreferido = parseInt(it.ref.k.slice(1)); momSucio = false; }
   setTimeout(pintarAudbar, 0);
+  setTimeout(pintarSegbar, 0);
   const tab = it && { st: "Stickers", m: "Imagen", p: "Pantalla", e: "Pantalla", en: "Encuadre", ep: "Encuadre" }[it.tipo];
   if (tab && window.irPestana) irPestana(tab);
   if (it && aviso) estado(`Seleccionado: ${NOMBRE_TIPO[it.tipo] || "bloque"} ${mmss(it.a)} – ${mmss(it.b)} (Ctrl+C, Supr, Ctrl+B…)`, "");
@@ -1680,6 +1689,8 @@ function atajos(ev) {
         `Pantalla «${OPS[porta.datos.pantalla]}» aplicada a ese pedazo.`);
     }
   }
+  // Ctrl+Shift+C / Ctrl+Shift+X sobre un bloque de Pantalla: el pedazo de video completo (con stickers, difuminados…)
+  if (ctrl && ev.shiftKey && it && it.carril === "p" && (k === "c" || k === "x")) { hecho(); return k === "c" ? segCopiar() : segCortar(); }
   if (!it && corteSel && (k === "delete" || k === "backspace")) { hecho(); return recuperarCorte(); }
   const itSt = !it && stSel ? itemsLinea().find(x => x.ref === stSel) : null;
   if (itSt && (k === "delete" || k === "backspace")) { hecho(); return borrar(itSt); }
@@ -2961,6 +2972,8 @@ async function recargar() {
   pintarListas();
   for (const k in plImgs) delete plImgs[k];   // por si se volvió a recortar una pleca con el mismo número
   pintarPlecas();
+  // «📷 Captura» (descargar imagen): en los Tiktoks motivacionales (Motivacional, Gaby, Yair y Solo subtítulos motivacional)
+  $("b_captura").style.display = X.estilo === "motivacional" || /motivacional/.test(X.plantilla_nombre || "") ? "" : "none";
   ponerFuente();
   if (E.preparando) setTimeout(vigilarProxy, 5000);
   pintarBotonRender();
@@ -3084,6 +3097,13 @@ async function iniciar() {
   iniciarAudio();
   iniciarTrans();
   iniciarDeslizador();
+  $("b_captura").onclick = () => {
+    video.pause();
+    const a = document.createElement("a");
+    a.href = `/edi/captura_descarga?t=${encodeURIComponent(T)}&tiempo=${aOriginal(ahoraE()).toFixed(3)}`;
+    a.download = ""; document.body.appendChild(a); a.click(); a.remove();
+    estado("Descargando la captura… (queda en tu carpeta de Descargas)", "ok");
+  };
   $("seg_cortar").onclick = segCortar; $("seg_copiar").onclick = segCopiar; $("seg_pegar").onclick = segPegar;
   $("seg_duplicar").onclick = segDuplicar; $("seg_quitar").onclick = segQuitar;
   pintarSegbar();
