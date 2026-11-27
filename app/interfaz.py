@@ -1530,6 +1530,7 @@ def datos_edicion(t):
         not vp.exists() or bool(ed.cargar_json(vp).get("provisional"))
         or (Path(t) / "plan.json").stat().st_mtime > vp.stat().st_mtime + 1)
     return {"titulo": plan.get("titulo", ""), "momentos": momentos, "cortes_manuales": manuales, "version": ed.VERSION,
+            "publicidad_qr": plan.get("publicidad_qr", True), "qr_disponible": ed.qr_disponible(plan),
             "previa_vieja": previa_vieja, "render": estado_render_edicion(t),
             "titulo_fin": plan.get("titulo_fin") if estilo_de(plan) == "motivacional" and plan.get("titulo")
             and not ed.estilo_motivacional().es_gaby(plantilla(plan)) else None,   # «Tiktoks Gaby»: el título va todo el video
@@ -2792,12 +2793,12 @@ def crear_app():
 
     @app.post("/rev/regresar")
     def rev_regresar(d: dict = Body(...)):
-        revision.regresar(validar_rev(d.get("carpeta")), d.get("nota", ""))
+        revision.regresar(validar_rev(d.get("carpeta")), d.get("nota", ""), bool(d.get("aprobado")))
         return {"ok": True}
 
     @app.post("/rev/render")
     def rev_render(d: dict = Body(...)):
-        return render_final_revisor(validar_rev(d.get("carpeta")), str(d.get("destino") or ""))
+        raise HTTPException(403, "El render final corresponde al Editor")
 
     @app.get("/rev/render_estado")
     def rev_render_estado(carpeta: str):
@@ -3015,6 +3016,34 @@ def crear_app():
     @app.get("/edi/datos")
     def edi_datos(t: str):
         return JSONResponse(datos_edicion(validar(t)))
+
+    @app.get("/edi/qr_imagen")
+    def edi_qr_imagen():
+        return FileResponse(BASE / "publicidad_qr.png")
+
+    @app.post("/edi/qr")
+    def edi_qr(d: dict = Body(...)):
+        t = validar(d.get("t"))
+        plan, _ = cargar(t)
+        plan["publicidad_qr"] = bool(d.get("activo"))
+        guardar_plan(t, plan)
+        return {"ok": True}
+
+    @app.get("/edi/avisos_revision")
+    def edi_avisos_revision():
+        avisos = []
+        for _, t in opciones_trabajos():
+            try:
+                p = revision.paquete_de(t)
+                if not p: continue
+                r = revision._leer(p / "revision.json", {}) or {}
+                if r.get("estado") not in ("aprobado", "regresado"): continue
+                avisos.append({"id": str(p.name) + "|" + str(r.get("decision_id") or r.get("estado")),
+                    "titulo": r.get("titulo", ""), "video": r.get("video", ""),
+                    "estado": r["estado"], "nota": r.get("nota", "")})
+            except Exception:
+                continue
+        return {"avisos": avisos}
 
     @app.post("/edi/audio_tramos")
     def edi_audio_tramos(d: dict = Body(...)):
@@ -3910,6 +3939,27 @@ AYUDA_LATERAL = """
 
 TEMA_JS = """() => {
   document.body.classList.add('dark');
+  const vistosRevision = new Set(JSON.parse(sessionStorage.getItem('avisosRevisionV2') || '[]'));
+  let consultandoRevision = false;
+  async function avisosRevision() {
+    if (consultandoRevision || document.querySelector('#alertaRevision')) return;
+    consultandoRevision = true;
+    try {
+      const r = await fetch('/edi/avisos_revision', {cache:'no-store'});
+      const d = await r.json();
+      const a = d.avisos.find(x => !vistosRevision.has(x.id));
+      if (!a) return;
+      const fondo = document.createElement('div'); fondo.id = 'alertaRevision';
+      fondo.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#000a;display:grid;place-items:center';
+      const caja = document.createElement('div'); caja.style.cssText = 'background:#202024;color:white;padding:28px;border-radius:12px;width:min(520px,90vw);white-space:pre-wrap';
+      const h = document.createElement('h2'); h.textContent = a.estado === 'aprobado' ? '✔ Listo para renderizar' : '⚠ Cambios solicitados';
+      const p = document.createElement('p'); p.textContent = 'Título: '+a.titulo+'\\nVideo: '+a.video+'\\n'+(a.nota || 'Proyecto aprobado por el revisor.');
+      const b = document.createElement('button'); b.textContent = 'Entendido'; b.style.cssText = 'padding:10px 20px;background:#E5252A;color:white;border-radius:6px';
+      b.onclick = () => { vistosRevision.add(a.id); sessionStorage.setItem('avisosRevisionV2',JSON.stringify([...vistosRevision])); fondo.remove(); avisosRevision(); };
+      caja.append(h,p,b); fondo.append(caja); document.body.append(fondo);
+    } catch(e) {} finally { consultandoRevision = false; }
+  }
+  setInterval(avisosRevision,3000); window.addEventListener('focus',avisosRevision); avisosRevision();
   // menú lateral plegable: se recuerda en este navegador
   let MINI = false;
   const poner = (mini) => {
@@ -4405,6 +4455,7 @@ def construir():
                 gr.Warning("Primero procesa o abre un video")
                 yield gr.update(), "", gr.update()
                 return
+            revision.traer_cambios(t, lambda x: cargar(x)[0], respaldar)
             destino = ruta_export(t)   # el video final queda en «Renders» del escritorio
             try:
                 destino.parent.mkdir(parents=True, exist_ok=True)

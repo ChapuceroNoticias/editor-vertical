@@ -5057,7 +5057,34 @@ def cmd_difuminar(args):
     return len(nuevos)
 
 
+def qr_disponible(plan):
+    nombre = str(plan.get("plantilla", "")).replace("\\", "/").split("/")[-1]
+    return nombre in ("chapucero_vertical.json", "clips_fuera.json", "solo_subtitulos_chapucero.json")
+
+
 def cmd_render(args):
+    salida = _cmd_render_base(args)
+    if TRAMO or getattr(args, "previa", False) or not salida:
+        return salida
+    plan = cargar_json(Path(args.trabajo.strip()) / "plan.json")
+    if not qr_disponible(plan) or not plan.get("publicidad_qr", True):
+        return salida
+    salida = Path(salida)
+    datos = json.loads(subprocess.check_output(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,duration:format=duration", "-of", "json", str(salida)]))
+    v = datos["streams"][0]
+    dur = float(v.get("duration") or datos["format"]["duration"])
+    inicio = max(0, dur - 5)
+    tmp = salida.with_name(salida.stem + "_qr_tmp.mp4")
+    filtro = f"[1:v]scale={v['width']}:{v['height']},setsar=1,format=rgba,fade=t=in:st={inicio}:d=0.5:alpha=1[qr];[0:v][qr]overlay=0:0:enable='gte(t,{inicio})':shortest=1[v]"
+    try:
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(salida), "-loop", "1", "-i", str(BASE / "publicidad_qr.png"), "-filter_complex_threads", "1", "-filter_complex", filtro, "-map", "[v]", "-map", "0:a?", "-c:a", "copy", *codificador(args.gpu, plantilla_plan(plan)["salida"]["crf"]), "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(tmp)], check=True)
+        tmp.replace(salida)
+    finally:
+        tmp.unlink(missing_ok=True)
+    return salida
+
+
+def _cmd_render_base(args):
     if not shutil.which("ffmpeg"):
         raise SystemExit("No encontré ffmpeg en el PATH")
     trabajo = Path(args.trabajo.strip())

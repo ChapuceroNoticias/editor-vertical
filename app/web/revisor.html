@@ -113,6 +113,7 @@
   .ventana .msg { font-size: 13px; margin-top: 10px; min-height: 18px; }
   .ventana .msg.err { color: var(--rojo); } .ventana .msg.ok { color: var(--ok); }
   .nota_ed { background: #2a1416; border: 1px solid #5a2a2e; color: #ffb3b5; border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin: 8px 18px 0; display: none; }
+#b_render,#b_cancelar_r,#fila_prog {display:none !important;}
 </style>
 </head>
 <body>
@@ -126,6 +127,7 @@
   <div class="filtros" id="filtros">
     <button data-f="pend" class="activo">Pendientes</button>
     <button data-f="regresado">Regresados</button>
+    <button data-f="aprobado">Listos para subir</button>
     <button data-f="renderizado">Renderizados</button>
     <button data-f="todos">Todos</button>
   </div>
@@ -136,7 +138,7 @@
 <main>
   <div class="cabeza" id="cabeza" hidden>
     <div class="tit"><b id="h_tit"></b><div id="h_meta"></div></div>
-    <button class="btn" id="b_regresar" title="Regresa el trabajo al editor con una nota de qué corregir">↩ Regresar al editor</button>
+    <button class="btn" id="b_regresar" title="Regresa el trabajo al editor con una nota de qué corregir">Listo o Cambios</button>
     <button class="btn" id="b_cancelar_r" hidden title="Cancela este render (o lo saca de la cola)">Cancelar render</button>
     <button class="btn prim" id="b_render" title="Arma el video en calidad completa con subtítulos y título, y lo guarda en la carpeta de videos finales">Render final</button>
     <button class="btn" id="b_cerrar" title="Cierra el trabajo (si no lo terminaste, vuelve a «Por revisar»)">✕</button>
@@ -151,7 +153,7 @@
       <span style="margin-left:auto;order:3;display:flex;gap:8px">
         <button class="btn" id="b_sel_todos" title="Marca todos los que se ven en la cuadrícula">☑ Seleccionar todos</button>
         <button class="btn" id="b_borrar_sel" disabled title="Borra de la carpeta compartida los trabajos marcados (renderizados o no). Los videos finales no se tocan.">🗑 Eliminar seleccionados</button>
-      </span><span>Clic en un video para revisarlo: corrige título y subtítulos (🔇 silencia la voz de un subtítulo), guarda y presiona <b>Render final</b>.</span></div>
+      </span><span>Clic en un video para revisarlo: corrige título y subtítulos (🔇 silencia la voz de un subtítulo), guarda y presiona <b>Listo o Cambios</b>.</span></div>
     <div class="tarjetas" id="tarjetas"></div>
   </div>
   <iframe id="marco" hidden></iframe>
@@ -172,10 +174,11 @@
 
 <!-- regresar -->
 <div class="capa" id="c_reg"><div class="ventana">
-  <h2>Regresar al editor</h2>
+  <h2>Listo o Cambios</h2>
+  <button class="btn prim" id="reg_listo" style="width:100%;background:#198754">Listo para subir</button>
   <p>Escribe qué tiene que corregir. Lo verá en el Editor Vertical al abrir el trabajo. Lo que ya corregiste aquí (subtítulos y título) se le pasa.</p>
   <textarea id="f_nota" rows="4" placeholder="Ej. la imagen del segundo 12 no corresponde; falta difuminar el logo…"></textarea>
-  <div class="botones"><button class="btn" id="reg_no">Cancelar</button><button class="btn prim" id="reg_si">Regresar</button></div>
+  <div class="botones"><button class="btn" id="reg_no">Cancelar</button><button class="btn prim" id="reg_si">Mandar cambios</button></div>
 </div></div>
 
 <!-- ocupado -->
@@ -187,7 +190,7 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const COLORES = { por_revisar: "var(--pend)", en_revision: "var(--azul)", regresado: "var(--rojo)", renderizado: "var(--ok)" };
+const COLORES = { aprobado: "var(--ok)", por_revisar: "var(--pend)", en_revision: "var(--azul)", regresado: "var(--rojo)", renderizado: "var(--ok)" };
 let DATOS = { trabajos: [], config: {} }, filtro = "pend", abierto = null, latidoT = null, renderT = null, pendiente = null;
 
 async function api(url, cuerpo) {
@@ -214,7 +217,7 @@ function pintarDestinos() {
   sel.classList.toggle("falta", !sel.value);
 }
 $("destino").onchange = () => $("destino").classList.toggle("falta", !$("destino").value && (DATOS.destinos || []).length > 0);
-const NOMBRES_FILTRO = { pend: "Pendientes", regresado: "Regresados", renderizado: "Renderizados", todos: "Todos" };
+const NOMBRES_FILTRO = { aprobado: "Listos para subir", pend: "Pendientes", regresado: "Regresados", renderizado: "Renderizados", todos: "Todos" };
 function pintarLista() {
   pintarDestinos();
   const q = ($("buscar").value || "").trim().toLowerCase();
@@ -249,12 +252,11 @@ async function abrir(carpeta, forzar) {
   $("marco").hidden = false;
   $("marco").src = `/sub/editor?t=${encodeURIComponent(r.t)}&revisor=1&v=${Date.now()}`;
   pintarCabeza();
-  $("fila_prog").hidden = false;
+  $("fila_prog").hidden = true;
   $("destino").value = ""; pintarDestinos();
   ocultarProg();
   clearInterval(latidoT);
   latidoT = setInterval(() => abierto && api("/rev/latido", { carpeta: abierto.carpeta }).catch(() => {}), 120000);
-  vigilarRender();
   await cargarLista();
 }
 function pintarTarjetas(filas) {
@@ -350,8 +352,7 @@ async function vigilarRenders() {
   }
   if (antes !== JSON.stringify(RENDERS) && !$("bienvenida").hidden) pintarLista();
 }
-setInterval(vigilarRenders, 2000);
-vigilarRenders();
+
 $("buscar").oninput = () => pintarLista();
 function pintarCabeza() {
   const r = abierto.rev || {};
@@ -442,7 +443,14 @@ $("reg_no").onclick = () => $("c_reg").classList.remove("ver");
 $("reg_si").onclick = async () => {
   const nota = $("f_nota").value.trim();
   if (!nota) { $("f_nota").focus(); return; }
-  await api("/rev/regresar", { carpeta: abierto.carpeta, nota });
+  await decidirRevision(false, nota);
+};
+$("reg_listo").onclick = () => decidirRevision(true, "");
+async function decidirRevision(aprobado, nota) {
+  if (!abierto) return;
+  const d = $("marco").contentDocument;
+  if (d && ["guardar", "titulo_guardar"].some(id => d.getElementById(id) && !d.getElementById(id).disabled)) { alert("Guarda primero los cambios de título y subtítulos."); return; }
+  try { await api("/rev/regresar", { carpeta: abierto.carpeta, nota, aprobado }); } catch(e) { alert(e.message); return; }
   $("c_reg").classList.remove("ver");
   abierto = null;   // ya no es nuestro: no se «suelta»
   await cerrar();

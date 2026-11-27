@@ -31,7 +31,7 @@ EXCLUIR = {"proxy.mp4", "proxy.json", "render_edicion.log", "exportado.txt", "re
            ".historial", ".rehacer", "_tramos", "revision.json"}
 
 ESTADOS = {"por_revisar": "Por revisar", "en_revision": "En revisión", "regresado": "Regresado al editor",
-           "renderizado": "Renderizado"}
+           "renderizado": "Renderizado", "aprobado": "Listo para subir"}
 
 _ENVIOS = {}          # carpeta _trabajo -> {"estado", "progreso", "etapa", "mensaje"}
 _LOCK = threading.Lock()
@@ -540,14 +540,16 @@ def soltar(carpeta):
     return True
 
 
-def regresar(carpeta, nota):
+def regresar(carpeta, nota, aprobado=False):
     carpeta = Path(carpeta)
     r = _leer(carpeta / "revision.json", {}) or {}
-    r["estado"] = "regresado"
+    r["estado"] = "aprobado" if aprobado else "regresado"
+    r["decision_id"] = str(time.time_ns())
+    r["titulo"] = (_leer(carpeta / "plan.json", {}) or {}).get("titulo", r.get("titulo", ""))
     r["nota"] = (nota or "").strip()[:1000]
     for k in ("revisa_pc", "latido"):
         r.pop(k, None)
-    _historial(r, "regresó al editor", r["nota"])
+    _historial(r, "listo para subir" if aprobado else "regresó al editor", r["nota"])
     _escribir(carpeta / "revision.json", r)
     return True
 

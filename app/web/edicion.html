@@ -535,7 +535,7 @@
  </div>
 
   <div class="lado">
-    <span class="rotulo">Así se verá</span>
+    <div style="display:flex;justify-content:space-between;align-items:center"><span class="rotulo">Así se verá</span><label id="qr_label" hidden><input type="checkbox" id="qr_activo" checked> Publicidad QR</label></div>
     <canvas id="previa" width="540" height="960"></canvas>
   </div>
  </div>
@@ -1051,6 +1051,7 @@ function dibujarEncajado(r, ax, ay, aw, ah, s) {   // como encajar_completo() de
   deVideo(rx, ry, rw, rh, ax + (aw - pw) / 2, ay + top + (h2 - ph) / 2, pw, ph);
   pctx.restore();
 }
+const qrImagen = new Image(); qrImagen.src = "/edi/qr_imagen";
 function componer(t, e, v) {
   const W = previa.width, H = previa.height, s = W / E.salida[0];
   pctx.fillStyle = "#000"; pctx.fillRect(0, 0, W, H);
@@ -1113,6 +1114,10 @@ function componer(t, e, v) {
   if (tituloImg && tituloImg.complete && tituloImg.naturalWidth && (E.estilo !== "motivacional" || t < E.armado.titulo_fin))
     pctx.drawImage(tituloImg, 0, 0, W, H);
   dibujarSelSticker(pctx, t, W, H);
+  if (X.qr_disponible && X.publicidad_qr && qrImagen.naturalWidth) {
+    const inicio = Math.max(0, durE()-5), alpha = Math.max(0, Math.min(1,(aEditado(t)-inicio)/0.5));
+    if(alpha>0) { pctx.save(); pctx.globalAlpha=alpha; pctx.drawImage(qrImagen,0,0,W,H); pctx.restore(); }
+  }
 }
 // ---------- cortinilla limpia sobre las transiciones de cambio de cámara de Nacho (t = tiempo original) ----------
 let cortImg = null;
@@ -2962,6 +2967,8 @@ async function recargar() {
   const q = `t=${encodeURIComponent(T)}`;
   const [e, p, x] = await Promise.all([fetch(`/enc/datos?${q}`), fetch(`/pant/datos?${q}`), fetch(`/edi/datos?${q}`)]);
   E = await e.json(); P = await p.json(); X = await x.json();
+  $("qr_label").hidden = !X.qr_disponible; $("qr_activo").checked = X.publicidad_qr;
+  $("qr_activo").onchange = async () => { const activo = $("qr_activo").checked; const r = await enviar("/edi/qr", {t:T,activo}, "Publicidad QR actualizada"); if(!r || r.ok === false) $("qr_activo").checked = X.publicidad_qr; };
   version = Date.now();
   tramoP = undefined; cambioP = null; momSel = -2; momSucio = false;
   E._grupos = null;
