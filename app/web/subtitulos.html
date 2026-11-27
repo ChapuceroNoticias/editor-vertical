@@ -567,13 +567,30 @@ function silenciarVivo() {
   const dentro = filas.some((fl, n) => { if (!fl.mudo) return false; const i = seg(fl.iTxt), f = finEf(n); return i !== null && f !== null && i <= t && t < f; });
   if (dentro !== mudoAuto) { mudoAuto = dentro; video.muted = dentro; }
 }
+// Publicidad QR: última capa, incluso cuando no hay subtítulos activos.
+const qrSubImagen = new Image();
+qrSubImagen.src = "/edi/qr_imagen";
+function dibujarQRSub() {
+  if (!D || !D.qr_disponible || !D.publicidad_qr || !qrSubImagen.naturalWidth) return;
+  // Un archivo final ya exportado puede traer el QR incorporado; no duplicarlo.
+  if (!vivo && !D.solo && !D.limpia) return;
+  const dur = vivo && E ? duracionEd() : video.duration;
+  if (!Number.isFinite(dur) || dur <= 0) return;
+  const alpha = Math.max(0, Math.min(1, (ahora() - Math.max(0, dur - 5)) / 0.5));
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(qrSubImagen, 0, 0, capa.width, capa.height);
+  ctx.restore();
+  if (alpha >= 1) cajaSub = null;
+}
 function bucle() {
   requestAnimationFrame(bucle);   // primero: un error al dibujar no congela la pestaña
   // pestaña oculta (estás en Edición u otra sección): no se dibuja nada y el video se pausa
   if (document.hidden || !document.documentElement.clientWidth) { if (!video.paused) video.pause(); return; }
   try {
     if (vivo && E) { saltarPausas(); componer(); actualizarControles(); }
-    dibujar(); marcoArrastre(); marcarActiva(); silenciarVivo();
+    dibujar(); marcoArrastre(); dibujarQRSub(); marcarActiva(); silenciarVivo();
   } catch (err) { if (!bucle._aviso) { bucle._aviso = true; console.error(err); } }
 }
 
@@ -1004,6 +1021,7 @@ function refrescarTitulo(d) {
 async function revisarCambiosEdicion() {
   try {
     const d = await (await fetch(`/sub/datos?t=${encodeURIComponent(T)}`)).json();
+    if (D) { D.publicidad_qr = d.publicidad_qr; D.qr_disponible = d.qr_disponible; }
     if (D && d.titulo_firma !== D.titulo_firma) refrescarTitulo(d);
     if (D && (d.previa_v !== D.previa_v || d.firma_cortes !== D.firma_cortes)) {
       if (!hayCambios()) { location.reload(); return true; }

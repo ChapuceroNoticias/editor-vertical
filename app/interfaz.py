@@ -2455,6 +2455,7 @@ def datos_subtitulos(t):
             elif not diseno or diseno[-1][1] != lay:
                 diseno.append([te, lay])
     return {
+        "publicidad_qr": plan.get("publicidad_qr", True), "qr_disponible": ed.qr_disponible(plan),
         "grupos": grupos, "modo": modo, "diseno": diseno, "areas": areas,
         # con qué tramos quitados se calcularon estos tiempos (si cambian en Edición, la pestaña se pone al día)
         "cortes": [{"inicio": c["inicio"], "fin": c["fin"], **({"manual": True} if c.get("manual") else {})} for c in cs],
